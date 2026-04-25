@@ -1,0 +1,34 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "jsx": "preserve",
+        "lib": [
+            "ESNext",
+            "DOM"
+        ],
+        "types": [
+            "vite/client",
+            "node"
+        ],
+        "ignoreDeprecations": "5.0",
+        "paths": {
+            "@/*": [
+                "./resources/js/*"
+            ]
+        },
+        "skipLibCheck": true
+    },
+    "include": [
+        "resources/js/**/*.ts",
+        "resources/js/**/*.vue",
+        "resources/js/**/*.d.ts",
+        "resources/js/types/*.d.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "public"
+    ]
+}
