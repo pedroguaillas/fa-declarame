@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Tenant\Contact;
 use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Shop;
+use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
 use Constants;
@@ -36,7 +37,10 @@ class ShopImportService
         $lines = preg_split('/\r?\n/', $content);
         $imported = 0;
         $skipped = 0;
-        $voucherType = null;
+
+        $identificationTypeId = IdentificationType::where('code_shop', Constants::RUC_COMPRA)->value('id');
+        $taxSupportId = TaxSupport::where('code', '01')->value('id');
+        $voucherTypeId = null;
 
         foreach (array_slice($lines, 1) as $line) {
             $line = trim($line);
@@ -92,28 +96,24 @@ class ShopImportService
                 }
             }
 
-            // Cachear
-            $identification_type = IdentificationType::where('code_shop', Constants::RUC_COMPRA)->get()->first();
-
             $contact = Contact::firstOrCreate(
                 ['identification' => trim($rucEmisor)],
                 [
+                    'identification_type_id' => $identificationTypeId,
                     'name' => $sriData['razon_social_emisor'] ?? trim($razonSocial),
-                    'identification_type_id' => $identification_type->id,
-                    // TODO: añadir Tipo de Contribuyente
+                    'provider_type' => strlen($rucEmisor) === 13 && in_array($rucEmisor[2], ['6', '9']) ? '02' : '01',
+                    'contributor_type_id' => $sriData['contributor_type_id'],
                 ],
             );
 
-            // Cachear
-            if ($voucherType === null) {
-                $voucherType = VoucherType::where('code', substr($claveAcceso, 8, 2))->first();
-            }
+            $voucherTypeId ??= VoucherType::where('code', substr($claveAcceso, 8, 2))->value('id');
 
             if ($sriData !== null) {
                 Shop::create([
                     'company_id' => $companyId,
                     'contact_id' => $contact->id,
-                    'voucher_type_id' => $voucherType->id,
+                    'voucher_type_id' => $voucherTypeId,
+                    'tax_support_id' => $taxSupportId,
                     'emision' => $sriData['fecha_emision'],
                     'autorization' => $claveAcceso,
                     'autorized_at' => $sriData['fecha_autorizacion'],
@@ -141,7 +141,8 @@ class ShopImportService
                 Shop::create([
                     'company_id' => $companyId,
                     'contact_id' => $contact->id,
-                    'voucher_type_id' => $voucherType->id,
+                    'voucher_type_id' => $voucherTypeId,
+                    'tax_support_id' => $taxSupportId,
                     'emision' => Carbon::createFromFormat('d/m/Y', trim($fechaEmision))->format('Y-m-d'),
                     'autorization' => $claveAcceso,
                     'autorized_at' => Carbon::createFromFormat('d/m/Y H:i:s', trim($fechaAutorizacion))->format('Y-m-d H:i:s'),

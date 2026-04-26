@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Shop extends BaseModel
 {
     protected $fillable = [
-        'acount_id',
+        'account_id',
         'company_id',
         'contact_id',
         'voucher_type_id',
+        'tax_support_id',
         'emision',
         'autorization',
         'autorized_at',
@@ -37,6 +38,8 @@ class Shop extends BaseModel
         'state_retention',
         'autorization_retention',
         'retention_at',
+
+        //Documentos modificados
     ];
 
     protected function casts(): array
@@ -81,6 +84,6 @@ class Shop extends BaseModel
 
     public function account(): BelongsTo
     {
-        return $this->belongsTo(Account::class, 'acount_id');
+        return $this->belongsTo(Account::class, 'account_id');
     }
 }

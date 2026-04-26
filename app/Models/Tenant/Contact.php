@@ -10,6 +10,7 @@ class Contact extends Model
         'identification_type_id',
         'identification',
         'name',
+        'provider_type',
         'address',
         'special_contribution',
         'accounting',

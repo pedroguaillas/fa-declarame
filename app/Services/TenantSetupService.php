@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Tenant;
 use App\Models\Tenant\ContributorType;
 use App\Models\Tenant\IdentificationType;
+use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\VoucherType;
 use Database\Seeders\RetentionSeeder;
 
@@ -65,6 +66,25 @@ class TenantSetupService
             $identificationType->contacts()->create([
                 'identification' => '9999999999999',
                 'name' => 'CONSUMIDOR FINAL',
+            ]);
+
+            TaxSupport::insert([
+                ['code' => '01', 'description' => 'Crédito Tributario para declaración de IVA (servicios y bienes distintos de inventarios y activos fijos)'],
+                ['code' => '02', 'description' => 'Costo o Gasto para declaración de IR (servicios y bienes distintos de inventarios y activos fijos)'],
+                ['code' => '03', 'description' => 'Activo Fijo - Crédito Tributario para declaración de IVA'],
+                ['code' => '04', 'description' => 'Activo Fijo - Costo o Gasto para declaración de IR'],
+                ['code' => '05', 'description' => 'Liquidación Gastos de Viaje, hospedaje y alimentación Gastos IR (a nombre de empleados y no de la empresa)'],
+                ['code' => '06', 'description' => 'Inventario - Crédito Tributario para declaración de IVA'],
+                ['code' => '07', 'description' => 'Inventario - Costo o Gasto para declaración de IR'],
+                ['code' => '08', 'description' => 'Valor pagado para solicitar Reembolso de Gasto (intermediario)'],
+                ['code' => '09', 'description' => 'Reembolso por Siniestros'],
+                ['code' => '10', 'description' => 'Distribución de Dividendos, Beneficios o Utilidades'],
+                ['code' => '11', 'description' => 'Convenios de débito o recaudación para IFI\'s'],
+                ['code' => '12', 'description' => 'Impuestos y retenciones presuntivos'],
+                ['code' => '13', 'description' => 'Valores reconocidos por entidades del sector público a favor de sujetos pasivos'],
+                ['code' => '14', 'description' => 'Valores facturados por socios a operadoras de transporte (que no constituyen gasto de dicha operadora)'],
+                ['code' => '15', 'description' => 'Pagos efectuados por consumos propios y de terceros de servicios digitales'],
+                ['code' => '00', 'description' => 'Casos especiales cuyo sustento no aplica en las opciones anteriores'],
             ]);
 
             VoucherType::insert($voucherTypes);

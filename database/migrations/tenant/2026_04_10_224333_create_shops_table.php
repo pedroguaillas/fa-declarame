@@ -13,9 +13,10 @@ return new class extends Migration
     {
         Schema::create('shops', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('acount_id')->nullable()->constrained()->on('acounts')->cascadeOnDelete();
+            $table->foreignId('account_id')->nullable()->constrained()->on('accounts')->cascadeOnDelete();
             $table->foreignId('company_id')->constrained()->on('companies')->cascadeOnDelete();
             $table->foreignId('voucher_type_id')->constrained()->on('voucher_types')->cascadeOnDelete();
+            $table->foreignId('tax_support_id')->constrained()->on('tax_supports')->cascadeOnDelete();
             $table->date('emision');
             $table->string('autorization', 49);
             $table->timestamp('autorized_at')->nullable();
@@ -42,6 +43,14 @@ return new class extends Migration
             $table->date('date_retention')->nullable();
             $table->string('state_retention')->nullable();
             $table->string('autorization_retention', 49)->nullable();
+
+            //Nota de Crédito o Débito
+            $table->foreignId('voucher_type_modify_id')->nullable()->constrained()->on('voucher_types')->cascadeOnDelete();
+            $table->string('est_modify', 3)->nullable();
+            $table->string('poi_modify', 3)->nullable();
+            $table->string('sec_modify', 9)->nullable();
+            $table->string('aut_modify', 49)->nullable();
+            //
             $table->timestamp('retention_at')->nullable();
             $table->timestamps();
         });

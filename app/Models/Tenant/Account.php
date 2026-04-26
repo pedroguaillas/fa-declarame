@@ -11,8 +11,6 @@ class Account extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'acounts';
-
     protected $fillable = [
         'parent_id',
         'code',

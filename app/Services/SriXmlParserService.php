@@ -2,12 +2,16 @@
 
 namespace App\Services;
 
+use App\Models\Tenant\ContributorType;
 use Carbon\Carbon;
 use Constants;
 use SimpleXMLElement;
 
 class SriXmlParserService
 {
+    /** @var array<string, int> */
+    private array $contributorTypeCache = [];
+
     /** @var array<string, string> */
     private array $infoNodeMap = [
         '01' => 'infoFactura',
@@ -22,6 +26,7 @@ class SriXmlParserService
      * @return array{
      *   estado: string,
      *   fecha_autorizacion: string,
+     *   contributor_type_id: int,
      *   ruc_emisor: string,
      *   razon_social_emisor: string,
      *   nombre_comercial_emisor: string,
@@ -81,6 +86,7 @@ class SriXmlParserService
         return [
             'estado' => (string) ($autorizacion->estado ?? 'AUTORIZADO'),
             'fecha_autorizacion' => Carbon::parse((string) $autorizacion->fechaAutorizacion)->format('Y-m-d H:i:s'),
+            'contributor_type_id' => $this->resolveContributorTypeId($infoTributaria),
             'ruc_emisor' => (string) $infoTributaria->ruc,
             'razon_social_emisor' => (string) $infoTributaria->razonSocial,
             'nombre_comercial_emisor' => (string) ($infoTributaria->nombreComercial ?? $infoTributaria->razonSocial),
@@ -94,6 +100,22 @@ class SriXmlParserService
             'total' => (float) ($info->importeTotal ?? $info->valorModificacion ?? 0),
             ...$this->extractIva($info),
         ];
+    }
+
+    private function resolveContributorTypeId(SimpleXMLElement $infoTributaria): int
+    {
+        $rimpe = trim((string) ($infoTributaria->contribuyenteRimpe ?? ''));
+
+        if ($rimpe === 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE') {
+            $description = 'RIMPE NEGOCIO POPULAR';
+        } elseif ($rimpe === 'CONTRIBUYENTE RÉGIMEN RIMPE') {
+            $description = 'RIMPE EMPRENDEDOR';
+        } else {
+            $description = 'GENERAL';
+        }
+
+        return $this->contributorTypeCache[$description]
+            ??= ContributorType::where('description', $description)->value('id');
     }
 
     /**
