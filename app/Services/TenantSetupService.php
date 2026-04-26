@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Models\Tenant\ContributorType;
+use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\VoucherType;
+use Database\Seeders\RetentionSeeder;
 
 
 class TenantSetupService
@@ -50,7 +52,24 @@ class TenantSetupService
                 ['description' => 'RIMPE NEGOCIO POPULAR'],
             ]);
 
+            IdentificationType::insert([
+                ['code_order' => '04', 'code_shop' => '01','description' => 'RUC'],
+                ['code_order' => '05', 'code_shop' => '02','description' => 'CEDULA'],
+                ['code_order' => '06', 'code_shop' => '03','description' => 'PASAPORTE'],
+            ]);
+
+            $identificationType = IdentificationType::create([
+                'code_order' => '07', 'description' => 'CONSUMIDOR FINAL',
+            ]);
+
+            $identificationType->contacts()->create([
+                'identification' => '9999999999999',
+                'name' => 'CONSUMIDOR FINAL',
+            ]);
+
             VoucherType::insert($voucherTypes);
+
+            (new RetentionSeeder)->run();
         });
     }
 }

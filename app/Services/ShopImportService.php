@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\Tenant\Contact;
+use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
+use Constants;
 
 class ShopImportService
 {
@@ -90,11 +92,19 @@ class ShopImportService
                 }
             }
 
+            // Cachear
+            $identification_type = IdentificationType::where('code_shop', Constants::RUC_COMPRA)->get()->first();
+
             $contact = Contact::firstOrCreate(
                 ['identification' => trim($rucEmisor)],
-                ['name' => $sriData['razon_social_emisor'] ?? trim($razonSocial)],
+                [
+                    'name' => $sriData['razon_social_emisor'] ?? trim($razonSocial),
+                    'identification_type_id' => $identification_type->id,
+                    // TODO: añadir Tipo de Contribuyente
+                ],
             );
 
+            // Cachear
             if ($voucherType === null) {
                 $voucherType = VoucherType::where('code', substr($claveAcceso, 8, 2))->first();
             }
@@ -127,7 +137,6 @@ class ShopImportService
                 $subTotal = (float) $valorSinImpuestos;
                 $ivaAmount = (float) $iva;
                 $totalAmount = (float) $total;
-                [$base0, $base5, $base8, $base12, $base15, $iva5, $iva8, $iva12, $iva15] = $this->distributeIva($subTotal, $ivaAmount);
 
                 Shop::create([
                     'company_id' => $companyId,
@@ -138,17 +147,11 @@ class ShopImportService
                     'autorized_at' => Carbon::createFromFormat('d/m/Y H:i:s', trim($fechaAutorizacion))->format('Y-m-d H:i:s'),
                     'serie' => trim($serie),
                     'sub_total' => $subTotal,
-                    'base0' => $base0,
-                    'base5' => $base5,
-                    'base8' => $base8,
-                    'base12' => $base12,
-                    'base15' => $base15,
-                    'iva5' => $iva5,
-                    'iva8' => $iva8,
-                    'iva12' => $iva12,
-                    'iva15' => $iva15,
+                    // TODO: No se tiene la certeza de $ivaAmount
+                    'iva15' => $ivaAmount,
                     'total' => $totalAmount,
-                    'state' => 'AUTORIZADO',
+                    // TODO: Analizar los estados de los comprobantes
+                    'state' => 'PENDIENTE',
                 ]);
             }
 
@@ -156,39 +159,5 @@ class ShopImportService
         }
 
         return ['imported' => $imported, 'skipped' => $skipped];
-    }
-
-    /**
-     * Distribute sub_total and IVA amount into the appropriate tax-rate buckets.
-     * Used as fallback when the SRI SOAP service is unavailable.
-     *
-     * @return array{float, float, float, float, float, float, float, float, float}
-     */
-    private function distributeIva(float $subTotal, float $ivaAmount): array
-    {
-        if ($ivaAmount <= 0 || $subTotal <= 0) {
-            return [$subTotal, 0, 0, 0, 0, 0, 0, 0, 0];
-        }
-
-        $ratio = $ivaAmount / $subTotal;
-        $rates = [5 => 0.05, 8 => 0.08, 12 => 0.12, 15 => 0.15];
-        $closest = 15;
-        $minDiff = PHP_FLOAT_MAX;
-
-        foreach ($rates as $rate => $value) {
-            $diff = abs($ratio - $value);
-
-            if ($diff < $minDiff) {
-                $minDiff = $diff;
-                $closest = $rate;
-            }
-        }
-
-        return match ($closest) {
-            5 => [0, $subTotal, 0, 0, 0, $ivaAmount, 0, 0, 0],
-            8 => [0, 0, $subTotal, 0, 0, 0, $ivaAmount, 0, 0],
-            12 => [0, 0, 0, $subTotal, 0, 0, 0, $ivaAmount, 0],
-            default => [0, 0, 0, 0, $subTotal, 0, 0, 0, $ivaAmount],
-        };
     }
 }

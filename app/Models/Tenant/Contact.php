@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Contact extends Model
 {
     protected $fillable = [
+        'identification_type_id',
         'identification',
         'name',
         'address',
@@ -15,7 +16,7 @@ class Contact extends Model
         'retention_agent',
         'phantom_taxpayer',
         'no_transactions',
-        'rimpe',
+        'contributor_type_id',
         'phone',
         'email',
     ];
@@ -25,7 +26,6 @@ class Contact extends Model
         return [
             'special_contribution' => 'boolean',
             'accounting' => 'boolean',
-            'retention_agent' => 'boolean',
             'phantom_taxpayer' => 'boolean',
             'no_transactions' => 'boolean',
         ];

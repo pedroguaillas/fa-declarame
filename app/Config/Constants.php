@@ -4,8 +4,8 @@ class Constants
 {
     // Tipo de identificación Compra
     const RUC_COMPRA = '01';
-    const CEDULA_COMPRA = '03';
-    const PASAPORTE_COMPRA = '04';
+    const CEDULA_COMPRA = '02';
+    const PASAPORTE_COMPRA = '03';
 
     // Tipo de identificación Venta
     const RUC_VENTA = '04';

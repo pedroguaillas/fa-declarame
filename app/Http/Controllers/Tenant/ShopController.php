@@ -22,36 +22,11 @@ class ShopController extends Controller
 {
     public function index(): Response
     {
-        $shops = Shop::with(['contact:id,name', 'retentionItems.retention', 'account:id,code,name'])
+        $shops = Shop::selectRaw('shops.id, acount_id, contact_id, serie, emision, autorization, initial, vt.code, sub_total, no_iva, base0, base5, base12, base15, iva5, iva12, iva15, discount, ice, total, state, serie_retention, date_retention, state_retention, autorization_retention')
+            ->with(['contact:id,name', 'retentionItems.retention', 'account:id,code,name'])
             ->join('voucher_types AS vt', 'vt.id', 'voucher_type_id')
             ->orderByDesc('emision')
-            ->paginate(25, [
-                'shops.id',
-                'acount_id',
-                'contact_id',
-                'serie',
-                'emision',
-                'autorization',
-                'initial',
-                'vt.code',
-                'sub_total',
-                'no_iva',
-                'base0',
-                'base5',
-                'base12',
-                'base15',
-                'iva5',
-                'iva12',
-                'iva15',
-                'discount',
-                'ice',
-                'total',
-                'state',
-                'serie_retention',
-                'date_retention',
-                'state_retention',
-                'autorization_retention',
-            ]);
+            ->paginate(25);
 
         $company = company();
         $isRetentionAgent = (bool) $company?->retention_agent;
