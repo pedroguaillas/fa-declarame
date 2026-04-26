@@ -27,13 +27,14 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
-            'role'                      => \App\Http\Middleware\RoleMiddleware::class,
+            'auth.tenant'               => \App\Http\Middleware\Tenant\AuthTenant::class,
+            'check.tenant.subscription' => \App\Http\Middleware\Tenant\CheckTenantSubscription::class,
+            'tenant.role'               => \App\Http\Middleware\Tenant\TenantRoleMiddleware::class,
+
             'check.active'              => \App\Http\Middleware\CheckActive::class,
             'central.only'              => \App\Http\Middleware\EnsureCentralUser::class,
-            'auth.tenant'               => \App\Http\Middleware\AuthTenant::class,
-            'guest.tenant'              => \App\Http\Middleware\GuestTenant::class,
-            'check.tenant.subscription' => \App\Http\Middleware\CheckTenantSubscription::class,
-            'tenant.role'               => \App\Http\Middleware\TenantRoleMiddleware::class,
+            'role'                      => \App\Http\Middleware\RoleMiddleware::class,
+
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

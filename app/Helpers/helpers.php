@@ -1,47 +1,34 @@
 <?php
 
+use App\Models\Tenant;
+use App\Models\Tenant\Company;
 use App\Models\TenantUser;
-use App\Models\User;
+use App\Models\User as CentralUser;
 use Illuminate\Support\Facades\Auth;
 
-/**
- * Retorna el usuario autenticado en cualquier contexto.
- * - En el panel central: User (super_admin o admin)
- * - En el tenant: TenantUser (empleado) o User (admin del tenant)
- * - null si no hay usuario autenticado
- */
-function user(): User|TenantUser|null
+
+function user(): CentralUser|TenantUser|null
 {
     return Auth::user() ?? Auth::guard('tenant')->user();
 }
 
-/**
- * Verifica si hay un usuario autenticado en cualquier guard.
- */
+
 function isAuthenticated(): bool
 {
     return Auth::check() || Auth::guard('tenant')->check();
 }
 
-/**
- * Verifica si el contexto actual es un tenant.
- */
+
 function isTenant(): bool
 {
     return tenancy()->tenant !== null;
 }
 
-/**
- * Retorna el tenant activo o null.
- */
-function currentTenant(): ?\App\Models\Tenant
+function currentTenant(): ?Tenant
 {
     return tenancy()->tenant;
 }
 
-/**
- * Verifica si el usuario autenticado es el admin del tenant actual.
- */
 function isTenantAdmin(): bool
 {
     $tenant = currentTenant();
@@ -49,14 +36,39 @@ function isTenantAdmin(): bool
 
     return $tenant !== null
         && $user !== null
-        && $user instanceof User
+        && $user instanceof CentralUser
         && $user->tenant_id === $tenant->id;
 }
 
-/**
- * Verifica si el usuario autenticado es un empleado del tenant.
- */
+
 function isTenantEmployee(): bool
 {
     return Auth::guard('tenant')->check();
+}
+
+
+function company(): ?Company
+{
+    static $cached = null;
+    static $cachedId = null;
+
+    $companyId = session('current_company_id');
+
+    if (!$companyId) {
+        return null;
+    }
+
+    if ($cached && $cachedId === $companyId) {
+        return $cached;
+    }
+
+    $cached = Company::withoutGlobalScopes()->find($companyId);
+    $cachedId = $companyId;
+
+    return $cached;
+}
+
+function companyId(): ?int
+{
+    return company()?->id;
 }

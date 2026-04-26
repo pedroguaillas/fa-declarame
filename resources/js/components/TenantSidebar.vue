@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { Link, usePage } from "@inertiajs/vue3";
 import { computed } from "vue";
-import { useTheme } from "@/composables/useTheme";
 import type { PageProps } from "@/types";
 import {
     Sidebar,
     SidebarContent,
-    SidebarFooter,
     SidebarGroup,
     SidebarGroupLabel,
     SidebarHeader,
@@ -15,28 +13,14 @@ import {
     SidebarMenuItem,
     SidebarRail,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Settings, Building2 } from "lucide-vue-next";
+import { Building2 } from "lucide-vue-next";
+import { useNavigation } from "@/composables/useNavigation";
+import NavMain from "./NavMain.vue";
 
-const page = usePage<PageProps & { tenant: { id: string; name: string } }>();
+const page = usePage<PageProps>();
+const user = computed(() => page.props.auth.user);
+const { navItems } = useNavigation(user.value);
 const tenant = computed(() => page.props.tenant);
-
-const navItems = [
-    {
-        title: "Dashboard",
-        url: route("tenant.dashboard"),
-        icon: LayoutDashboard,
-    },
-    {
-        title: "Empleados",
-        url: route("employees.index"),
-        icon: Users,
-    },
-    {
-        title: "Mi perfil",
-        url: route("tenant.profile.edit"),
-        icon: Settings,
-    },
-];
 </script>
 
 <template>
@@ -67,19 +51,7 @@ const navItems = [
         </SidebarHeader>
 
         <SidebarContent>
-            <SidebarGroup>
-                <SidebarGroupLabel>Navegación</SidebarGroupLabel>
-                <SidebarMenu>
-                    <SidebarMenuItem v-for="item in navItems" :key="item.title">
-                        <SidebarMenuButton :tooltip="item.title" as-child>
-                            <Link :href="item.url">
-                                <component :is="item.icon" />
-                                <span>{{ item.title }}</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarGroup>
+            <NavMain :items="navItems" />
         </SidebarContent>
 
         <SidebarRail />

@@ -33,11 +33,11 @@ class TenantSeeder extends Seeder
             }
 
             // Correr migraciones del tenant
-            tenancy()->initialize($tenant);
-            Artisan::call('tenants:migrate', [
-                '--tenants' => [$tenant->id],
-            ]);
-            tenancy()->end();
+            // tenancy()->initialize($tenant);
+            // Artisan::call('tenants:migrate', [
+            //     '--tenants' => [$tenant->id],
+            // ]);
+            // tenancy()->end();
         }
     }
 }

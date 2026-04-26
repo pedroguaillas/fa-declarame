@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Tenant\Company;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -17,6 +18,8 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = user();
+        $currentCompanyId = session('current_company_id');
+        $isTenant = isTenant();
 
         return array_merge(parent::share($request), [
             'auth' => [
@@ -30,6 +33,12 @@ class HandleInertiaRequests extends Middleware
                         : null,
                 ] : null,
             ],
+            'currentCompany' => $isTenant && $currentCompanyId
+                ? Company::find($currentCompanyId, ['id', 'ruc', 'name'])
+                : null,
+            'companiesScope' => $isTenant && $user
+                ? Company::orderBy('name')->get(['id', 'ruc', 'name'])
+                : [],
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error'   => $request->session()->get('error'),

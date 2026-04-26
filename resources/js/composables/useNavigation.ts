@@ -6,7 +6,6 @@ import {
     Settings,
     Building2,
     UserCog,
-    KeyRound,
 } from "lucide-vue-next";
 import type { User } from "@/types";
 import type { LucideIcon } from "lucide-vue-next";
@@ -27,14 +26,14 @@ export function useNavigation(user: User) {
             icon: LayoutDashboard,
         },
         {
-            title: "Usuarios",
-            url: route("users.index"),
-            icon: Users,
-        },
-        {
             title: "Suscripciones",
             url: route("subscriptions.index"),
             icon: CreditCard,
+        },
+        {
+            title: "Usuarios",
+            url: route("users.index"),
+            icon: Users,
         },
         {
             title: "Tenants",
@@ -72,23 +71,20 @@ export function useNavigation(user: User) {
     const adminNav: NavItem[] = [
         {
             title: "Dashboard",
-            url: route("dashboard"),
+            url: route("tenant.dashboard"),
             icon: LayoutDashboard,
         },
         {
-            title: "Empleados",
-            url: "#",
-            icon: UserCog,
-            items: [
-                { title: "Listar", url: "#" },
-                { title: "Registrar", url: "#" },
-            ],
+            title: "Empresas",
+            url: route("tenant.companies.index"),
+            icon: Users,
         },
         {
-            title: "Mi Suscripción",
-            url: "#",
-            icon: CreditCard,
+            title: "Compras",
+            url: route("tenant.shops.index"),
+            icon: Users,
         },
+
         {
             title: "Configuración",
             url: "#",
@@ -96,7 +92,7 @@ export function useNavigation(user: User) {
             items: [
                 {
                     title: "Mi perfil",
-                    url: route("profile.edit"),
+                    url: route("tenant.profile.edit"),
                 },
             ],
         },

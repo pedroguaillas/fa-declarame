@@ -4,7 +4,10 @@ namespace Database\Seeders;
 
 use App\Models\Role;
 use App\Models\Tenant;
+use App\Models\Tenant\Company;
+use App\Models\Tenant\ContributorType;
 use App\Models\User;
+use App\Services\TenantSetupService;
 use Illuminate\Database\Seeder;
 
 class UserSeeder extends Seeder
@@ -42,26 +45,22 @@ class UserSeeder extends Seeder
             ]
         );
 
-        // Asignar user_id al tenant
         if ($tenant) {
             $tenant->user_id = $admin->id;
             $tenant->save();
         }
 
-        // Empleado — vive en la DB del tenant
         if ($tenant) {
-            tenancy()->initialize($tenant);
+            app(TenantSetupService::class)->setup($tenant);
 
-            \App\Models\TenantUser::updateOrCreate(
-                ['email' => 'empleado@admin.com'],
-                [
-                    'name'      => 'Empleado Demo',
-                    'password'  => 'password',
-                    'is_active' => true,
-                ]
-            );
-
-            tenancy()->end();
+            $tenant->run(function (): void {
+                Company::create([
+                    'ruc' => '1105167694001',
+                    'name' => 'FACTUS',
+                    'matrix_address' => 'COLOMBIA',
+                    'contributor_type_id' => ContributorType::first()->id,
+                ]);
+            });
         }
     }
 }

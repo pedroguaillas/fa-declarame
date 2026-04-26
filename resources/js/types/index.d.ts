@@ -86,6 +86,14 @@ export interface ModelPermission {
     model_entity?: ModelEntity;
 }
 
+export interface LaravelPaginatorMeta {
+    current_page: number;
+    from: number | null;
+    last_page: number;
+    to: number | null;
+    total: number;
+}
+
 export interface PaginatedData<T> {
     data: T[];
     current_page: number;
@@ -111,6 +119,11 @@ export type PageProps<
         success: string | null;
         error: string | null;
     };
-
+    currentCompany: CompanyScope | null;
+    companiesScope: CompanyScope[];
+    tenant: {
+        id: string;
+        name: string;
+    };
     ziggy: Config & { location: string };
 };
