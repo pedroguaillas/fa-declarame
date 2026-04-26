@@ -9,6 +9,7 @@ use App\Http\Controllers\Tenant\CompanyScopeController;
 use App\Http\Controllers\Tenant\ContactController;
 use App\Http\Controllers\Tenant\DashboardController as TenantDashboardController;
 use App\Http\Controllers\Tenant\EmployeeController;
+use App\Http\Controllers\Tenant\OrderController;
 use App\Http\Controllers\Tenant\ProfileController as TenantProfileController;
 use App\Http\Controllers\Tenant\ShopController;
 use App\Http\Middleware\Tenant\RequireCompanyScope;
@@ -25,9 +26,25 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
     Route::middleware(RequireCompanyScope::class)->group(function () {
 
 
+        Route::post('orders/import', [OrderController::class, 'import'])->name('tenant.orders.import');
+        Route::post('orders/import-retentions', [OrderController::class, 'importRetentions'])->name('tenant.orders.import-retentions');
+
+        Route::resource('orders', OrderController::class)
+            ->except(['show'])
+            ->names([
+                'index' => 'tenant.orders.index',
+                'create' => 'tenant.orders.create',
+                'store' => 'tenant.orders.store',
+                'edit' => 'tenant.orders.edit',
+                'update' => 'tenant.orders.update',
+                'destroy' => 'tenant.orders.destroy',
+            ]);
+
+        Route::post('orders/{order}/retention', [OrderController::class, 'storeRetention'])
+            ->name('tenant.orders.retention.store');
+
         Route::post('shops/import', [ShopController::class, 'import'])->name('tenant.shops.import');
         Route::post('shops/import-retentions', [ShopController::class, 'importRetentions'])->name('tenant.shops.import-retentions');
-
         Route::resource('shops', ShopController::class)
             ->except(['show'])
             ->names([
@@ -38,10 +55,8 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
                 'update' => 'tenant.shops.update',
                 'destroy' => 'tenant.shops.destroy',
             ]);
-
         Route::post('shops/{shop}/retention', [ShopController::class, 'storeRetention'])
             ->name('tenant.shops.retention.store');
-
         Route::patch('shops/{shop}/account', [ShopController::class, 'updateAccount'])
             ->name('tenant.shops.account.update');
     });

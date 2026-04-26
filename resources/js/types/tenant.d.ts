@@ -91,3 +91,47 @@ export interface VoucherType {
     code: string;
     description: string;
 }
+
+export interface Order {
+    id: number;
+    contact_id: number;
+    contact: { id: number; identification: string; name: string } | null;
+    voucher_type_id: number;
+    emision: string;
+    autorization: string | null;
+    autorized_at: string | null;
+    serie: string;
+    sub_total: string;
+    no_iva: string;
+    exempt: string;
+    base0: string;
+    base5: string;
+    base8: string;
+    base12: string;
+    base15: string;
+    iva5: string;
+    iva8: string;
+    iva12: string;
+    iva15: string;
+    aditional_discount: string;
+    discount: string;
+    ice: string;
+    total: string;
+    state: string;
+    serie_retention: string | null;
+    date_retention: string | null;
+    state_retention: string | null;
+    autorization_retention: string | null;
+    retention_at: string | null;
+    retention_items: OrderRetentionItem[];
+}
+
+export interface OrderRetentionItem {
+    id?: number;
+    order_id?: number;
+    retention_id: number | null;
+    retention?: { code: string; description: string; type: string };
+    base: number | string;
+    percentage: number | string;
+    value: number | string;
+}

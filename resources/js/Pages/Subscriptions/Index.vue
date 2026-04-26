@@ -3,7 +3,7 @@ import { useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
-import type { Subscription, Plan, User, PaginatedData } from "@/types";
+import type { Subscription, Plan, User, Paginator } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
 import DatePicker from "@/components/DatePicker.vue";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,7 @@ import {
 } from "lucide-vue-next";
 
 const props = defineProps<{
-    subscriptions: PaginatedData<Subscription>;
+    subscriptions: Paginator<Subscription>;
     plans: Plan[];
     admins: User[];
 }>();

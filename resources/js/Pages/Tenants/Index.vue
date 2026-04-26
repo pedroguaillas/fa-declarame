@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { useForm, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
-import type { Tenant, PaginatedData } from '@/types'
-import AppLayout from '@/layouts/AppLayout.vue'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
+import { useForm, router } from "@inertiajs/vue3";
+import { ref } from "vue";
+import type { Tenant, Paginator } from "@/types";
+import AppLayout from "@/layouts/AppLayout.vue";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
     Table,
     TableBody,
@@ -14,7 +14,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from '@/components/ui/table'
+} from "@/components/ui/table";
 import {
     Dialog,
     DialogContent,
@@ -22,102 +22,111 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog'
-import { Building2, Plus, Pencil, Trash2, Globe, ExternalLink } from 'lucide-vue-next'
+} from "@/components/ui/dialog";
+import {
+    Building2,
+    Plus,
+    Pencil,
+    Trash2,
+    Globe,
+    ExternalLink,
+} from "lucide-vue-next";
 
 const props = defineProps<{
-    tenants: PaginatedData<Tenant>
-}>()
+    tenants: Paginator<Tenant>;
+}>();
 
 // ── Crear ──────────────────────────────────────────────
-const createDialog = ref(false)
+const createDialog = ref(false);
 const createForm = useForm({
-    name: '',
-    subdomain: '',
-})
+    name: "",
+    subdomain: "",
+});
 
 function autoSubdomain() {
     createForm.subdomain = createForm.name
         .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '')
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "");
 }
 
 function openCreate() {
-    createForm.reset()
-    createDialog.value = true
+    createForm.reset();
+    createDialog.value = true;
 }
 
 function store() {
-    createForm.post(route('tenants.store'), {
+    createForm.post(route("tenants.store"), {
         onSuccess: () => {
-            createDialog.value = false
-            createForm.reset()
+            createDialog.value = false;
+            createForm.reset();
         },
-    })
+    });
 }
 
 // ── Editar ─────────────────────────────────────────────
-const editDialog = ref(false)
-const editing = ref<Tenant | null>(null)
-const editForm = useForm({ name: '' })
+const editDialog = ref(false);
+const editing = ref<Tenant | null>(null);
+const editForm = useForm({ name: "" });
 
 function openEdit(tenant: Tenant) {
-    editing.value = tenant
-    editForm.name = tenant.name
-    editDialog.value = true
+    editing.value = tenant;
+    editForm.name = tenant.name;
+    editDialog.value = true;
 }
 
 function update() {
-    editForm.put(route('tenants.update', editing.value!.id), {
+    editForm.put(route("tenants.update", editing.value!.id), {
         onSuccess: () => {
-            editDialog.value = false
-            editing.value = null
+            editDialog.value = false;
+            editing.value = null;
         },
-    })
+    });
 }
 
 // ── Eliminar ───────────────────────────────────────────
-const deleteDialog = ref(false)
-const toDelete = ref<Tenant | null>(null)
+const deleteDialog = ref(false);
+const toDelete = ref<Tenant | null>(null);
 
 function confirmDelete(tenant: Tenant) {
-    toDelete.value = tenant
-    deleteDialog.value = true
+    toDelete.value = tenant;
+    deleteDialog.value = true;
 }
 
 function handleDelete() {
-    router.delete(route('tenants.destroy', toDelete.value!.id), {
+    router.delete(route("tenants.destroy", toDelete.value!.id), {
         onFinish: () => {
-            deleteDialog.value = false
-            toDelete.value = null
+            deleteDialog.value = false;
+            toDelete.value = null;
         },
-    })
+    });
 }
 
 function goToPage(url: string | null) {
-    if (url) router.visit(url, { preserveScroll: true })
+    if (url) router.visit(url, { preserveScroll: true });
 }
 
 function getTenantUrl(tenant: Tenant) {
-    const domain = tenant.domains?.[0]?.domain
-    return domain ? `http://${domain}` : null
+    const domain = tenant.domains?.[0]?.domain;
+    return domain ? `http://${domain}` : null;
 }
 </script>
 
 <template>
     <AppLayout>
         <div class="space-y-6">
-
             <!-- Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold text-foreground flex items-center gap-2">
+                    <h1
+                        class="text-2xl font-bold text-foreground flex items-center gap-2"
+                    >
                         <Building2 class="size-6" />
                         Tenants
                     </h1>
                     <p class="text-muted-foreground text-sm mt-1">
-                        Gestiona las empresas del sistema. Cada tenant tiene su propia base de datos.
+                        Gestiona las empresas del sistema. Cada tenant tiene su
+                        propia base de datos.
                     </p>
                 </div>
                 <Button @click="openCreate">
@@ -139,17 +148,28 @@ function getTenantUrl(tenant: Tenant) {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        <TableRow v-for="tenant in tenants.data" :key="tenant.id">
-                            <TableCell class="font-medium">{{ tenant.name }}</TableCell>
+                        <TableRow
+                            v-for="tenant in tenants.data"
+                            :key="tenant.id"
+                        >
+                            <TableCell class="font-medium">{{
+                                tenant.name
+                            }}</TableCell>
                             <TableCell>
-                                <code class="text-xs bg-muted px-1.5 py-0.5 rounded">
+                                <code
+                                    class="text-xs bg-muted px-1.5 py-0.5 rounded"
+                                >
                                     {{ tenant.id }}
                                 </code>
                             </TableCell>
                             <TableCell>
                                 <div class="flex items-center gap-2">
-                                    <Globe class="size-3 text-muted-foreground" />
-                                    <span class="text-sm">{{ tenant.domains?.[0]?.domain ?? '—' }}</span>
+                                    <Globe
+                                        class="size-3 text-muted-foreground"
+                                    />
+                                    <span class="text-sm">{{
+                                        tenant.domains?.[0]?.domain ?? "—"
+                                    }}</span>
                                     <a
                                         v-if="getTenantUrl(tenant)"
                                         :href="getTenantUrl(tenant)!"
@@ -162,14 +182,26 @@ function getTenantUrl(tenant: Tenant) {
                             </TableCell>
                             <TableCell>
                                 <div v-if="tenant.user">
-                                    <p class="text-sm font-medium">{{ tenant.user.name }}</p>
-                                    <p class="text-xs text-muted-foreground">{{ tenant.user.email }}</p>
+                                    <p class="text-sm font-medium">
+                                        {{ tenant.user.name }}
+                                    </p>
+                                    <p class="text-xs text-muted-foreground">
+                                        {{ tenant.user.email }}
+                                    </p>
                                 </div>
-                                <Badge v-else variant="outline" class="text-xs">Sin asignar</Badge>
+                                <Badge v-else variant="outline" class="text-xs"
+                                    >Sin asignar</Badge
+                                >
                             </TableCell>
                             <TableCell class="text-right">
-                                <div class="flex items-center justify-end gap-2">
-                                    <Button variant="ghost" size="icon" @click="openEdit(tenant)">
+                                <div
+                                    class="flex items-center justify-end gap-2"
+                                >
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        @click="openEdit(tenant)"
+                                    >
                                         <Pencil class="size-4" />
                                     </Button>
                                     <Button
@@ -184,7 +216,10 @@ function getTenantUrl(tenant: Tenant) {
                             </TableCell>
                         </TableRow>
                         <TableRow v-if="tenants.data.length === 0">
-                            <TableCell colspan="5" class="text-center text-muted-foreground py-8">
+                            <TableCell
+                                colspan="5"
+                                class="text-center text-muted-foreground py-8"
+                            >
                                 No hay tenants registrados.
                             </TableCell>
                         </TableRow>
@@ -192,9 +227,13 @@ function getTenantUrl(tenant: Tenant) {
                 </Table>
 
                 <!-- Paginación -->
-                <div v-if="tenants.last_page > 1" class="flex items-center justify-between px-4 py-3 border-t border-border">
+                <div
+                    v-if="tenants.last_page > 1"
+                    class="flex items-center justify-between px-4 py-3 border-t border-border"
+                >
                     <p class="text-sm text-muted-foreground">
-                        Mostrando {{ tenants.from }} - {{ tenants.to }} de {{ tenants.total }}
+                        Mostrando {{ tenants.from }} - {{ tenants.to }} de
+                        {{ tenants.total }}
                     </p>
                     <div class="flex gap-1">
                         <Button
@@ -203,7 +242,10 @@ function getTenantUrl(tenant: Tenant) {
                             variant="outline"
                             size="sm"
                             :disabled="!link.url"
-                            :class="{ 'bg-primary text-primary-foreground': link.active }"
+                            :class="{
+                                'bg-primary text-primary-foreground':
+                                    link.active,
+                            }"
                             @click="goToPage(link.url)"
                             v-html="link.label"
                         />
@@ -228,9 +270,16 @@ function getTenantUrl(tenant: Tenant) {
                             v-model="createForm.name"
                             placeholder="Ej: Empresa ABC"
                             @input="autoSubdomain"
-                            :class="{ 'border-destructive': createForm.errors.name }"
+                            :class="{
+                                'border-destructive': createForm.errors.name,
+                            }"
                         />
-                        <p v-if="createForm.errors.name" class="text-xs text-destructive">{{ createForm.errors.name }}</p>
+                        <p
+                            v-if="createForm.errors.name"
+                            class="text-xs text-destructive"
+                        >
+                            {{ createForm.errors.name }}
+                        </p>
                     </div>
                     <div class="space-y-2">
                         <Label>Subdominio</Label>
@@ -238,18 +287,36 @@ function getTenantUrl(tenant: Tenant) {
                             <Input
                                 v-model="createForm.subdomain"
                                 placeholder="empresa-abc"
-                                :class="{ 'border-destructive': createForm.errors.subdomain }"
+                                :class="{
+                                    'border-destructive':
+                                        createForm.errors.subdomain,
+                                }"
                             />
-                            <span class="text-sm text-muted-foreground whitespace-nowrap">.localhost</span>
+                            <span
+                                class="text-sm text-muted-foreground whitespace-nowrap"
+                                >.localhost</span
+                            >
                         </div>
-                        <p v-if="createForm.errors.subdomain" class="text-xs text-destructive">{{ createForm.errors.subdomain }}</p>
+                        <p
+                            v-if="createForm.errors.subdomain"
+                            class="text-xs text-destructive"
+                        >
+                            {{ createForm.errors.subdomain }}
+                        </p>
                         <p class="text-xs text-muted-foreground">
                             Solo letras minúsculas, números y guiones.
                         </p>
                     </div>
                     <DialogFooter>
-                        <Button type="button" variant="outline" @click="createDialog = false">Cancelar</Button>
-                        <Button type="submit" :disabled="createForm.processing">Crear tenant</Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            @click="createDialog = false"
+                            >Cancelar</Button
+                        >
+                        <Button type="submit" :disabled="createForm.processing"
+                            >Crear tenant</Button
+                        >
                     </DialogFooter>
                 </form>
             </DialogContent>
@@ -261,7 +328,8 @@ function getTenantUrl(tenant: Tenant) {
                 <DialogHeader>
                     <DialogTitle>Editar tenant</DialogTitle>
                     <DialogDescription>
-                        Solo puedes cambiar el nombre. El subdominio no puede modificarse.
+                        Solo puedes cambiar el nombre. El subdominio no puede
+                        modificarse.
                     </DialogDescription>
                 </DialogHeader>
                 <form @submit.prevent="update" class="space-y-4">
@@ -269,17 +337,31 @@ function getTenantUrl(tenant: Tenant) {
                         <Label>Nombre</Label>
                         <Input
                             v-model="editForm.name"
-                            :class="{ 'border-destructive': editForm.errors.name }"
+                            :class="{
+                                'border-destructive': editForm.errors.name,
+                            }"
                         />
-                        <p v-if="editForm.errors.name" class="text-xs text-destructive">{{ editForm.errors.name }}</p>
+                        <p
+                            v-if="editForm.errors.name"
+                            class="text-xs text-destructive"
+                        >
+                            {{ editForm.errors.name }}
+                        </p>
                     </div>
                     <div class="space-y-2">
                         <Label>Subdominio</Label>
                         <Input :value="editing?.id" disabled />
                     </div>
                     <DialogFooter>
-                        <Button type="button" variant="outline" @click="editDialog = false">Cancelar</Button>
-                        <Button type="submit" :disabled="editForm.processing">Guardar cambios</Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            @click="editDialog = false"
+                            >Cancelar</Button
+                        >
+                        <Button type="submit" :disabled="editForm.processing"
+                            >Guardar cambios</Button
+                        >
                     </DialogFooter>
                 </form>
             </DialogContent>
@@ -291,13 +373,19 @@ function getTenantUrl(tenant: Tenant) {
                 <DialogHeader>
                     <DialogTitle>¿Eliminar tenant?</DialogTitle>
                     <DialogDescription>
-                        Se eliminará el tenant <strong>{{ toDelete?.name }}</strong> y su base de datos.
-                        Los admins asignados quedarán sin tenant. Esta acción no se puede deshacer.
+                        Se eliminará el tenant
+                        <strong>{{ toDelete?.name }}</strong> y su base de
+                        datos. Los admins asignados quedarán sin tenant. Esta
+                        acción no se puede deshacer.
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="outline" @click="deleteDialog = false">Cancelar</Button>
-                    <Button variant="destructive" @click="handleDelete">Eliminar</Button>
+                    <Button variant="outline" @click="deleteDialog = false"
+                        >Cancelar</Button
+                    >
+                    <Button variant="destructive" @click="handleDelete"
+                        >Eliminar</Button
+                    >
                 </DialogFooter>
             </DialogContent>
         </Dialog>

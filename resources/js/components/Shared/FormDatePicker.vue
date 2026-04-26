@@ -167,6 +167,7 @@ const handleTimeChange = (e: Event) => {
                     :locale="APP_LOCALE"
                     :model-value="internalDate"
                     @update:model-value="handleSelect"
+                    layout="month-and-year"
                 />
 
                 <div v-if="isDateTime" class="flex flex-col gap-1">

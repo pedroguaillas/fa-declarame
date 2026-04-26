@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
-import type { PaginatedData } from "@/types";
+import type { Paginator } from "@/types";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,7 @@ interface Employee {
 }
 
 const props = defineProps<{
-    employees: PaginatedData<Employee>;
+    employees: Paginator<Employee>;
 }>();
 
 // ── Crear ──────────────────────────────────────────────

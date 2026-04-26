@@ -28,6 +28,7 @@ export interface ActionDef<T> {
     show?: (item: T) => boolean;
     type?: "check";
     checked?: (item: T) => boolean;
+    tooltip?: string;
 }
 
 export interface ActionPayload<T> {

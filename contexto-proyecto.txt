@@ -448,7 +448,7 @@ Subscription {
 Permission { id, name, slug, description: string|null, model_permissions_count?: number }
 ModelEntity { id, name, slug, description: string|null, model_permissions_count?: number }
 ModelPermission { id, role_id, permission_id, model_entity_id, permission?, model_entity? }
-PaginatedData<T> {
+Paginator<T> {
   data: T[], current_page, last_page, per_page, total, from, to,
   links: { url: string|null, label: string, active: boolean }[]
 }

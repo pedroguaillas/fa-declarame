@@ -6,6 +6,8 @@ import {
     Settings,
     Building2,
     UserCog,
+    ShoppingCart,
+    ReceiptIndianRupee,
 } from "lucide-vue-next";
 import type { User } from "@/types";
 import type { LucideIcon } from "lucide-vue-next";
@@ -77,12 +79,17 @@ export function useNavigation(user: User) {
         {
             title: "Empresas",
             url: route("tenant.companies.index"),
-            icon: Users,
+            icon: Building2,
         },
         {
             title: "Compras",
             url: route("tenant.shops.index"),
-            icon: Users,
+            icon: ShoppingCart,
+        },
+        {
+            title: "Ventas",
+            url: route("tenant.orders.index"),
+            icon: ReceiptIndianRupee,
         },
 
         {

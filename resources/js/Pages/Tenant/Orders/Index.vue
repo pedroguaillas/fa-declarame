@@ -2,42 +2,36 @@
 import { router, useForm } from "@inertiajs/vue3";
 import { computed, ref, watch } from "vue";
 
+import ConfirmDialog from "@/components/Shared/ConfirmDialog.vue";
 import DataTableDesktop from "@/components/Shared/DataTableDesktop.vue";
 import DataTableMobile from "@/components/Shared/DataTableMobile.vue";
 import HeaderList from "@/components/Shared/HeaderList.vue";
 import Pagination from "@/components/Shared/Pagination.vue";
-import ConfirmDialog from "@/components/Shared/ConfirmDialog.vue";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
+import type { Paginator } from "@/types";
+import type { Order, RetentionItem, RetentionOption } from "@/types/tenant";
 import type { ActionDef, ActionPayload, ColumnDef } from "@/types/shared";
-import { Paginator } from "@/types";
-import { Account, RetentionItem, RetentionOption, Shop } from "@/types/tenant";
-import { FileText, Pencil, Receipt, Trash2 } from "lucide-vue-next";
+import { Pencil, Receipt, Trash2, Upload } from "lucide-vue-next";
 
-// ─── Props ─────────────────────────────────────────────────────────────────
+// ─── Props ──────────────────────────────────────────────────────────────────
 
 const props = defineProps<{
-    shops: Paginator<Shop>;
+    orders: Paginator<Order>;
     retentions: RetentionOption[];
-    accounts: Account[];
-    isActiveRetention: boolean;
 }>();
 
-// ─── Table columns ──────────────────────────────────────────────────────────
+// ─── Columns ────────────────────────────────────────────────────────────────
 
-const columns: ColumnDef<Shop>[] = [
+const columns: ColumnDef<Order>[] = [
     { key: "emision", label: "Emisión" },
-    {
-        key: "serie",
-        label: "Serie",
-        format: (_, item) => `${item.initial}-${item.serie}`,
-    },
+    { key: "serie", label: "Serie" },
     {
         key: "contact",
-        label: "Proveedor",
+        label: "Cliente",
         format: (_, item) => item.contact?.name ?? "—",
     },
     {
@@ -46,10 +40,6 @@ const columns: ColumnDef<Shop>[] = [
         align: "right",
         format: (v) => `$${Number(v).toFixed(2)}`,
     },
-];
-
-const columnsWithRetention: ColumnDef<Shop>[] = [
-    ...columns,
     {
         key: "retention_items",
         label: "Retención",
@@ -61,7 +51,7 @@ const columnsWithRetention: ColumnDef<Shop>[] = [
     },
     {
         key: "total",
-        label: "A pagar",
+        label: "A cobrar",
         align: "right",
         format: (_, item) => {
             const ret = (item.retention_items ?? []).reduce(
@@ -73,41 +63,34 @@ const columnsWithRetention: ColumnDef<Shop>[] = [
     },
 ];
 
-const activeColumns = computed(() =>
-    props.isActiveRetention ? columnsWithRetention : columns,
-);
-
-const actions: ActionDef<Shop>[] = [
-    { event: "edit", label: "Editar", icon: Pencil },
-    { event: "account", label: "Cuenta contable", icon: Receipt },
-    ...(props.isActiveRetention
-        ? [
-              {
-                  event: "retention",
-                  label: "Retención",
-                  icon: FileText,
-              } as ActionDef<Shop>,
-          ]
-        : []),
+const actions: ActionDef<Order>[] = [
+    {
+        event: "edit",
+        label: "Editar",
+        icon: Pencil,
+    },
+    {
+        event: "retention",
+        label: "Retención",
+        icon: Receipt,
+    },
     {
         event: "delete",
         label: "Eliminar",
+        icon: Trash2,
         separator: true,
         class: "text-destructive focus:text-destructive",
-        icon: Trash2,
     },
 ];
 
 // ─── Actions ────────────────────────────────────────────────────────────────
 
-const deleteTarget = ref<Shop | null>(null);
+const deleteTarget = ref<Order | null>(null);
 const deleteLoading = ref(false);
 
-function handleAction({ event, item }: ActionPayload<Shop>) {
+function handleAction({ event, item }: ActionPayload<Order>) {
     if (event === "edit") {
-        router.visit(route("tenant.shops.edit", { shop: item.id }));
-    } else if (event === "account") {
-        openAccountPanel(item);
+        router.visit(route("tenant.orders.edit", { order: item.id }));
     } else if (event === "retention") {
         openRetentionPanel(item);
     } else if (event === "delete") {
@@ -115,12 +98,12 @@ function handleAction({ event, item }: ActionPayload<Shop>) {
     }
 }
 
-function handleSelect(item: Shop) {
-    router.visit(route("tenant.shops.edit", { shop: item.id }));
+function handleSelect(item: Order) {
+    router.visit(route("tenant.orders.edit", { order: item.id }));
 }
 
 function handlePageChange(page: number) {
-    router.visit(route("tenant.shops.index", { page }), {
+    router.visit(route("tenant.orders.index", { page }), {
         preserveScroll: true,
     });
 }
@@ -129,7 +112,7 @@ function confirmDelete() {
     if (!deleteTarget.value) return;
     deleteLoading.value = true;
     router.delete(
-        route("tenant.shops.destroy", { shop: deleteTarget.value.id }),
+        route("tenant.orders.destroy", { order: deleteTarget.value.id }),
         {
             preserveScroll: true,
             onFinish: () => {
@@ -152,7 +135,7 @@ function handleFileSelected(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
     importForm.file = file;
-    importForm.post(route("tenant.shops.import"), {
+    importForm.post(route("tenant.orders.import"), {
         forceFormData: true,
         onFinish: () => {
             importForm.reset();
@@ -165,7 +148,7 @@ function handleRetentionsFileSelected(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
     importRetentionsForm.file = file;
-    importRetentionsForm.post(route("tenant.shops.import-retentions"), {
+    importRetentionsForm.post(route("tenant.orders.import-retentions"), {
         forceFormData: true,
         onFinish: () => {
             importRetentionsForm.reset();
@@ -175,65 +158,11 @@ function handleRetentionsFileSelected(event: Event) {
     });
 }
 
-// ─── Account panel ──────────────────────────────────────────────────────────
-
-const accountPanelOpen = ref(false);
-const accountPanelEditing = ref(false);
-const selectedShopForAccount = ref<Shop | null>(null);
-const accountQuery = ref("");
-const accountDropdownOpen = ref(false);
-const accountForm = useForm<{ acount_id: number | null }>({ acount_id: null });
-
-function openAccountPanel(shop: Shop) {
-    selectedShopForAccount.value = shop;
-    accountForm.acount_id = shop.acount_id;
-    accountPanelEditing.value = !shop.acount_id;
-    accountQuery.value = shop.account
-        ? `${shop.account.code} – ${shop.account.name}`
-        : "";
-    accountPanelOpen.value = true;
-}
-
-function closeAccountPanel() {
-    accountPanelOpen.value = false;
-    accountPanelEditing.value = false;
-    selectedShopForAccount.value = null;
-    accountQuery.value = "";
-}
-
-function filteredAccounts(): Account[] {
-    const q = accountQuery.value.trim().toLowerCase();
-    if (!q) return props.accounts.slice(0, 8);
-    return props.accounts
-        .filter(
-            (a) =>
-                a.code.toLowerCase().includes(q) ||
-                a.name.toLowerCase().includes(q),
-        )
-        .slice(0, 8);
-}
-
-function selectAccount(account: Account) {
-    accountForm.acount_id = account.id;
-    accountQuery.value = `${account.code} – ${account.name}`;
-    accountDropdownOpen.value = false;
-}
-
-function submitAccount() {
-    if (!selectedShopForAccount.value) return;
-    accountForm.patch(
-        route("tenant.shops.account.update", {
-            shop: selectedShopForAccount.value.id,
-        }),
-        { onSuccess: () => closeAccountPanel() },
-    );
-}
-
 // ─── Retention panel ─────────────────────────────────────────────────────────
 
 const today = new Date().toISOString().slice(0, 10);
 const retentionPanelOpen = ref(false);
-const selectedShop = ref<Shop | null>(null);
+const selectedOrder = ref<Order | null>(null);
 
 interface ItemSearch {
     query: string;
@@ -261,11 +190,11 @@ const retentionForm = useForm<{
     items: [emptyItem()],
 });
 
-function openRetentionPanel(shop: Shop) {
-    selectedShop.value = shop;
-    if (!shop.serie_retention) {
+function openRetentionPanel(order: Order) {
+    selectedOrder.value = order;
+    if (!order.serie_retention) {
         retentionForm.reset();
-        retentionForm.items = [emptyItem(shop.sub_total)];
+        retentionForm.items = [emptyItem(order.sub_total)];
         itemSearches.value = [emptySearch()];
     }
     retentionPanelOpen.value = true;
@@ -273,11 +202,11 @@ function openRetentionPanel(shop: Shop) {
 
 function closeRetentionPanel() {
     retentionPanelOpen.value = false;
-    selectedShop.value = null;
+    selectedOrder.value = null;
 }
 
 function addItem() {
-    retentionForm.items.push(emptyItem(selectedShop.value?.sub_total ?? 0));
+    retentionForm.items.push(emptyItem(selectedOrder.value?.sub_total ?? 0));
     itemSearches.value.push(emptySearch());
 }
 
@@ -304,7 +233,7 @@ function selectRetention(idx: number, retention: RetentionOption) {
     item.percentage = retention.percentage;
     recalcValue(idx);
     itemSearches.value[idx].query =
-        `${retention.code} – ${retention.description}`;
+        `${retention.code} - ${retention.description}`;
     itemSearches.value[idx].open = false;
 }
 
@@ -316,19 +245,13 @@ function recalcValue(idx: number) {
 }
 
 function submitRetention() {
-    if (!selectedShop.value) return;
+    if (!selectedOrder.value) return;
     retentionForm.post(
-        route("tenant.shops.retention.store", {
-            shop: selectedShop.value.id,
+        route("tenant.orders.retention.store", {
+            order: selectedOrder.value.id,
         }),
         { onSuccess: () => closeRetentionPanel() },
     );
-}
-
-const typeLabel: Record<string, string> = { iva: "IVA", renta: "Renta" };
-
-function closeDropdownDelayed(close: () => void) {
-    setTimeout(() => close(), 150);
 }
 
 function closeItemSearchDelayed(idx: number) {
@@ -339,46 +262,46 @@ function closeItemSearchDelayed(idx: number) {
     }, 150);
 }
 
+const typeLabel: Record<string, string> = { iva: "IVA", renta: "Renta" };
+
 watch(
-    () => props.shops.current_page,
-    () => {
-        // reset any open panels on page change
-        closeAccountPanel();
-        closeRetentionPanel();
-    },
+    () => props.orders.current_page,
+    () => closeRetentionPanel(),
 );
 </script>
 
 <template>
     <TenantLayout>
         <div
-            class="flex flex-col gap-4 w-full max-w-full md:max-w-2xl xl:max-w-7xl mx-auto"
+            class="flex flex-col gap-4 w-full max-w-full md:max-w-4xl xl:max-w-7xl mx-auto"
         >
             <!-- Header -->
             <HeaderList
-                title="Compras"
-                :description="`${shops.total} compra${shops.total !== 1 ? 's' : ''} registrada${shops.total !== 1 ? 's' : ''}`"
-                link-label="Nueva compra"
-                :link-href="route('tenant.shops.create')"
+                title="Ventas"
+                :description="`${orders.total} venta${orders.total !== 1 ? 's' : ''} registrada${orders.total !== 1 ? 's' : ''}`"
+                link-label="Nueva venta"
+                :link-href="route('tenant.orders.create')"
                 :show-import="true"
                 import-label="Importar SRI"
                 @click-import="importFileInput?.click()"
             >
-                <!-- Extra button for retentions import -->
                 <template #extra-actions>
                     <Button
-                        v-if="isActiveRetention"
                         variant="outline"
                         size="sm"
                         class="font-bold"
                         :disabled="importRetentionsForm.processing"
                         @click="importRetentionsFileInput?.click()"
                     >
-                        {{
-                            importRetentionsForm.processing
-                                ? "Importando…"
-                                : "Importar retenciones"
-                        }}
+                        <Upload class="size-4" />
+
+                        <span class="hidden md:inline-block">
+                            {{
+                                importRetentionsForm.processing
+                                    ? "Importando…"
+                                    : "Importar retenciones"
+                            }}</span
+                        >
                     </Button>
                 </template>
             </HeaderList>
@@ -387,28 +310,28 @@ watch(
             <input
                 ref="importFileInput"
                 type="file"
-                accept=".txt"
+                accept=".txt,.zip"
                 class="hidden"
                 @change="handleFileSelected"
             />
             <input
                 ref="importRetentionsFileInput"
                 type="file"
-                accept=".txt,.zip"
+                accept=".txt"
                 class="hidden"
                 @change="handleRetentionsFileSelected"
             />
 
             <!-- Table -->
             <div
-                class="border-border bg-card flex-1 overflow-hidden rounded-lg border"
+                class="border-border bg-card overflow-hidden rounded-lg border"
             >
                 <div class="hidden h-full md:block">
                     <DataTableDesktop
-                        :columns="activeColumns"
-                        :items="shops.data"
+                        :columns="columns"
+                        :items="orders.data"
                         :actions="actions"
-                        empty-text="No hay compras registradas."
+                        empty-text="No hay ventas registradas."
                         @select="handleSelect"
                         @action="handleAction"
                         :actionsMode="'icons'"
@@ -416,24 +339,24 @@ watch(
                 </div>
                 <div class="h-full md:hidden">
                     <DataTableMobile
-                        :columns="activeColumns"
-                        :items="shops.data"
+                        :columns="columns"
+                        :items="orders.data"
                         :actions="actions"
-                        empty-text="No hay compras registradas."
+                        empty-text="No hay ventas registradas."
                         @select="handleSelect"
                         @action="handleAction"
                     />
                 </div>
             </div>
 
-            <Pagination :paginator="shops" @change-page="handlePageChange" />
+            <Pagination :paginator="orders" @change-page="handlePageChange" />
         </div>
 
         <!-- Confirm delete -->
         <ConfirmDialog
             :open="!!deleteTarget"
-            title="¿Eliminar compra?"
-            :description="`Se eliminará la compra ${deleteTarget?.serie}. Esta acción no se puede deshacer.`"
+            title="¿Eliminar venta?"
+            :description="`Se eliminará la venta ${deleteTarget?.serie}. Esta acción no se puede deshacer.`"
             :loading="deleteLoading"
             @update:open="
                 (v) => {
@@ -443,234 +366,6 @@ watch(
             @confirm="confirmDelete"
             @cancel="deleteTarget = null"
         />
-
-        <!-- Account slide-over -->
-        <Teleport to="body">
-            <Transition
-                enter-active-class="transition-opacity duration-200"
-                enter-from-class="opacity-0"
-                enter-to-class="opacity-100"
-                leave-active-class="transition-opacity duration-150"
-                leave-from-class="opacity-100"
-                leave-to-class="opacity-0"
-            >
-                <div
-                    v-if="accountPanelOpen"
-                    class="fixed inset-0 z-40 bg-black/40"
-                    @click="closeAccountPanel"
-                />
-            </Transition>
-
-            <Transition
-                enter-active-class="transition-transform duration-200 ease-out"
-                enter-from-class="translate-x-full"
-                enter-to-class="translate-x-0"
-                leave-active-class="transition-transform duration-150 ease-in"
-                leave-from-class="translate-x-0"
-                leave-to-class="translate-x-full"
-            >
-                <div
-                    v-if="accountPanelOpen && selectedShopForAccount"
-                    class="bg-background border-border fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l shadow-xl"
-                >
-                    <div
-                        class="border-border flex items-start justify-between border-b px-6 py-4"
-                    >
-                        <div>
-                            <h2 class="text-foreground text-base font-semibold">
-                                Cuenta contable
-                            </h2>
-                            <p
-                                class="text-muted-foreground mt-0.5 font-mono text-sm"
-                            >
-                                {{ selectedShopForAccount.serie }}
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            class="text-muted-foreground hover:text-foreground -mr-1 rounded-md p-1 transition-colors"
-                            @click="closeAccountPanel"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke-width="1.5"
-                                stroke="currentColor"
-                                class="size-5"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M6 18 18 6M6 6l12 12"
-                                />
-                            </svg>
-                        </button>
-                    </div>
-
-                    <!-- View mode -->
-                    <div
-                        v-if="
-                            selectedShopForAccount.account &&
-                            accountForm.acount_id ===
-                                selectedShopForAccount.acount_id &&
-                            !accountPanelEditing
-                        "
-                        class="flex flex-1 flex-col p-6"
-                    >
-                        <p
-                            class="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase"
-                        >
-                            Cuenta asignada
-                        </p>
-                        <div
-                            class="border-border bg-muted flex items-start gap-3 rounded-lg border px-4 py-3"
-                        >
-                            <span
-                                class="text-foreground font-mono text-sm font-semibold"
-                                >{{ selectedShopForAccount.account.code }}</span
-                            >
-                            <span class="text-foreground text-sm">{{
-                                selectedShopForAccount.account.name
-                            }}</span>
-                        </div>
-                        <button
-                            type="button"
-                            class="text-primary hover:text-primary/70 mt-4 self-start text-sm font-medium"
-                            @click="accountPanelEditing = true"
-                        >
-                            Cambiar cuenta
-                        </button>
-                    </div>
-
-                    <!-- Assign form -->
-                    <form
-                        v-else
-                        class="flex flex-1 flex-col overflow-hidden"
-                        @submit.prevent="submitAccount"
-                    >
-                        <div class="flex-1 overflow-y-auto p-6">
-                            <p
-                                class="text-muted-foreground mb-3 text-xs font-medium tracking-wider uppercase"
-                            >
-                                Buscar cuenta de costo o gasto
-                            </p>
-                            <div class="relative">
-                                <input
-                                    v-model="accountQuery"
-                                    type="text"
-                                    placeholder="Buscar por código o nombre…"
-                                    class="border-border bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring/30 h-9 w-full rounded-md border px-3 pr-8 text-sm focus:ring-2 focus:outline-none"
-                                    @focus="accountDropdownOpen = true"
-                                    @blur="
-                                        closeDropdownDelayed(
-                                            () => (accountDropdownOpen = false),
-                                        )
-                                    "
-                                />
-                                <button
-                                    v-if="accountForm.acount_id"
-                                    type="button"
-                                    class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2"
-                                    @mousedown.prevent="
-                                        () => {
-                                            accountForm.acount_id = null;
-                                            accountQuery = '';
-                                        }
-                                    "
-                                >
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke-width="1.5"
-                                        stroke="currentColor"
-                                        class="size-4"
-                                    >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            d="M6 18 18 6M6 6l12 12"
-                                        />
-                                    </svg>
-                                </button>
-                                <div
-                                    v-if="
-                                        accountDropdownOpen &&
-                                        filteredAccounts().length > 0
-                                    "
-                                    class="border-border bg-popover absolute top-full right-0 left-0 z-10 mt-1 max-h-60 overflow-y-auto rounded-md border shadow-lg"
-                                >
-                                    <button
-                                        v-for="account in filteredAccounts()"
-                                        :key="account.id"
-                                        type="button"
-                                        class="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors"
-                                        @mousedown.prevent="
-                                            selectAccount(account)
-                                        "
-                                    >
-                                        <span
-                                            class="text-foreground w-28 shrink-0 font-mono text-xs font-semibold"
-                                            >{{ account.code }}</span
-                                        >
-                                        <span
-                                            class="text-muted-foreground flex-1 truncate text-xs"
-                                            >{{ account.name }}</span
-                                        >
-                                    </button>
-                                </div>
-                            </div>
-                            <div
-                                v-if="accountForm.acount_id"
-                                class="border-border bg-muted mt-3 flex items-center gap-3 rounded-lg border px-4 py-2.5"
-                            >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke-width="1.5"
-                                    stroke="currentColor"
-                                    class="text-primary size-4 shrink-0"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        d="m4.5 12.75 6 6 9-13.5"
-                                    />
-                                </svg>
-                                <span class="text-foreground text-sm">{{
-                                    accountQuery
-                                }}</span>
-                            </div>
-                        </div>
-                        <div
-                            class="border-border flex items-center justify-end gap-3 border-t px-6 py-4"
-                        >
-                            <Button
-                                variant="outline"
-                                type="button"
-                                @click="closeAccountPanel"
-                                >Cancelar</Button
-                            >
-                            <Button
-                                type="submit"
-                                :disabled="
-                                    accountForm.processing ||
-                                    !accountForm.acount_id
-                                "
-                            >
-                                {{
-                                    accountForm.processing
-                                        ? "Guardando…"
-                                        : "Guardar cuenta"
-                                }}
-                            </Button>
-                        </div>
-                    </form>
-                </div>
-            </Transition>
-        </Teleport>
 
         <!-- Retention slide-over -->
         <Teleport to="body">
@@ -698,7 +393,7 @@ watch(
                 leave-to-class="translate-x-full"
             >
                 <div
-                    v-if="retentionPanelOpen && selectedShop"
+                    v-if="retentionPanelOpen && selectedOrder"
                     class="bg-background border-border fixed inset-y-0 right-0 z-50 flex w-full max-w-4xl border-l shadow-xl"
                 >
                     <!-- Left: invoice info -->
@@ -709,12 +404,12 @@ watch(
                             <p
                                 class="text-muted-foreground text-xs font-semibold tracking-widest uppercase"
                             >
-                                Factura
+                                Venta
                             </p>
                             <p
                                 class="text-foreground mt-0.5 font-mono text-sm font-medium"
                             >
-                                {{ selectedShop.serie }}
+                                {{ selectedOrder.serie }}
                             </p>
                         </div>
                         <div class="flex-1 space-y-4 overflow-y-auto p-5">
@@ -722,10 +417,10 @@ watch(
                                 <p
                                     class="text-muted-foreground mb-0.5 text-xs font-medium"
                                 >
-                                    Proveedor
+                                    Cliente
                                 </p>
                                 <p class="text-foreground text-sm">
-                                    {{ selectedShop.contact?.name }}
+                                    {{ selectedOrder.contact?.name }}
                                 </p>
                             </div>
                             <div>
@@ -735,7 +430,7 @@ watch(
                                     Fecha emisión
                                 </p>
                                 <p class="text-foreground text-sm tabular-nums">
-                                    {{ selectedShop.emision }}
+                                    {{ selectedOrder.emision }}
                                 </p>
                             </div>
                             <div>
@@ -747,7 +442,7 @@ watch(
                                 <p
                                     class="text-foreground font-mono text-xs break-all"
                                 >
-                                    {{ selectedShop.autorization }}
+                                    {{ selectedOrder.autorization }}
                                 </p>
                             </div>
                             <!-- IVA breakdown -->
@@ -772,7 +467,7 @@ watch(
                                     <tbody class="divide-border divide-y">
                                         <tr
                                             v-if="
-                                                Number(selectedShop.no_iva) > 0
+                                                Number(selectedOrder.no_iva) > 0
                                             "
                                         >
                                             <td
@@ -785,14 +480,14 @@ watch(
                                             >
                                                 ${{
                                                     Number(
-                                                        selectedShop.no_iva,
+                                                        selectedOrder.no_iva,
                                                     ).toFixed(2)
                                                 }}
                                             </td>
                                         </tr>
                                         <tr
                                             v-if="
-                                                Number(selectedShop.base0) > 0
+                                                Number(selectedOrder.base0) > 0
                                             "
                                         >
                                             <td
@@ -805,14 +500,14 @@ watch(
                                             >
                                                 ${{
                                                     Number(
-                                                        selectedShop.base0,
+                                                        selectedOrder.base0,
                                                     ).toFixed(2)
                                                 }}
                                             </td>
                                         </tr>
                                         <tr
                                             v-if="
-                                                Number(selectedShop.base12) > 0
+                                                Number(selectedOrder.base12) > 0
                                             "
                                         >
                                             <td
@@ -825,14 +520,14 @@ watch(
                                             >
                                                 ${{
                                                     Number(
-                                                        selectedShop.base12,
+                                                        selectedOrder.base12,
                                                     ).toFixed(2)
                                                 }}
                                             </td>
                                         </tr>
                                         <tr
                                             v-if="
-                                                Number(selectedShop.iva12) > 0
+                                                Number(selectedOrder.iva12) > 0
                                             "
                                         >
                                             <td
@@ -845,14 +540,14 @@ watch(
                                             >
                                                 ${{
                                                     Number(
-                                                        selectedShop.iva12,
+                                                        selectedOrder.iva12,
                                                     ).toFixed(2)
                                                 }}
                                             </td>
                                         </tr>
                                         <tr
                                             v-if="
-                                                Number(selectedShop.base15) > 0
+                                                Number(selectedOrder.base15) > 0
                                             "
                                         >
                                             <td
@@ -865,14 +560,14 @@ watch(
                                             >
                                                 ${{
                                                     Number(
-                                                        selectedShop.base15,
+                                                        selectedOrder.base15,
                                                     ).toFixed(2)
                                                 }}
                                             </td>
                                         </tr>
                                         <tr
                                             v-if="
-                                                Number(selectedShop.iva15) > 0
+                                                Number(selectedOrder.iva15) > 0
                                             "
                                         >
                                             <td
@@ -885,14 +580,14 @@ watch(
                                             >
                                                 ${{
                                                     Number(
-                                                        selectedShop.iva15,
+                                                        selectedOrder.iva15,
                                                     ).toFixed(2)
                                                 }}
                                             </td>
                                         </tr>
                                         <tr
                                             v-if="
-                                                Number(selectedShop.discount) >
+                                                Number(selectedOrder.discount) >
                                                 0
                                             "
                                         >
@@ -906,12 +601,14 @@ watch(
                                             >
                                                 -${{
                                                     Number(
-                                                        selectedShop.discount,
+                                                        selectedOrder.discount,
                                                     ).toFixed(2)
                                                 }}
                                             </td>
                                         </tr>
-                                        <tr v-if="Number(selectedShop.ice) > 0">
+                                        <tr
+                                            v-if="Number(selectedOrder.ice) > 0"
+                                        >
                                             <td
                                                 class="text-muted-foreground px-3 py-1.5"
                                             >
@@ -922,7 +619,7 @@ watch(
                                             >
                                                 ${{
                                                     Number(
-                                                        selectedShop.ice,
+                                                        selectedOrder.ice,
                                                     ).toFixed(2)
                                                 }}
                                             </td>
@@ -938,7 +635,7 @@ watch(
                                             >
                                                 ${{
                                                     Number(
-                                                        selectedShop.total,
+                                                        selectedOrder.total,
                                                     ).toFixed(2)
                                                 }}
                                             </td>
@@ -964,7 +661,7 @@ watch(
                                     class="text-muted-foreground mt-0.5 font-mono text-sm"
                                 >
                                     {{
-                                        selectedShop.serie_retention ??
+                                        selectedOrder.serie_retention ??
                                         "001-001-000000001"
                                     }}
                                 </p>
@@ -993,7 +690,7 @@ watch(
 
                         <!-- Registered view -->
                         <div
-                            v-if="selectedShop.serie_retention"
+                            v-if="selectedOrder.serie_retention"
                             class="flex-1 overflow-y-auto p-6"
                         >
                             <div class="mb-6 grid grid-cols-2 gap-4">
@@ -1006,7 +703,7 @@ watch(
                                     <p
                                         class="text-foreground font-mono text-sm font-medium"
                                     >
-                                        {{ selectedShop.serie_retention }}
+                                        {{ selectedOrder.serie_retention }}
                                     </p>
                                 </div>
                                 <div>
@@ -1016,7 +713,7 @@ watch(
                                         Fecha
                                     </p>
                                     <p class="text-foreground text-sm">
-                                        {{ selectedShop.date_retention }}
+                                        {{ selectedOrder.date_retention }}
                                     </p>
                                 </div>
                                 <div class="col-span-2">
@@ -1029,7 +726,7 @@ watch(
                                         class="text-foreground font-mono text-sm break-all"
                                     >
                                         {{
-                                            selectedShop.autorization_retention
+                                            selectedOrder.autorization_retention
                                         }}
                                     </p>
                                 </div>
@@ -1040,7 +737,7 @@ watch(
                                         Estado
                                     </p>
                                     <Badge>{{
-                                        selectedShop.state_retention
+                                        selectedOrder.state_retention
                                     }}</Badge>
                                 </div>
                             </div>
@@ -1092,7 +789,7 @@ watch(
                                     </thead>
                                     <tbody class="divide-border divide-y">
                                         <tr
-                                            v-for="item in selectedShop.retention_items"
+                                            v-for="item in selectedOrder.retention_items"
                                             :key="item.id"
                                         >
                                             <td
@@ -1152,7 +849,7 @@ watch(
                                                 class="text-foreground px-4 py-2.5 text-right font-mono font-semibold"
                                             >
                                                 ${{
-                                                    selectedShop.retention_items
+                                                    selectedOrder.retention_items
                                                         .reduce(
                                                             (s, i) =>
                                                                 s +

@@ -3,19 +3,19 @@ import { computed, ref, watch, watchEffect } from "vue";
 import { Link } from "@inertiajs/vue3";
 
 import FormField from "@/components/Shared/FormField.vue";
+import FormSelect from "@/components/Shared/FormSelect.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import FormSelect from "@/components/Shared/FormSelect.vue";
-import { Account, VoucherType } from "@/types/tenant";
+
+import type { VoucherType } from "@/types/tenant";
 import FormDatePicker from "@/components/Shared/FormDatePicker.vue";
 
 interface FormErrors {
     [key: string]: string | undefined;
 }
 
-interface ShopFormData {
-    acount_id: number | null;
+interface OrderFormData {
     contact_id: number | null;
     voucher_type_id: number | string;
     emision: string;
@@ -25,8 +25,12 @@ interface ShopFormData {
     sub_total: number | string;
     no_iva: number | string;
     base0: number | string;
+    base5: number | string;
+    base8: number | string;
     base12: number | string;
     base15: number | string;
+    iva5: number | string;
+    iva8: number | string;
     iva12: number | string;
     iva15: number | string;
     aditional_discount: number | string;
@@ -34,25 +38,19 @@ interface ShopFormData {
     ice: number | string;
     total: number | string;
     state: string;
-    serie_retention: string;
-    date_retention: string;
-    state_retention: string;
-    autorization_retention: string;
     errors: FormErrors;
     processing: boolean;
 }
 
 const props = withDefaults(
     defineProps<{
-        form: ShopFormData;
+        form: OrderFormData;
         voucherTypes: VoucherType[];
-        accounts?: Account[];
         submitLabel: string;
         initialContactIdentification?: string;
         initialContactName?: string;
     }>(),
     {
-        accounts: () => [],
         initialContactIdentification: "",
         initialContactName: "",
     },
@@ -89,9 +87,7 @@ watch(contactIdentification, async (identification) => {
 
     try {
         const res = await fetch(
-            route("tenant.contacts.resolve", {
-                identification,
-            }),
+            route("tenant.contacts.resolve", { identification }),
             { headers: { Accept: "application/json" } },
         );
 
@@ -112,51 +108,6 @@ watch(contactIdentification, async (identification) => {
         contactResolving.value = false;
     }
 });
-
-// ── Account search ─────────────────────────────────────────────────────────
-
-const accountQuery = ref("");
-const accountDropdownOpen = ref(false);
-
-watch(
-    () => props.form.acount_id,
-    (id) => {
-        if (id && !accountQuery.value) {
-            const found = props.accounts.find((a) => a.id === id);
-            if (found) accountQuery.value = `${found.code} – ${found.name}`;
-        }
-    },
-    { immediate: true },
-);
-
-function filteredAccounts(): Account[] {
-    const q = accountQuery.value.trim().toLowerCase();
-    if (!q) return props.accounts.slice(0, 8);
-    return props.accounts
-        .filter(
-            (a) =>
-                a.code.toLowerCase().includes(q) ||
-                a.name.toLowerCase().includes(q),
-        )
-        .slice(0, 8);
-}
-
-function selectAccount(account: Account) {
-    props.form.acount_id = account.id;
-    accountQuery.value = `${account.code} – ${account.name}`;
-    accountDropdownOpen.value = false;
-}
-
-function clearAccount() {
-    props.form.acount_id = null;
-    accountQuery.value = "";
-}
-
-function closeAccountDropdownDelayed() {
-    setTimeout(() => {
-        accountDropdownOpen.value = false;
-    }, 150);
-}
 
 // ── Numeric helpers ────────────────────────────────────────────────────────
 
@@ -293,72 +244,6 @@ const nowLocal = new Date(
                     />
                 </div>
 
-                <!-- Cuenta contable -->
-                <div class="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-3">
-                    <Label>Cuenta contable (costo / gasto)</Label>
-                    <div class="relative">
-                        <Input
-                            v-model="accountQuery"
-                            type="text"
-                            placeholder="Buscar por código o nombre…"
-                            class="pr-8"
-                            @focus="accountDropdownOpen = true"
-                            @blur="closeAccountDropdownDelayed"
-                        />
-                        <button
-                            v-if="form.acount_id"
-                            type="button"
-                            class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2"
-                            @mousedown.prevent="clearAccount"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke-width="1.5"
-                                stroke="currentColor"
-                                class="size-4"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M6 18 18 6M6 6l12 12"
-                                />
-                            </svg>
-                        </button>
-                        <div
-                            v-if="
-                                accountDropdownOpen &&
-                                filteredAccounts().length > 0
-                            "
-                            class="border-border bg-popover absolute left-0 right-0 top-full z-10 mt-1 max-h-52 overflow-y-auto rounded-md border shadow-lg"
-                        >
-                            <button
-                                v-for="account in filteredAccounts()"
-                                :key="account.id"
-                                type="button"
-                                class="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors"
-                                @mousedown.prevent="selectAccount(account)"
-                            >
-                                <span
-                                    class="text-foreground w-28 shrink-0 font-mono text-xs font-medium"
-                                    >{{ account.code }}</span
-                                >
-                                <span
-                                    class="text-muted-foreground flex-1 truncate text-xs"
-                                    >{{ account.name }}</span
-                                >
-                            </button>
-                        </div>
-                    </div>
-                    <p
-                        v-if="form.errors.acount_id"
-                        class="text-destructive text-xs"
-                    >
-                        {{ form.errors.acount_id }}
-                    </p>
-                </div>
-
                 <!-- Tipo de comprobante -->
                 <FormSelect
                     label="Tipo de comprobante"
@@ -371,7 +256,6 @@ const nowLocal = new Date(
 
                 <!-- Serie -->
                 <FormField
-                    id="serie"
                     label="Serie"
                     v-model="form.serie"
                     :error="form.errors.serie"
@@ -392,9 +276,8 @@ const nowLocal = new Date(
                 />
 
                 <!-- Autorización -->
-                <div class="flex flex-col gap-1.5 lg:col-span-2">
+                <div class="lg:col-span-2">
                     <FormField
-                        id="autorization"
                         label="Autorización"
                         v-model="form.autorization"
                         :error="form.errors.autorization"
@@ -425,7 +308,6 @@ const nowLocal = new Date(
             </h2>
             <div class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
                 <FormField
-                    id="no_iva"
                     label="No IVA"
                     v-model="form.no_iva"
                     type="number"
@@ -434,7 +316,6 @@ const nowLocal = new Date(
                     class="text-right font-mono"
                 />
                 <FormField
-                    id="base0"
                     label="Base 0%"
                     v-model="form.base0"
                     type="number"
@@ -443,7 +324,6 @@ const nowLocal = new Date(
                     class="text-right font-mono"
                 />
                 <FormField
-                    id="base15"
                     label="Base 15%"
                     v-model="form.base15"
                     type="number"
@@ -452,7 +332,6 @@ const nowLocal = new Date(
                     class="text-right font-mono"
                 />
                 <FormField
-                    id="iva15"
                     label="IVA 15%"
                     v-model="form.iva15"
                     type="number"
@@ -461,7 +340,6 @@ const nowLocal = new Date(
                     class="text-right font-mono"
                 />
                 <FormField
-                    id="discount"
                     label="Descuento"
                     v-model="form.discount"
                     type="number"
@@ -470,7 +348,6 @@ const nowLocal = new Date(
                     class="text-right font-mono"
                 />
                 <FormField
-                    id="sub_total"
                     label="Subtotal"
                     :model-value="form.sub_total"
                     :error="form.errors.sub_total"
@@ -480,7 +357,6 @@ const nowLocal = new Date(
                     class="text-right font-mono"
                 />
                 <FormField
-                    id="ice"
                     label="ICE"
                     v-model="form.ice"
                     type="number"
@@ -493,9 +369,8 @@ const nowLocal = new Date(
                 <div class="bg-muted flex flex-col gap-1 rounded-lg px-4 py-3">
                     <Label
                         class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
+                        >Total</Label
                     >
-                        Total
-                    </Label>
                     <Input
                         :model-value="form.total"
                         type="number"
@@ -518,7 +393,7 @@ const nowLocal = new Date(
             class="border-border flex items-center justify-end gap-3 border-t px-6 py-4"
         >
             <Button variant="outline" type="button" as-child>
-                <Link :href="route('tenant.shops.index')"> Cancelar </Link>
+                <Link :href="route('tenant.orders.index')">Cancelar</Link>
             </Button>
             <Button type="submit" :disabled="form.processing">
                 {{ form.processing ? "Guardando..." : submitLabel }}

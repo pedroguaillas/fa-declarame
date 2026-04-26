@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Tenant\Contact;
+use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
@@ -48,8 +49,16 @@ class OrderImportService
                 continue;
             }
 
-            [$tipoComprobante, $serie, $claveAcceso, $fechaAutorizacion,
-                $fechaEmision, $valorSinImpuestos, $iva, $total] = $cols;
+            [
+                $tipoComprobante,
+                $serie,
+                $claveAcceso,
+                $fechaAutorizacion,
+                $fechaEmision,
+                $valorSinImpuestos,
+                $iva,
+                $total
+            ] = $cols;
 
             $claveAcceso = trim($claveAcceso);
 
@@ -78,8 +87,10 @@ class OrderImportService
                 $sriData = $this->xmlParser->parse($autorizacion);
             }
 
+
             if ($sriData !== null) {
                 $contact = Contact::firstOrCreate(
+                    ['identification_type_id' => IdentificationType::where('code_order', $sriData['cod_doc'])->first()->id],
                     ['identification' => $sriData['identificacion_comprador']],
                     ['name' => $sriData['razon_social_comprador']],
                 );

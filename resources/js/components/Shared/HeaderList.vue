@@ -57,9 +57,7 @@ const handleImportClick = () => {
 
 <template>
     <Head :title="title" />
-    <div
-        class="flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-between"
-    >
+    <div class="flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-3">
             <Button
                 v-if="backHref"
@@ -74,9 +72,7 @@ const handleImportClick = () => {
             </Button>
 
             <div>
-                <h2
-                    class="text-2xl leading-tight font-black tracking-tight uppercase"
-                >
+                <h2 class="text-2xl leading-tight font-black tracking-tight uppercase">
                     {{ title }}
                 </h2>
                 <p
@@ -95,9 +91,7 @@ const handleImportClick = () => {
                 />
                 <Input
                     :model-value="modelValue"
-                    @update:model-value="
-                        emit('update:modelValue', String($event))
-                    "
+                    @update:model-value="emit('update:modelValue', String($event))"
                     :placeholder="searchPlaceholder"
                     class="w-full pr-9 pl-10 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
                 />
@@ -111,15 +105,17 @@ const handleImportClick = () => {
                 </button>
             </div>
 
-            <div class="flex w-full gap-2 sm:w-auto">
-                <!-- Botón Importar -->
+            <div class="flex w-full items-center gap-2 sm:w-auto">
+                
+                <slot name="extra-actions" />
+
                 <template v-if="showImport">
                     <Button
                         variant="outline"
                         type="button"
                         @click="handleImportClick"
                         size="sm"
-                        class="flex-1 cursor-pointer font-bold sm:flex-none"
+                        class="cursor-pointer font-bold sm:flex-none"
                     >
                         <component :is="importIcon" class="size-4" />
                         <span class="hidden md:inline-block">
@@ -128,12 +124,11 @@ const handleImportClick = () => {
                     </Button>
                 </template>
 
-                <!-- Botón Principal -->
                 <template v-if="linkLabel">
                     <Button
                         v-if="linkHref"
                         as-child
-                        class="flex-1 font-bold sm:flex-none"
+                        class=" font-bold sm:flex-none"
                         size="sm"
                     >
                         <Link :href="linkHref">
@@ -146,7 +141,8 @@ const handleImportClick = () => {
                         v-else
                         type="button"
                         @click="handleButtonClick"
-                        class="flex-1 cursor-pointer font-bold sm:flex-none"
+                        class=" cursor-pointer font-bold sm:flex-none"
+                        size="sm"
                     >
                         <component :is="linkIcon" class="size-4" />
                         {{ linkLabel }}

@@ -94,7 +94,7 @@ export interface LaravelPaginatorMeta {
     total: number;
 }
 
-export interface PaginatedData<T> {
+export interface Paginator<T> {
     data: T[];
     current_page: number;
     last_page: number;

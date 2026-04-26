@@ -22,6 +22,13 @@ import type { Component } from "vue";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { ActionDef, ActionPayload, ColumnDef } from "@/types/shared";
 
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+
 const props = defineProps<{
     columns: ColumnDef<T>[];
     items: T[];
@@ -29,6 +36,7 @@ const props = defineProps<{
     actions?: ActionDef<T>[];
     emptyText?: string;
     emptyIcon?: Component;
+    actionsMode?: "menu" | "icons" | "auto";
 }>();
 
 const emit = defineEmits<{
@@ -193,40 +201,75 @@ function visibleActions(item: T): ActionDef<T>[] {
                                 <!-- Si todas las acciones visibles son tipo check, mostrarlas inline -->
                                 <template
                                     v-if="
-                                        visibleActions(item).every(
-                                            (a) => a.type === 'check',
-                                        )
+                                        props.actionsMode === 'icons' ||
+                                        (props.actionsMode === 'auto' &&
+                                            visibleActions(item).every(
+                                                (a) => a.icon,
+                                            ))
                                     "
                                 >
                                     <div
                                         class="flex items-center justify-center gap-1"
                                     >
-                                        <button
-                                            v-for="action in visibleActions(
-                                                item,
-                                            )"
-                                            :key="action.event"
-                                            type="button"
-                                            :class="[
-                                                'flex size-6 cursor-pointer items-center justify-center rounded transition-colors',
-                                                action.checked?.(item)
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'bg-muted text-muted-foreground hover:bg-muted/80',
-                                                action.class,
-                                            ]"
-                                            @click="
-                                                emit('action', {
-                                                    event: action.event,
-                                                    item,
-                                                })
-                                            "
-                                        >
-                                            <component
-                                                v-if="action.icon"
-                                                :is="action.icon"
-                                                class="size-3.5"
-                                            />
-                                        </button>
+                                        <TooltipProvider>
+                                            <div
+                                                class="flex items-center justify-center gap-1"
+                                            >
+                                                <Tooltip
+                                                    v-for="action in visibleActions(
+                                                        item,
+                                                    )"
+                                                    :key="action.event"
+                                                >
+                                                    <TooltipTrigger as-child>
+                                                        <button
+                                                            type="button"
+                                                            :class="[
+                                                                'flex size-6 cursor-pointer items-center justify-center rounded transition-colors',
+
+                                                                action.checked?.(
+                                                                    item,
+                                                                )
+                                                                    ? 'bg-primary text-primary-foreground'
+                                                                    : '',
+
+                                                                action.event ===
+                                                                'delete'
+                                                                    ? 'text-destructive hover:bg-destructive/10'
+                                                                    : 'bg-muted text-muted-foreground hover:bg-muted/80',
+
+                                                                action.class,
+                                                            ]"
+                                                            @click="
+                                                                emit('action', {
+                                                                    event: action.event,
+                                                                    item,
+                                                                })
+                                                            "
+                                                        >
+                                                            <component
+                                                                v-if="
+                                                                    action.icon
+                                                                "
+                                                                :is="
+                                                                    action.icon
+                                                                "
+                                                                class="size-3.5"
+                                                            />
+                                                        </button>
+                                                    </TooltipTrigger>
+
+                                                    <TooltipContent>
+                                                        <p>
+                                                            {{
+                                                                action.tooltip ??
+                                                                action.label
+                                                            }}
+                                                        </p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </div>
+                                        </TooltipProvider>
                                     </div>
                                 </template>
 

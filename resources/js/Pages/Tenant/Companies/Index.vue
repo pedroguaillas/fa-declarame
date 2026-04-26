@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from "@/layouts/AppLayout.vue";
 import { router } from "@inertiajs/vue3";
-import type { PaginatedData } from "@/types";
+import type { Paginator } from "@/types";
 import type { ActionPayload, ColumnDef } from "@/types/shared";
 import { Company } from "@/types/tenant";
 
@@ -12,7 +12,7 @@ import Pagination from "@/components/Shared/Pagination.vue";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 
 const props = defineProps<{
-    companies: PaginatedData<Company>;
+    companies: Paginator<Company>;
 }>();
 
 const columns: ColumnDef<Company>[] = [

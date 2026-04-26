@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useForm, router } from "@inertiajs/vue3";
 import { ref, computed } from "vue";
-import type { User, Role, PaginatedData, Tenant } from "@/types";
+import type { User, Role, Paginator, Tenant } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,7 @@ import {
 import { Users, Plus, Pencil, Trash2 } from "lucide-vue-next";
 
 const props = defineProps<{
-    users: PaginatedData<User>;
+    users: Paginator<User>;
     roles: Role[];
     admins: User[];
     tenants: Tenant[];
@@ -532,11 +532,8 @@ function getRoleBadgeVariant(slug: string) {
                                 </SelectContent>
                             </Select>
                         </div>
-                        
-                        <div
-                            v-if="editRoleSlug === 'admin'"
-                            class="space-y-2"
-                        >
+
+                        <div v-if="editRoleSlug === 'admin'" class="space-y-2">
                             <Label>Tenant (empresa)</Label>
                             <Select v-model="editForm.tenant_id">
                                 <SelectTrigger
