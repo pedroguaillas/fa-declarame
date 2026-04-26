@@ -3,6 +3,7 @@
 namespace App\Models\Tenant;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Contact extends Model
 {
@@ -30,5 +31,10 @@ class Contact extends Model
             'phantom_taxpayer' => 'boolean',
             'no_transactions' => 'boolean',
         ];
+    }
+
+    public function identificationType(): BelongsTo
+    {
+        return $this->belongsTo(IdentificationType::class);
     }
 }

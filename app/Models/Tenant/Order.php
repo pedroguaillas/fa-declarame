@@ -77,4 +77,9 @@ class Order extends BaseModel
     {
         return $this->belongsTo(Contact::class);
     }
+
+    public function voucherType(): BelongsTo
+    {
+        return $this->belongsTo(VoucherType::class);
+    }
 }

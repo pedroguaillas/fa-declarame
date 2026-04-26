@@ -9,6 +9,7 @@ use App\Http\Controllers\Tenant\CompanyScopeController;
 use App\Http\Controllers\Tenant\ContactController;
 use App\Http\Controllers\Tenant\DashboardController as TenantDashboardController;
 use App\Http\Controllers\Tenant\EmployeeController;
+use App\Http\Controllers\Tenant\AtsController;
 use App\Http\Controllers\Tenant\OrderController;
 use App\Http\Controllers\Tenant\ProfileController as TenantProfileController;
 use App\Http\Controllers\Tenant\ShopController;
@@ -26,6 +27,7 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
     Route::middleware(RequireCompanyScope::class)->group(function () {
 
 
+        Route::get('orders/export-ats', [AtsController::class, 'export'])->name('tenant.orders.export-ats');
         Route::post('orders/import', [OrderController::class, 'import'])->name('tenant.orders.import');
         Route::post('orders/import-retentions', [OrderController::class, 'importRetentions'])->name('tenant.orders.import-retentions');
 

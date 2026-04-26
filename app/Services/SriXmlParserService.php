@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Tenant\ContributorType;
+use App\Models\Tenant\IdentificationType;
 use Carbon\Carbon;
 use Constants;
 use SimpleXMLElement;
@@ -67,6 +68,7 @@ class SriXmlParserService
         }
 
         $infoTributaria = $xml->infoTributaria;
+        $infoFactura = $xml->infoFactura;
         $codDoc = (string) $infoTributaria->codDoc;
         $infoNodeName = $this->infoNodeMap[$codDoc] ?? null;
 
@@ -93,6 +95,7 @@ class SriXmlParserService
             'cod_doc' => $codDoc,
             'fecha_emision' => Carbon::createFromFormat('d/m/Y', trim((string) $info->fechaEmision))->format('Y-m-d'),
             'serie' => $serie,
+            'tipoIdentificacionComprador' => $this->resolveTipoIdentificacionComprador($infoFactura),
             'identificacion_comprador' => trim((string) ($info->identificacionComprador ?? '')),
             'razon_social_comprador' => trim((string) ($info->razonSocialComprador ?? '')),
             'sub_total' => (float) ($info->totalSinImpuestos ?? 0),
@@ -100,6 +103,13 @@ class SriXmlParserService
             'total' => (float) ($info->importeTotal ?? $info->valorModificacion ?? 0),
             ...$this->extractIva($info),
         ];
+    }
+
+    private function resolveTipoIdentificacionComprador(SimpleXMLElement $infoFactura): int
+    {
+        $tipoIdentificacionComprador = trim((string) $infoFactura->tipoIdentificacionComprador);
+
+        return IdentificationType::where('code_order', $tipoIdentificacionComprador)->value('id');
     }
 
     private function resolveContributorTypeId(SimpleXMLElement $infoTributaria): int

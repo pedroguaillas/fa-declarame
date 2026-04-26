@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import { ref } from "vue";
 import type { Subscription } from "@/types";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
     Card,
     CardContent,
@@ -12,6 +14,20 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
     Table,
     TableBody,
     TableCell,
@@ -19,7 +35,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Users, CreditCard, CalendarCheck, Clock } from "lucide-vue-next";
+import { Users, CreditCard, CalendarCheck, Clock, Download } from "lucide-vue-next";
 
 interface TenantUser {
     id: number;
@@ -50,17 +66,54 @@ function getDaysVariant(days: number) {
     if (days <= 7) return "outline" as const;
     return "default" as const;
 }
+
+// ─── ATS Export ──────────────────────────────────────────────────────────────
+
+const atsDialogOpen = ref(false);
+const currentYear = new Date().getFullYear();
+const atsYear = ref(String(currentYear));
+const atsMonth = ref(String(new Date().getMonth() + 1));
+
+const yearOptions = Array.from({ length: 10 }, (_, i) => currentYear - i);
+const monthOptions = [
+    { value: "1", label: "Enero" },
+    { value: "2", label: "Febrero" },
+    { value: "3", label: "Marzo" },
+    { value: "4", label: "Abril" },
+    { value: "5", label: "Mayo" },
+    { value: "6", label: "Junio" },
+    { value: "7", label: "Julio" },
+    { value: "8", label: "Agosto" },
+    { value: "9", label: "Septiembre" },
+    { value: "10", label: "Octubre" },
+    { value: "11", label: "Noviembre" },
+    { value: "12", label: "Diciembre" },
+];
+
+function downloadAts() {
+    window.location.href = route("tenant.orders.export-ats", {
+        year: atsYear.value,
+        month: atsMonth.value,
+    });
+    atsDialogOpen.value = false;
+}
 </script>
 
 <template>
     <TenantLayout>
         <div class="space-y-6">
             <!-- Header -->
-            <div>
-                <h1 class="text-2xl font-bold text-foreground">Dashboard</h1>
-                <p class="text-muted-foreground text-sm mt-1">
-                    Bienvenido al panel de {{ tenant.name }}.
-                </p>
+            <div class="flex items-start justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-foreground">Dashboard</h1>
+                    <p class="text-muted-foreground text-sm mt-1">
+                        Bienvenido al panel de {{ tenant.name }}.
+                    </p>
+                </div>
+                <Button variant="outline" size="sm" class="font-bold" @click="atsDialogOpen = true">
+                    <Download class="size-4" />
+                    <span class="hidden sm:inline">Exportar ATS</span>
+                </Button>
             </div>
 
             <!-- Alerta sin suscripción -->
@@ -250,5 +303,59 @@ function getDaysVariant(days: number) {
                 </CardContent>
             </Card>
         </div>
+
+        <!-- ATS Export dialog -->
+        <Dialog v-model:open="atsDialogOpen">
+            <DialogContent class="max-w-sm">
+                <DialogHeader>
+                    <DialogTitle>Exportar ATS XML</DialogTitle>
+                </DialogHeader>
+                <div class="grid grid-cols-2 gap-4 py-2">
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-sm font-medium">Año</label>
+                        <Select v-model="atsYear">
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="y in yearOptions"
+                                    :key="y"
+                                    :value="String(y)"
+                                >
+                                    {{ y }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-sm font-medium">Mes</label>
+                        <Select v-model="atsMonth">
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="m in monthOptions"
+                                    :key="m.value"
+                                    :value="m.value"
+                                >
+                                    {{ m.label }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" @click="atsDialogOpen = false">
+                        Cancelar
+                    </Button>
+                    <Button @click="downloadAts">
+                        <Download class="size-4" />
+                        Descargar XML
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </TenantLayout>
 </template>

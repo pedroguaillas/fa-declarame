@@ -34,7 +34,7 @@ class OrderImportService
         $lines = preg_split('/\r?\n/', $content);
         $imported = 0;
         $skipped = 0;
-        $voucherType = null;
+        $voucherTypeId = null;
 
         foreach (array_slice($lines, 1) as $line) {
             $line = trim($line);
@@ -49,15 +49,7 @@ class OrderImportService
                 continue;
             }
 
-            [
-                $tipoComprobante,
-                $serie,
-                $claveAcceso,
-                $fechaAutorizacion,
-                $fechaEmision,
-                $valorSinImpuestos,
-                $iva,
-                $total
+            [$tipoComprobante, $serie, $claveAcceso, $fechaAutorizacion, $fechaEmision, $valorSinImpuestos, $iva, $total
             ] = $cols;
 
             $claveAcceso = trim($claveAcceso);
@@ -90,19 +82,20 @@ class OrderImportService
 
             if ($sriData !== null) {
                 $contact = Contact::firstOrCreate(
-                    ['identification_type_id' => IdentificationType::where('code_order', $sriData['cod_doc'])->first()->id],
                     ['identification' => $sriData['identificacion_comprador']],
-                    ['name' => $sriData['razon_social_comprador']],
+                    [
+                        'identification_type_id' => $sriData['tipoIdentificacionComprador'],
+                        'name' => $sriData['razon_social_comprador'],
+                        'provider_type' => strlen($sriData['identificacion_comprador']) === 13 && in_array($sriData['identificacion_comprador'][2], ['6', '9']) ? '02' : '01',
+                    ],
                 );
 
-                if ($voucherType === null) {
-                    $voucherType = VoucherType::where('code', substr($claveAcceso, 8, 2))->first();
-                }
+                $voucherTypeId ??= VoucherType::where('code', substr($claveAcceso, 8, 2))->value('id');
 
                 Order::create([
                     'company_id' => $companyId,
                     'contact_id' => $contact->id,
-                    'voucher_type_id' => $voucherType->id,
+                    'voucher_type_id' => $voucherTypeId,
                     'emision' => $sriData['fecha_emision'],
                     'autorization' => $claveAcceso,
                     'autorized_at' => $sriData['fecha_autorizacion'],
@@ -131,7 +124,6 @@ class OrderImportService
                 $subTotal = (float) $valorSinImpuestos;
                 $ivaAmount = (float) $iva;
                 $totalAmount = (float) $total;
-                [$base0, $base5, $base8, $base12, $base15, $iva5, $iva8, $iva12, $iva15] = $this->distributeIva($subTotal, $ivaAmount);
 
                 Order::create([
                     'company_id' => $companyId,
@@ -142,17 +134,8 @@ class OrderImportService
                     'autorized_at' => Carbon::createFromFormat('d/m/Y H:i:s', trim($fechaAutorizacion))->format('Y-m-d H:i:s'),
                     'serie' => trim($serie),
                     'sub_total' => $subTotal,
-                    'base0' => $base0,
-                    'base5' => $base5,
-                    'base8' => $base8,
-                    'base12' => $base12,
-                    'base15' => $base15,
-                    'iva5' => $iva5,
-                    'iva8' => $iva8,
-                    'iva12' => $iva12,
-                    'iva15' => $iva15,
                     'total' => $totalAmount,
-                    'state' => 'AUTORIZADO',
+                    'state' => 'PENDIENTE',
                 ]);
             }
 
@@ -160,39 +143,5 @@ class OrderImportService
         }
 
         return ['imported' => $imported, 'skipped' => $skipped];
-    }
-
-    /**
-     * Distribute sub_total and IVA amount into the appropriate tax-rate buckets.
-     * Used as fallback when the SRI SOAP service is unavailable.
-     *
-     * @return array{float, float, float, float, float, float, float, float, float}
-     */
-    private function distributeIva(float $subTotal, float $ivaAmount): array
-    {
-        if ($ivaAmount <= 0 || $subTotal <= 0) {
-            return [$subTotal, 0, 0, 0, 0, 0, 0, 0, 0];
-        }
-
-        $ratio = $ivaAmount / $subTotal;
-        $rates = [5 => 0.05, 8 => 0.08, 12 => 0.12, 15 => 0.15];
-        $closest = 15;
-        $minDiff = PHP_FLOAT_MAX;
-
-        foreach ($rates as $rate => $value) {
-            $diff = abs($ratio - $value);
-
-            if ($diff < $minDiff) {
-                $minDiff = $diff;
-                $closest = $rate;
-            }
-        }
-
-        return match ($closest) {
-            5 => [0, $subTotal, 0, 0, 0, $ivaAmount, 0, 0, 0],
-            8 => [0, 0, $subTotal, 0, 0, 0, $ivaAmount, 0, 0],
-            12 => [0, 0, 0, $subTotal, 0, 0, 0, $ivaAmount, 0],
-            default => [0, 0, 0, 0, $subTotal, 0, 0, 0, $ivaAmount],
-        };
     }
 }

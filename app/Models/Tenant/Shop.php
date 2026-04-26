@@ -86,4 +86,14 @@ class Shop extends BaseModel
     {
         return $this->belongsTo(Account::class, 'account_id');
     }
+
+    public function voucherType(): BelongsTo
+    {
+        return $this->belongsTo(VoucherType::class);
+    }
+
+    public function taxSupport(): BelongsTo
+    {
+        return $this->belongsTo(TaxSupport::class);
+    }
 }
