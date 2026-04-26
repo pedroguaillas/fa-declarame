@@ -30,10 +30,13 @@ const props = defineProps<{
 
 const columns: ColumnDef<Shop>[] = [
     { key: "emision", label: "Emisión" },
+    // todo: si hay un labelDescription
     {
         key: "serie",
         label: "Serie",
         format: (_, item) => `${item.initial}-${item.serie}`,
+        labelDescription: (_, item) =>
+            item.serie_retention ? `${item.serie_retention}` : "",
     },
     {
         key: "contact",
@@ -86,6 +89,10 @@ const actions: ActionDef<Shop>[] = [
                   event: "retention",
                   label: "Retención",
                   icon: FileText,
+                  class: (item) =>
+                      item.serie_retention
+                          ? "text-green-600! hover:bg-green-100!"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80",
               } as ActionDef<Shop>,
           ]
         : []),
@@ -412,6 +419,15 @@ watch(
                         @select="handleSelect"
                         @action="handleAction"
                         :actionsMode="'icons'"
+                        :rowClass="
+                            (item: Shop) => {
+                                if (item.serie_retention) {
+                                    return 'bg-green-100 hover:bg-green-200 dark:bg-green-900/20';
+                                }
+
+                                return '';
+                            }
+                        "
                     />
                 </div>
                 <div class="h-full md:hidden">

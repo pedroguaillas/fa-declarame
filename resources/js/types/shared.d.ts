@@ -17,18 +17,20 @@ export interface ColumnDef<T> {
     badge?: BadgeDef<T>;
     avatar?: AvatarDef<T>;
     format?: (value: any, item: T) => string;
+    labelDescription?: (value: any, item: T) => string;
 }
 
 export interface ActionDef<T> {
     icon?: any;
     label: string;
     event: string;
-    class?: string;
+    class?: string | ((item: T) => string);
     separator?: boolean;
     show?: (item: T) => boolean;
     type?: "check";
     checked?: (item: T) => boolean;
     tooltip?: string;
+    color?: string;
 }
 
 export interface ActionPayload<T> {

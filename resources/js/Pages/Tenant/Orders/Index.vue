@@ -73,6 +73,10 @@ const actions: ActionDef<Order>[] = [
         event: "retention",
         label: "Retención",
         icon: Receipt,
+        class: (item) =>
+            item.serie_retention
+                ? "text-green-600! hover:bg-green-100!"
+                : "bg-muted text-muted-foreground hover:bg-muted/80",
     },
     {
         event: "delete",

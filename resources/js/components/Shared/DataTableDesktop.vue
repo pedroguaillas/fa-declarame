@@ -37,6 +37,7 @@ const props = defineProps<{
     emptyText?: string;
     emptyIcon?: Component;
     actionsMode?: "menu" | "icons" | "auto";
+    rowClass?: (item: T) => string;
 }>();
 
 const emit = defineEmits<{
@@ -139,6 +140,10 @@ function visibleActions(item: T): ActionDef<T>[] {
                             :key="idx"
                             class="cursor-pointer"
                             @click="emit('select', item)"
+                            :class="[
+                                'cursor-pointer transition-colors',
+                                props.rowClass?.(item),
+                            ]"
                         >
                             <TableCell
                                 v-for="col in columns"
@@ -188,7 +193,23 @@ function visibleActions(item: T): ActionDef<T>[] {
                                 </Badge>
                                 <!-- Texto plano -->
                                 <template v-else>
-                                    {{ cellValue(item, col) }}
+                                    <div class="flex flex-col leading-tight">
+                                        <span>
+                                            {{ cellValue(item, col) }}
+                                        </span>
+
+                                        <span
+                                            v-if="col.labelDescription"
+                                            class="text-muted-foreground text-xs"
+                                        >
+                                            {{
+                                                col.labelDescription(
+                                                    item[col.key],
+                                                    item,
+                                                )
+                                            }}
+                                        </span>
+                                    </div>
                                 </template>
                             </TableCell>
 
@@ -238,7 +259,12 @@ function visibleActions(item: T): ActionDef<T>[] {
                                                                     ? 'text-destructive hover:bg-destructive/10'
                                                                     : 'bg-muted text-muted-foreground hover:bg-muted/80',
 
-                                                                action.class,
+                                                                typeof action.class ===
+                                                                'function'
+                                                                    ? action.class(
+                                                                          item,
+                                                                      )
+                                                                    : action.class,
                                                             ]"
                                                             @click="
                                                                 emit('action', {
