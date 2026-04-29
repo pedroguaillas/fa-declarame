@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('identification_types', function (Blueprint $table) {
             $table->id();
-            $table->string('code_order');
-            $table->string('code_shop')->nullable();
+            $table->string('code_order'); //ventas tipo de identificacion
+            $table->string('code_shop')->nullable();//compras
             $table->string('description');
             $table->timestamps();
         });

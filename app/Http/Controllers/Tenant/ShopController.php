@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreShopRequest;
 use App\Http\Requests\Tenant\UpdateShopRequest;
 use App\Models\Tenant\Account;
+use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Retention;
+use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\VoucherType;
 use App\Services\ShopImportService;
@@ -53,13 +55,24 @@ class ShopController extends Controller
         return Inertia::render('Tenant/Shops/Create', [
             'voucherTypes' => VoucherType::whereIn('code', ['01', '02', '03', '04', '05'])->get(),
             'accounts' => $this->expenseAccounts(),
+            'identificationTypes' => $this->identificationTypes()
         ]);
     }
 
     public function store(StoreShopRequest $request): RedirectResponse
     {
+        $taxSupportId = null;
+        $voucherType = VoucherType::find($request->voucher_type_id);
+
+        if ($voucherType->code === Constants::NOTA_VENTA) {
+            $taxSupportId = TaxSupport::where('code', Constants::NOTA_VENTA)->value('id');
+        } else {
+            $taxSupportId = TaxSupport::where('code', Constants::FACTURA)->value('id');
+        }
+
         Shop::create(array_merge($request->validated(), [
             'company_id' => session('current_company_id'),
+            'tax_support_id' => $taxSupportId,
         ]));
 
         return redirect()->route('tenant.shops.index')
@@ -98,6 +111,11 @@ class ShopController extends Controller
             ->where('is_detail', true)
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
+    }
+
+    private function identificationTypes(): Collection
+    {
+        return IdentificationType::where('description', '!=', 'CONSUMIDOR FINAL')->get();
     }
 
     public function import(Request $request, ShopImportService $service): RedirectResponse

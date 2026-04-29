@@ -96,4 +96,12 @@ class Shop extends BaseModel
     {
         return $this->belongsTo(TaxSupport::class);
     }
+
+    public function voucherTypeModify()
+    {
+        return $this->belongsTo(
+            \App\Models\Tenant\VoucherType::class,
+            'voucher_type_modify_id'
+        );
+    }
 }

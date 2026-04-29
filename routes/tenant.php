@@ -83,10 +83,7 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
 
     Route::get('companies/resolve/{identification}', [CompanyController::class, 'resolve'])->name('tenant.companies.resolve');
     Route::get('contacts/resolve/{identification}', [ContactController::class, 'resolve'])->name('tenant.contacts.resolve');
-
-
-
-
+    Route::post('/contacts', [ContactController::class, 'store'])->name('tenant.contacts.store');
 
     Route::post('/logout', [AuthController::class, 'logout'])
         ->name('tenant.logout');

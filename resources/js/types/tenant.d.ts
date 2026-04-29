@@ -50,6 +50,13 @@ export interface RetentionItem {
     value: number | string;
 }
 
+export interface IdentificationType{
+    id?: number;
+    code_order: string, 
+    code_shop: string, 
+    description: string
+}
+
 export interface Shop {
     id: number;
     acount_id: number | null;
