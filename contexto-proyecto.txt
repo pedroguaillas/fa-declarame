@@ -1,0 +1,592 @@
+# CONTEXTO DEL PROYECTO - LARAVEL + SAIL + PGSQL + INERTIA + SHADCN VUE
+# Última actualización: Dashboard, Perfil, Usuarios, Suscripciones, Planes, Roles, Permisos, Módulos
+
+## STACK TECNOLÓGICO
+- Laravel 13 (PHP 8.5)
+- Laravel Sail (Docker) - NO hay nada instalado en el host WSL, todo corre en contenedores
+- PostgreSQL (base de datos)
+- Inertia.js v2 + Vue 3 (frontend SPA sin API REST)
+- TypeScript estricto (todos los .vue usan <script setup lang="ts">)
+- Tailwind CSS v4 (NO usa tailwind.config.js ni postcss.config.js)
+- Shadcn-vue (componentes UI)
+- Vite 8 con @tailwindcss/vite plugin
+- Ziggy (rutas Laravel disponibles en Vue via función global route())
+- date-fns (formateo de fechas)
+- @internationalized/date (DatePicker con shadcn Calendar)
+
+## ENTORNO DE DESARROLLO
+- OS: Windows 11 con WSL2 Ubuntu
+- Docker Desktop con integración WSL activada
+- Alias: sail='sh $([ -f sail ] && echo sail || echo vendor/bin/sail)'
+- Todos los comandos usan prefijo "sail": sail artisan, sail npm, sail composer
+- Puerto local: http://localhost
+
+---
+
+## ESTRUCTURA DE ARCHIVOS
+
+```
+resources/
+  js/
+    app.ts                          ← Entry point Inertia + Vue
+    bootstrap.ts                    ← Axios config con tipos
+    types/
+      index.d.ts                    ← Interfaces TypeScript globales
+      ziggy.d.ts                    ← Declaración global route() + ComponentCustomProperties
+    composables/
+      useNavigation.ts              ← Navegación dinámica según rol
+      useTheme.ts                   ← Toggle light/dark/system con listener del SO
+    layouts/
+      AppLayout.vue                 ← Layout principal: SidebarProvider + SidebarInset + slot
+    components/
+      AppSidebar.vue                ← Sidebar: AppLogo + NavMain + NavUser
+      AppLogo.vue                   ← Logo fijo en header del sidebar
+      NavMain.vue                   ← Items con Link de Inertia (NO <a href>)
+      NavUser.vue                   ← Avatar + dropdown: tema, perfil, logout
+      DatePicker.vue                ← Datepicker con @internationalized/date + shadcn Calendar
+      FlashMessage.vue              ← Notificaciones flash animadas (fixed top-right)
+      ui/                           ← Componentes shadcn-vue instalados
+    Pages/
+      Auth/
+        Login.vue
+      Dashboard/
+        SuperAdmin.vue              ← Stats + por vencer + ingresos por plan + recientes
+        Admin.vue                   ← Stats equipo + suscripción + empleados + historial
+        Employee.vue                ← Info empresa + estado suscripción
+      Profile/
+        Edit.vue                    ← Info personal + cambio de contraseña
+      Roles/
+        Index.vue                   ← Tabla + dialogs crear/editar/eliminar
+        Form.vue                    ← Formulario con matriz de permisos (Switch por celda)
+      Permissions/
+        Index.vue                   ← Tabla + dialogs crear/editar/eliminar
+      ModelEntities/
+        Index.vue                   ← Tabla + dialogs crear/editar/eliminar
+      Plans/
+        Index.vue                   ← Tabla + dialogs crear/editar/eliminar
+      Subscriptions/
+        Index.vue                   ← Tabla paginada + dialogs crear/editar/eliminar
+        History.vue                 ← Historial por admin + resumen suscripción activa
+      Users/
+        Index.vue                   ← Tabla paginada + dialogs crear/editar/eliminar
+  css/
+    app.css                         ← @import "tailwindcss" + @theme {} con tokens shadcn
+  views/
+    app.blade.php                   ← Script inline para tema antes de Vue (evita flash)
+bootstrap/
+  app.php                          ← Middlewares: HandleInertiaRequests, CheckSubscription, RoleMiddleware
+routes/
+  web.php                          ← Rutas agrupadas por middleware
+  auth.php                         ← Login / Logout
+app/
+  Http/
+    Controllers/
+      Auth/AuthController.php
+      DashboardController.php       ← Invokable, retorna vista según rol
+      RoleController.php
+      PermissionController.php
+      ModelEntityController.php
+      PlanController.php
+      SubscriptionController.php
+      UserController.php
+      ProfileController.php
+    Middleware/
+      CheckSubscription.php         ← Bloquea si suscripción vencida
+      RoleMiddleware.php            ← Verifica rol ('role:super_admin')
+      HandleInertiaRequests.php     ← Comparte auth.user + flash
+  Models/
+    User.php
+    Role.php
+    Plan.php
+    Permission.php
+    ModelEntity.php
+    ModelPermission.php
+    Subscription.php
+database/
+  migrations/                       ← En orden: roles, users, plans, permissions,
+                                       model_entities, model_permissions, subscriptions
+  seeders/
+    DatabaseSeeder.php
+    RoleSeeder.php
+    PlanSeeder.php
+    PermissionSeeder.php
+    ModelEntitySeeder.php
+    ModelPermissionSeeder.php
+    UserSeeder.php
+```
+
+---
+
+## BASE DE DATOS
+
+### Tablas
+
+```
+roles
+  id, name, slug, description, timestamps
+
+plans
+  id, name, slug, description, price (decimal 10,2),
+  max_employees (int), is_active (bool), timestamps
+
+permissions
+  id, name, slug, description, timestamps
+
+model_entities
+  id, name, slug, description, timestamps
+
+model_permissions
+  id, role_id (FK), permission_id (FK), model_entity_id (FK), timestamps
+  UNIQUE(role_id, permission_id, model_entity_id)
+
+users
+  id, role_id (FK), admin_id (FK users nullable),
+  name, email, email_verified_at, password,
+  is_active (bool), remember_token, timestamps
+
+subscriptions
+  id, user_id (FK), plan_id (FK), created_by (FK users),
+  start_date (date), end_date (date), is_active (bool), notes, timestamps
+```
+
+### Datos seed por defecto
+
+**Roles:** super_admin, admin, employee
+
+**Planes:** Básico ($29.99, max 5 emp), Pro ($79.99, max 20 emp)
+
+**Permisos:** view, create, edit, delete, assign
+
+**Módulos:** permissions, models, roles, users, plans, subscriptions
+
+**Permisos por rol:**
+- super_admin → TODO en TODOS los módulos
+- admin → view/create/edit/delete en users y subscriptions
+- employee → solo view en users
+
+**Usuarios seed:**
+- superadmin@admin.com / password → super_admin
+- admin@admin.com / password → admin
+- empleado@admin.com / password → employee (admin_id = admin)
+
+---
+
+## MODELOS ELOQUENT
+
+### User.php
+```php
+// Relaciones
+role()                       → BelongsTo Role
+admin()                      → BelongsTo User (admin_id)
+employees()                  → HasMany User (admin_id)
+subscriptions()              → HasMany Subscription
+createdSubscriptions()       → HasMany Subscription (created_by)
+activeSubscriptionRelation() → HasOne Subscription (is_active=true, end_date>=now) ← eager load
+
+// Helpers
+isSuperAdmin() / isAdmin() / isEmployee() → bool
+activeSubscription()         → ?Subscription (método, no relación Eloquent)
+hasActiveSubscription()      → bool
+hasPermission(permSlug, modelSlug) → bool (super_admin siempre true)
+```
+
+### Subscription.php
+```php
+user()      → BelongsTo User
+plan()      → BelongsTo Plan
+createdBy() → BelongsTo User (foreign: created_by)
+isExpired() → bool
+isValid()   → bool (is_active && !isExpired)
+```
+
+---
+
+## MIDDLEWARES
+
+### CheckSubscription (alias: check.subscription)
+- super_admin → pasa siempre
+- admin → necesita suscripción activa (is_active=true Y end_date >= hoy)
+- employee → necesita que su admin tenga suscripción activa
+- Si falla → logout + redirect login con error
+
+### RoleMiddleware (alias: role)
+- Uso: Route::middleware('role:super_admin')
+- Acepta múltiples: 'role:super_admin,admin'
+- Falla → abort(403)
+
+### HandleInertiaRequests
+Comparte globalmente:
+```js
+{
+  auth: { user: { id, name, email, role, has_active_subscription } },
+  flash: { success: string|null, error: string|null },
+  ziggy: Config & { location: string }
+}
+```
+
+---
+
+## RUTAS COMPLETAS
+
+```php
+GET  /                         → redirect login
+
+// Guest
+GET  /login                    → Auth/Login.vue
+POST /login                    → AuthController@login
+POST /logout                   → AuthController@logout
+
+// Auth + check.subscription
+GET  /dashboard                → DashboardController (invokable, vista según rol)
+GET  /profile                  → Profile/Edit.vue
+PATCH /profile/info            → ProfileController@updateInfo
+PATCH /profile/password        → ProfileController@updatePassword
+
+// Solo super_admin
+GET|POST        /roles                           → RoleController
+GET|PUT|DELETE  /roles/{role}                    → RoleController
+GET             /roles/create                    → Roles/Form.vue
+GET             /roles/{role}/edit               → Roles/Form.vue
+
+GET|POST        /permissions                     → PermissionController
+PUT|DELETE      /permissions/{permission}        → PermissionController
+
+GET|POST        /model-entities                  → ModelEntityController
+PUT|DELETE      /model-entities/{modelEntity}    → ModelEntityController
+
+GET|POST        /plans                           → PlanController
+PUT|DELETE      /plans/{plan}                    → PlanController
+PATCH           /plans/{plan}/toggle-active      → PlanController@toggleActive
+
+GET|POST        /subscriptions                   → SubscriptionController
+PUT|DELETE      /subscriptions/{subscription}    → SubscriptionController
+PATCH           /subscriptions/{sub}/toggle-active → SubscriptionController@toggleActive
+GET             /subscriptions/history/{user}    → Subscriptions/History.vue
+
+GET|POST        /users                           → UserController
+PUT|DELETE      /users/{user}                    → UserController
+PATCH           /users/{user}/toggle-active      → UserController@toggleActive
+```
+
+---
+
+## LÓGICA DE NEGOCIO
+
+### Suscripciones
+1. Super Admin asigna plan + fechas a un Admin
+2. Al crear nueva suscripción → las anteriores del mismo usuario quedan is_active=false
+3. Suscripción válida: is_active=true AND end_date >= hoy
+4. Admin con suscripción vencida → él y sus empleados no pueden entrar
+5. Se mantiene historial completo (nunca se eliminan, solo se desactivan)
+6. toggleActive: al activar una, desactiva las demás del mismo usuario
+
+### Empleados
+- Tienen admin_id apuntando al Admin que los creó
+- Al crear empleado se valida max_employees del plan activo del Admin
+- Si Admin no tiene suscripción activa → abort(422)
+
+### Permisos
+- Combinación única: rol + permiso + módulo (tabla model_permissions)
+- super_admin bypasea siempre: hasPermission() retorna true
+- Uso: $user->hasPermission('view', 'users')
+
+---
+
+## FRONTEND — CONVENCIONES ESTRICTAS
+
+### Componentes shadcn-vue instalados
+button, card, input, label, table, dialog, badge, tooltip, alert, switch,
+avatar, dropdown-menu, collapsible, separator, sidebar, select, textarea,
+popover, calendar
+
+### Instalación de nuevos componentes
+```bash
+sail npx shadcn-vue@latest add nombre-componente
+```
+
+### Colores — NUNCA usar colores estáticos Tailwind
+Siempre variables de tema shadcn:
+- bg-background, text-foreground
+- bg-card, text-card-foreground
+- bg-muted, text-muted-foreground
+- text-primary, bg-primary, text-primary-foreground
+- text-destructive, border-destructive
+- bg-accent, text-accent-foreground
+- border-border, bg-sidebar-primary, text-sidebar-foreground
+EXCEPCIÓN permitida: text-green-600 dark:text-green-400, text-yellow-600
+para estados semánticos muy específicos.
+
+### UX Pattern — Tablas con Dialogs (NO formularios en página)
+Todas las páginas siguen el mismo patrón:
+1. Header con título + icono + descripción + botón "Nuevo X" (justify-between)
+2. Tabla con datos en rounded-lg border border-border bg-card
+3. Dialog para CREAR (abre con openCreate(), resetea form)
+4. Dialog para EDITAR (abre con openEdit(item), carga datos)
+5. Dialog para CONFIRMAR ELIMINAR
+EXCEPCIÓN: Roles/Form.vue tiene página propia por la matriz de permisos.
+
+### Switch — siempre usar :model-value
+```vue
+<Switch
+    :model-value="form.is_active"
+    @update:model-value="(val) => form.is_active = val"
+/>
+```
+
+### Select — siempre con w-full en el trigger
+```vue
+<SelectTrigger class="w-full">
+```
+
+### Links de navegación — siempre Link de Inertia (NUNCA <a href>)
+```vue
+import { Link } from '@inertiajs/vue3'
+<Link :href="route('dashboard')">Dashboard</Link>
+```
+
+### Navegación programática
+```vue
+import { router } from '@inertiajs/vue3'
+router.visit(route('users.index'))
+router.patch(route('users.toggle-active', id))
+router.delete(route('users.destroy', id))
+```
+
+### Formularios Inertia
+```ts
+const form = useForm({ campo: '' })
+form.post(route('ruta.store'))
+form.put(route('ruta.update', id))
+form.patch(route('ruta.update-info'))
+// onSuccess siempre cierra dialog y resetea form
+```
+
+### Flash messages
+Backend: return back()->with('success', 'mensaje') o ->with('error', 'mensaje')
+Frontend: FlashMessage.vue captura automáticamente, auto-desaparece en 4s
+Está montado en AppLayout.vue fuera del slot.
+
+### DatePicker
+Usa @internationalized/date, NO date-fns para el calendario.
+Emite string 'yyyy-MM-dd' via @update:modelValue.
+```vue
+<DatePicker v-model="form.start_date" placeholder="Seleccionar fecha" />
+```
+
+### Formateo de fechas en tablas
+Usar date-fns con locale español:
+```ts
+import { format, parseISO } from 'date-fns'
+import { es } from 'date-fns/locale'
+format(parseISO(date), 'dd MMM yyyy', { locale: es })
+```
+
+### Formateo de moneda
+```ts
+new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(amount)
+```
+
+### Tema dark/light
+- Composable useTheme() → { theme, setTheme }
+- Persiste en localStorage key 'theme'
+- Opciones: 'light' | 'dark' | 'system'
+- Listener activo para cambios del SO en tiempo real
+- Script inline en app.blade.php evita flash de tema al cargar
+
+### Navegación dinámica por rol
+Composable useNavigation(user) → { navItems }
+- super_admin: Dashboard, Usuarios, Suscripciones, Planes,
+  Roles y Permisos (subitems: Roles, Permisos, Módulos), Configuración
+- admin: Dashboard, Empleados, Mi Suscripción, Configuración
+- employee: Dashboard, Configuración
+- Todos los roles: Configuración → route('profile.edit')
+- Items sin subitems son links directos, con subitems son collapsibles
+
+### Alias de paths
+```
+@/ → resources/js/
+```
+
+### TypeScript — ziggy.d.ts
+```ts
+import { route as ziggyRoute } from 'ziggy-js'
+declare global { let route: typeof ziggyRoute }
+declare module 'vue' {
+  interface ComponentCustomProperties { route: typeof ziggyRoute }
+}
+declare module '@inertiajs/core' {
+  interface PageProps extends InertiaPageProps, AppPageProps {}
+}
+```
+NO usar import { route } from 'ziggy-js' en cada componente — es global.
+Si TS no lo reconoce: Ctrl+Shift+P → TypeScript: Restart TS Server
+
+---
+
+## TIPOS TYPESCRIPT (types/index.d.ts)
+
+```ts
+User {
+  id, name, email, role: Role, admin_id: number|null,
+  admin?: User, is_active: boolean, has_active_subscription: boolean|null
+}
+Role {
+  id, name, slug, description: string|null,
+  users_count?: number, model_permissions?: ModelPermission[]
+}
+Plan {
+  id, name, slug, description: string|null,
+  price: number, max_employees: number,
+  is_active: boolean, subscriptions_count?: number
+}
+Subscription {
+  id, user_id, plan_id, created_by: number,
+  start_date: string, end_date: string,
+  is_active: boolean, notes: string|null,
+  plan?: Plan, user?: User, created_by?: User
+}
+Permission { id, name, slug, description: string|null, model_permissions_count?: number }
+ModelEntity { id, name, slug, description: string|null, model_permissions_count?: number }
+ModelPermission { id, role_id, permission_id, model_entity_id, permission?, model_entity? }
+Paginator<T> {
+  data: T[], current_page, last_page, per_page, total, from, to,
+  links: { url: string|null, label: string, active: boolean }[]
+}
+PageProps<T> {
+  auth: { user: User },
+  flash: { success: string|null, error: string|null },
+  ziggy: Config & { location: string }
+}
+```
+
+---
+
+## DASHBOARD POR ROL
+
+### SuperAdmin (Dashboard/SuperAdmin.vue)
+Props: stats{total_admins, total_employees, active_subscriptions, expired_subscriptions},
+       expiring_soon: Subscription[], revenue_by_plan: {name,count,revenue,price}[],
+       recent_subscriptions: Subscription[]
+- Grid 4 stats cards
+- Card: suscripciones por vencer en 7 días con badge días y botón historial
+- Card: ingresos por plan con barra de progreso proporcional al total
+- Tabla: últimas 5 suscripciones con botón "Ver todas"
+
+### Admin (Dashboard/Admin.vue)
+Props: stats{employee_count, max_employees, slots_used_pct, days_remaining},
+       subscription: Subscription|null, employees: User[], subscription_history: Subscription[]
+- Alerta si no tiene suscripción activa
+- Grid 4 stats: empleados (con barra uso %), plan, vencimiento, días restantes
+- Card: últimos 5 empleados con badge activo/inactivo
+- Card: tabla historial últimas 5 suscripciones
+
+### Employee (Dashboard/Employee.vue)
+Props: admin: User|null, admin_subscription: Subscription|null
+- Alerta si admin no tiene suscripción
+- Card info del admin
+- Grid 3 cards: plan, vencimiento, días restantes
+
+---
+
+## PENDIENTE DE IMPLEMENTAR
+
+1. **Breadcrumbs** → navegación contextual en header del AppLayout
+2. **Filtros y búsqueda** → en tablas de usuarios y suscripciones
+3. **Componente Pagination reutilizable** → evitar repetir código en cada Index
+4. **Laravel Policies** → autorización granular por recurso
+5. **Vista empleados del Admin** → filtrar users.index por admin_id del auth
+6. **Multi-empresa (TeamSwitcher)** → lógica de cambio de empresa activa
+7. **Notificaciones email** → alertas de vencimiento (Laravel Notifications)
+8. **Exportar CSV/PDF** → suscripciones y usuarios
+9. **Tests** → Feature tests para controllers y middlewares
+
+---
+
+## COMANDOS ÚTILES
+
+```bash
+# Contenedores
+sail up -d
+sail down
+
+# Base de datos
+sail artisan migrate
+sail artisan migrate:fresh --seed
+sail artisan db:seed
+
+# Generar recursos
+sail artisan make:model Nombre -m
+sail artisan make:controller NombreController
+sail artisan make:middleware NombreMiddleware
+sail artisan make:seeder NombreSeeder
+sail artisan make:policy NombrePolicy --model=Nombre
+
+# Frontend
+sail npm run dev
+sail npm run build
+sail npx shadcn-vue@latest add nombre-componente
+sail npm install nombre-paquete
+
+# Limpiar caché Vite (si hay errores de módulos)
+rm -rf node_modules/.vite && sail npm run dev
+
+# Utilidades
+sail artisan tinker
+sail artisan route:list
+sail artisan optimize:clear
+```
+
+---
+
+## NOTAS CRÍTICAS PARA LA IA
+
+1. **Docker first**: NUNCA sugerir instalar PHP, Composer o Node en el host WSL.
+   Todo va con prefijo `sail`.
+
+2. **Tailwind v4**: NO tailwind.config.js. Configuración en app.css con
+   `@import "tailwindcss"` y `@theme {}`. NO @layer base/components/utilities.
+
+3. **TypeScript estricto**: Todos los componentes usan `<script setup lang="ts">`.
+   Siempre tipar props con defineProps<{}>().
+
+4. **Shadcn-vue**: Componentes en @/components/ui/. NUNCA colores hardcodeados.
+   SIEMPRE variables de tema. Switch usa :model-value. Select usa w-full en trigger.
+
+5. **Inertia**: NO hay API REST. Respuestas son Inertia::render() o redirect()->with().
+   Forms usan useForm() de @inertiajs/vue3.
+
+6. **Links internos**: SIEMPRE <Link> de Inertia. NUNCA <a href> para rutas internas
+   (causa recarga completa de página y rompe la experiencia SPA).
+
+7. **Pattern UX**: SIEMPRE tabla + dialogs para CRUD. NUNCA formulario inline en la
+   página. EXCEPCIÓN: Roles/Form.vue tiene página propia por la matriz de permisos.
+
+8. **Laravel 13**: Route model binding, Form Requests para validaciones complejas,
+   Policies para autorización, Resources para respuestas consistentes.
+
+9. **Flash messages**: SIEMPRE return back()->with('success'/'error', 'mensaje').
+   FlashMessage.vue los captura automáticamente desde props.flash.
+
+10. **Slugs de sistema protegidos**:
+    Roles: super_admin, admin, employee
+    Módulos: permissions, models, roles, users, plans, subscriptions
+    Deshabilitar botón eliminar en UI cuando systemSlugs.includes(item.slug).
+
+11. **Paginación**: ->paginate(15) en controllers. Paginación inline en Index.vue
+    con goToPage(url) usando router.visit(url, { preserveScroll: true }).
+
+12. **DashboardController**: Es invokable (__invoke), usa match() por rol.
+    Cada rol retorna Inertia::render() con su vista y props específicas.
+
+13. **activeSubscriptionRelation vs activeSubscription**:
+    - activeSubscriptionRelation() → HasOne, usar para with(['activeSubscriptionRelation.plan'])
+    - activeSubscription() → método que retorna ?Subscription, usar en lógica PHP
+
+14. **Tema**: Script inline en app.blade.php es CRÍTICO para evitar flash.
+    useTheme() tiene listener MediaQuery para modo sistema en tiempo real.
+
+15. **route() global**: NO importar en cada componente. Está en ziggy.d.ts global.
+    Si falla: Ctrl+Shift+P → TypeScript: Restart TS Server en VSCode.
+
+16. **Caché Vite**: Si aparece ERR_ABORTED 504 (Outdated Optimize Dep):
+    rm -rf node_modules/.vite && sail npm run dev
