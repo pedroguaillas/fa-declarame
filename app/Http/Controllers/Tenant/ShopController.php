@@ -62,9 +62,9 @@ class ShopController extends Controller
     public function store(StoreShopRequest $request): RedirectResponse
     {
         $taxSupportId = null;
-        $vaucherType = VoucherType::find($request->voucher_type_id);
+        $voucherType = VoucherType::find($request->voucher_type_id);
 
-        if ($vaucherType->code === Constants::NOTA_VENTA) {
+        if ($voucherType->code === Constants::NOTA_VENTA) {
             $taxSupportId = TaxSupport::where('code', Constants::NOTA_VENTA)->value('id');
         } else {
             $taxSupportId = TaxSupport::where('code', Constants::FACTURA)->value('id');
