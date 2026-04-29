@@ -18,34 +18,212 @@ class StoreShopRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'acount_id' => ['nullable', 'integer', 'exists:acounts,id'],
-            'contact_id' => ['required', 'integer', 'exists:contacts,id'],
-            'voucher_type_id' => ['required', 'integer'],
-            'emision' => ['required', 'date'],
-            'autorization' => ['required', 'string', 'max:49'],
-            'autorized_at' => ['nullable', 'date'],
-            'serie' => ['required', 'string', 'max:17'],
-            'sub_total' => ['required', 'numeric', 'min:0'],
-            'no_iva' => ['nullable', 'numeric', 'min:0'],
-            'base0' => ['nullable', 'numeric', 'min:0'],
-            'base5' => ['nullable', 'numeric', 'min:0'],
-            'base8' => ['nullable', 'numeric', 'min:0'],
-            'base12' => ['nullable', 'numeric', 'min:0'],
-            'base15' => ['nullable', 'numeric', 'min:0'],
-            'iva5' => ['nullable', 'numeric', 'min:0'],
-            'iva8' => ['nullable', 'numeric', 'min:0'],
-            'iva12' => ['nullable', 'numeric', 'min:0'],
-            'iva15' => ['nullable', 'numeric', 'min:0'],
-            'aditional_discount' => ['nullable', 'numeric', 'min:0'],
-            'discount' => ['nullable', 'numeric', 'min:0'],
-            'ice' => ['nullable', 'numeric', 'min:0'],
-            'total' => ['required', 'numeric', 'min:0'],
-            'state' => ['required', 'string'],
-            'serie_retention' => ['nullable', 'string', 'max:17'],
-            'date_retention' => ['nullable', 'date'],
-            'state_retention' => ['nullable', 'string'],
-            'autorization_retention' => ['nullable', 'string', 'max:49'],
-            'retention_at' => ['nullable', 'date'],
+
+            'account_id' => [
+                'nullable',
+                'integer',
+                'exists:accounts,id'
+            ],
+
+            'contact_id' => [
+                'required',
+                'integer',
+                'exists:contacts,id'
+            ],
+
+            'voucher_type_id' => [
+                'required',
+                'integer',
+                'exists:voucher_types,id'
+            ],
+
+            'tax_support_id' => [
+                'nullable',
+                'integer',
+                'exists:tax_supports,id'
+            ],
+
+            'emision' => [
+                'required',
+                'date'
+            ],
+
+            'autorization' => [
+                'required',
+                'string',
+                'max:49'
+            ],
+
+            'autorized_at' => [
+                'nullable',
+                'date'
+            ],
+
+            'serie' => [
+                'required',
+                'string',
+                'max:17'
+            ],
+
+            'sub_total' => [
+                'required',
+                'numeric',
+                'min:0'
+            ],
+
+            'no_iva' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'exempt' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'base0' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'base5' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'base8' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'base12' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'base15' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'iva5' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'iva8' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'iva12' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'iva15' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'aditional_discount' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'discount' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'ice' => [
+                'nullable',
+                'numeric',
+                'min:0'
+            ],
+
+            'total' => [
+                'required',
+                'numeric',
+                'min:0'
+            ],
+
+            'state' => [
+                'required',
+                'string'
+            ],
+
+            'serie_retention' => [
+                'nullable',
+                'string',
+                'max:17'
+            ],
+
+            'date_retention' => [
+                'nullable',
+                'date'
+            ],
+
+            'state_retention' => [
+                'nullable',
+                'string'
+            ],
+
+            'autorization_retention' => [
+                'nullable',
+                'string',
+                'max:49'
+            ],
+
+            'retention_at' => [
+                'nullable',
+                'date'
+            ],
+
+            // DOCUMENTO MODIFICADO
+
+            'voucher_type_modify_id' => [
+                'nullable',
+                'integer',
+                'exists:voucher_types,id'
+            ],
+
+            'est_modify' => [
+                'nullable',
+                'string',
+                'max:3'
+            ],
+
+            'poi_modify' => [
+                'nullable',
+                'string',
+                'max:3'
+            ],
+
+            'sec_modify' => [
+                'nullable',
+                'string',
+                'max:9'
+            ],
+
+            'aut_modify' => [
+                'nullable',
+                'string',
+                'max:49'
+            ],
         ];
     }
 }

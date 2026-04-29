@@ -46,9 +46,11 @@ return new class extends Migration
 
             //Nota de Crédito o Débito
             $table->foreignId('voucher_type_modify_id')->nullable()->constrained()->on('voucher_types')->cascadeOnDelete();
-            $table->string('est_modify', 3)->nullable();
-            $table->string('poi_modify', 3)->nullable();
-            $table->string('sec_modify', 9)->nullable();
+            $table->unsignedSmallInteger('est_modify')->nullable();
+
+            $table->unsignedSmallInteger('poi_modify')->nullable();
+
+            $table->unsignedInteger('sec_modify')->nullable();
             $table->string('aut_modify', 49)->nullable();
             //
             $table->timestamp('retention_at')->nullable();
