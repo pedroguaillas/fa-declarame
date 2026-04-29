@@ -14,3 +14,4 @@ Sistema Tributario para el procesamiento de información de Compras, Ventas y Re
 # Copiar .env.example a .env
 
 `cp .env.example .env`
+hola
