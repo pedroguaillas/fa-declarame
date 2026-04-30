@@ -135,7 +135,7 @@ class ShopImportService
                     'state' => $sriData['estado'],
                 ]);
 
-                $this->createShopItems($shop, $sriData['detalles'] ?? [], $companyId);
+                $this->createShopItems($shop, $sriData['detalles'] ?? [], $contact->id);
             } else {
                 $subTotal = (float) $valorSinImpuestos;
                 $ivaAmount = (float) $iva;
@@ -168,7 +168,7 @@ class ShopImportService
     /**
      * @param array<int, array{code: string, aux_code: string|null, description: string, quantity: float, unit_price: float, discount: float, total: float, tax_percentage: float, tax_value: float}> $detalles
      */
-    private function createShopItems(Shop $shop, array $detalles, int $companyId): void
+    private function createShopItems(Shop $shop, array $detalles, int $contactId): void
     {
         if (empty($detalles)) {
             return;
@@ -181,7 +181,7 @@ class ShopImportService
                 [
                     'code' => $detalle['code'],
                     'description' => $detalle['description'],
-                    'company_id' => $companyId,
+                    'contact_id' => $contactId,
                 ],
                 ['aux_code' => $detalle['aux_code']],
             );

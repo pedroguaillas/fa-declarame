@@ -1441,7 +1441,7 @@ watch(
                     </div>
 
                     <!-- Right: retention panel -->
-                    <div class="flex flex-1 flex-col">
+                    <div class="flex min-w-0 flex-1 flex-col">
                         <div
                             class="border-border flex items-start justify-between border-b px-6 py-4"
                         >
@@ -1485,7 +1485,7 @@ watch(
                         <!-- Registered view -->
                         <div
                             v-if="selectedShop.serie_retention"
-                            class="flex-1 overflow-y-auto p-6"
+                            class="min-w-0 flex-1 overflow-y-auto p-6"
                         >
                             <div class="mb-6 grid grid-cols-2 gap-4">
                                 <div>
@@ -1542,7 +1542,7 @@ watch(
                                 Detalle
                             </p>
                             <div
-                                class="border-border overflow-hidden rounded-lg border"
+                                class="border-border overflow-auto rounded-lg border"
                             >
                                 <table
                                     class="divide-border min-w-full divide-y text-sm"
@@ -1550,32 +1550,32 @@ watch(
                                     <thead class="bg-muted">
                                         <tr>
                                             <th
-                                                class="text-muted-foreground px-4 py-2.5 text-left text-xs font-medium uppercase"
+                                                class="text-muted-foreground whitespace-nowrap px-4 py-2.5 text-left text-xs font-medium uppercase"
                                             >
                                                 Tipo
                                             </th>
                                             <th
-                                                class="text-muted-foreground px-4 py-2.5 text-left text-xs font-medium uppercase"
+                                                class="text-muted-foreground whitespace-nowrap px-4 py-2.5 text-left text-xs font-medium uppercase"
                                             >
                                                 Código
                                             </th>
                                             <th
-                                                class="text-muted-foreground px-4 py-2.5 text-left text-xs font-medium uppercase"
+                                                class="text-muted-foreground whitespace-nowrap px-4 py-2.5 text-left text-xs font-medium uppercase"
                                             >
                                                 Descripción
                                             </th>
                                             <th
-                                                class="text-muted-foreground px-4 py-2.5 text-right text-xs font-medium uppercase"
+                                                class="text-muted-foreground whitespace-nowrap px-4 py-2.5 text-right text-xs font-medium uppercase"
                                             >
                                                 Base
                                             </th>
                                             <th
-                                                class="text-muted-foreground px-4 py-2.5 text-right text-xs font-medium uppercase"
+                                                class="text-muted-foreground whitespace-nowrap px-4 py-2.5 text-right text-xs font-medium uppercase"
                                             >
                                                 %
                                             </th>
                                             <th
-                                                class="text-muted-foreground px-4 py-2.5 text-right text-xs font-medium uppercase"
+                                                class="text-muted-foreground whitespace-nowrap px-4 py-2.5 text-right text-xs font-medium uppercase"
                                             >
                                                 Valor
                                             </th>
@@ -1587,7 +1587,7 @@ watch(
                                             :key="item.id"
                                         >
                                             <td
-                                                class="text-foreground px-4 py-2.5"
+                                                class="text-foreground whitespace-nowrap px-4 py-2.5"
                                             >
                                                 {{
                                                     typeLabel[
@@ -1597,7 +1597,7 @@ watch(
                                                 }}
                                             </td>
                                             <td
-                                                class="text-foreground px-4 py-2.5 font-mono"
+                                                class="text-foreground whitespace-nowrap px-4 py-2.5 font-mono"
                                             >
                                                 {{ item.retention?.code }}
                                             </td>
@@ -1609,19 +1609,19 @@ watch(
                                                 }}
                                             </td>
                                             <td
-                                                class="text-foreground px-4 py-2.5 text-right font-mono"
+                                                class="text-foreground whitespace-nowrap px-4 py-2.5 text-right font-mono"
                                             >
                                                 ${{
                                                     Number(item.base).toFixed(2)
                                                 }}
                                             </td>
                                             <td
-                                                class="text-foreground px-4 py-2.5 text-right font-mono"
+                                                class="text-foreground whitespace-nowrap px-4 py-2.5 text-right font-mono"
                                             >
                                                 {{ item.percentage }}%
                                             </td>
                                             <td
-                                                class="text-foreground px-4 py-2.5 text-right font-mono font-medium"
+                                                class="text-foreground whitespace-nowrap px-4 py-2.5 text-right font-mono font-medium"
                                             >
                                                 ${{
                                                     Number(item.value).toFixed(

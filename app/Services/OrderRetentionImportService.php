@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant\Company;
 use App\Models\Tenant\Contact;
+use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\Retention;
 use App\Models\Tenant\VoucherType;
@@ -349,9 +350,13 @@ class OrderRetentionImportService
 
         $retainerRuc = (string) $retentionXml->infoTributaria->ruc;
         $retainerName = (string) $retentionXml->infoTributaria->razonSocial;
+        $identificationTypeId = IdentificationType::where('code_shop', Constants::RUC_COMPRA)->value('id');
 
         $contact = Contact::firstOrCreate(
-            ['identification' => $retainerRuc],
+            [
+                'identification' => $retainerRuc,
+                'identification_type_id' => $identificationTypeId,
+            ],
             ['name' => $retainerName],
         );
 
