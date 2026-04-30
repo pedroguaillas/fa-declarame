@@ -373,11 +373,6 @@ class AtsXmlService
             'NA'
         );
 
-        // ─────────────────────────────
-        // DOCUMENTO MODIFICADO
-        // SOLO NC Y ND
-        // ─────────────────────────────
-
         if (
             in_array(
                 $voucherCode,
@@ -387,9 +382,9 @@ class AtsXmlService
 
             if (
                 $shop->voucher_type_modify_id &&
-                $shop->est_modify &&
-                $shop->poi_modify &&
-                $shop->sec_modify &&
+                $shop->est_modify !== null &&
+                $shop->poi_modify !== null &&
+                $shop->sec_modify !== null &&
                 $shop->aut_modify
             ) {
 
@@ -403,19 +398,31 @@ class AtsXmlService
 
                 $d->addChild(
                     'estabModificado',
-                    $shop->est_modify
+                    str_pad(
+                        (string) $shop->est_modify,
+                        3,
+                        '0',
+                        STR_PAD_LEFT
+                    )
                 );
 
                 $d->addChild(
                     'ptoEmiModificado',
-                    $shop->poi_modify
+                    str_pad(
+                        (string) $shop->poi_modify,
+                        3,
+                        '0',
+                        STR_PAD_LEFT
+                    )
                 );
 
                 $d->addChild(
                     'secModificado',
-                    ltrim(
-                        $shop->sec_modify,
-                        '0'
+                    str_pad(
+                        (string) $shop->sec_modify,
+                        9,
+                        '0',
+                        STR_PAD_LEFT
                     )
                 );
 
@@ -425,7 +432,6 @@ class AtsXmlService
                 );
             }
         }
-
         // ─────────────────────────────
         // FORMAS PAGO
         // ─────────────────────────────

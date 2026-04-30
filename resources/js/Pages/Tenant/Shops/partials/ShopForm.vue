@@ -3,123 +3,110 @@ import { computed, ref, watch, watchEffect } from "vue";
 import { Link } from "@inertiajs/vue3";
 
 import FormField from "@/components/Shared/FormField.vue";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import FormSelect from "@/components/Shared/FormSelect.vue";
 import FormDatePicker from "@/components/Shared/FormDatePicker.vue";
 
-import {
-    Account,
-    IdentificationType,
-    VoucherType,
-} from "@/types/tenant";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-// ─────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────
+import { Account, IdentificationType, VoucherType } from "@/types/tenant";
 
 interface FormErrors {
-    [key: string]: string | undefined;
+  [key: string]: string | undefined;
 }
 
 interface ShopFormData {
-    acount_id: number | null;
+  acount_id: number | null;
 
-    contact_id: number | null;
+  contact_id: number | null;
 
-    voucher_type_id: number | string;
+  voucher_type_id: number | string;
 
-    type_identification: string | undefined;
+  type_identification: string | undefined;
 
-    emision: string;
+  emision: string;
 
-    autorization: string;
+  autorization: string;
 
-    autorized_at: string;
+  autorized_at: string;
 
-    serie: string;
+  serie: string;
 
-    sub_total: number | string;
+  sub_total: number | string;
 
-    no_iva: number | string;
+  no_iva: number | string;
 
-    base0: number | string;
+  base0: number | string;
 
-    base12: number | string;
+  base12: number | string;
+  iva12: number | string;
 
-    base15: number | string;
+  base15: number | string;
+  iva15: number | string;
 
-    iva12: number | string;
+  aditional_discount: number | string;
 
-    iva15: number | string;
+  discount: number | string;
 
-    aditional_discount: number | string;
+  ice: number | string;
 
-    discount: number | string;
+  total: number | string;
 
-    ice: number | string;
+  state: string;
 
-    total: number | string;
+  serie_retention: string;
 
-    state: string;
+  date_retention: string;
 
-    serie_retention: string;
+  state_retention: string;
 
-    date_retention: string;
+  autorization_retention: string;
 
-    state_retention: string;
+  voucher_type_modify_id: number | string | null;
 
-    autorization_retention: string;
+  est_modify: string;
 
-    voucher_type_modify_id: number | string | null;
+  poi_modify: string;
 
-    est_modify: string;
+  sec_modify: string;
 
-    poi_modify: string;
+  aut_modify: string;
 
-    sec_modify: string;
+  errors: FormErrors;
 
-    aut_modify: string;
-
-    errors: FormErrors;
-
-    processing: boolean;
+  processing: boolean;
 }
 
-// ─────────────────────────────────────────────
-// PROPS
-// ─────────────────────────────────────────────
-
 const props = withDefaults(
-    defineProps<{
-        form: ShopFormData;
+  defineProps<{
+    form: ShopFormData;
 
-        voucherTypes: VoucherType[];
+    voucherTypes: VoucherType[];
 
-        accounts?: Account[];
+    accounts?: Account[];
 
-        submitLabel: string;
+    submitLabel: string;
 
-        initialContactIdentification?: string;
+    initialContactIdentification?: string;
 
-        initialContactName?: string;
+    initialContactName?: string;
 
-        identificationTypes: IdentificationType[];
-    }>(),
-    {
-        accounts: () => [],
+    identificationTypes: IdentificationType[];
+  }>(),
+  {
+    accounts: () => [],
 
-        initialContactIdentification: "",
+    initialContactIdentification: "",
 
-        initialContactName: "",
+    initialContactName: "",
 
-        identificationTypes: () => [],
-    },
+    identificationTypes: () => [],
+  }
 );
 
 const emit = defineEmits<{
-    submit: [];
+  submit: [];
 }>();
 
 // ─────────────────────────────────────────────
@@ -127,29 +114,26 @@ const emit = defineEmits<{
 // ─────────────────────────────────────────────
 
 const identificationOptions = computed(() =>
-    props.identificationTypes.map((i) => ({
-        id: i.id ?? 0,
-        label: i.description,
-    })),
+  props.identificationTypes.map((i) => ({
+    id: i.id ?? 0,
+    label: i.description,
+  }))
 );
 
 const voucherTypeOptions = computed(() =>
-    props.voucherTypes.map((v) => ({
-        id: v.id,
-        label: `${v.code} - ${v.description}`,
-    })),
+  props.voucherTypes.map((v) => ({
+    id: v.id,
+    label: `${v.code} - ${v.description}`,
+  }))
 );
 
-<<<<<<< HEAD
 const modifyVoucherOptions = computed(() =>
-    props.voucherTypes
-        .filter((v) =>
-            ["01", "02", "03"].includes(v.code),
-        )
-        .map((v) => ({
-            id: v.id,
-            label: `${v.code} - ${v.description}`,
-        })),
+  props.voucherTypes
+    .filter((v) => ["01", "02", "03"].includes(v.code))
+    .map((v) => ({
+      id: v.id,
+      label: `${v.code} - ${v.description}`,
+    }))
 );
 
 // ─────────────────────────────────────────────
@@ -157,184 +141,195 @@ const modifyVoucherOptions = computed(() =>
 // ─────────────────────────────────────────────
 
 const selectedVoucher = computed(() =>
-    props.voucherTypes.find(
-        (v) =>
-            v.id == props.form.voucher_type_id,
-    ),
+  props.voucherTypes.find((v) => v.id == props.form.voucher_type_id)
 );
 
-const voucherCode = computed(
-    () => selectedVoucher.value?.code || "",
-);
+const voucherCode = computed(() => selectedVoucher.value?.code || "");
 
-// NOTA DE VENTA
-
-const isNotaVenta = computed(
-    () => voucherCode.value === "02",
-);
-
-// NOTA CREDITO / DEBITO
-
-const showModifyDocumentFields =
-    computed(() =>
-        ["04", "05"].includes(
-            voucherCode.value,
-        ),
-    );
+const showModifyDocumentFields = computed(() => ["04", "05"].includes(voucherCode.value));
 
 // ─────────────────────────────────────────────
-// CONTACT
+// CONTACTO
 // ─────────────────────────────────────────────
-
-const contactIdentification = ref(
-    props.initialContactIdentification ?? "",
-);
-
-const contactName = ref(
-    props.initialContactName ?? "",
-);
-
-const contactResolving = ref(false);
-
-const contactError = ref<string | null>(null);
-
-watch(contactIdentification, async (identification) => {
-    const expectedLength =
-        maxIdentificationLength.value;
-
-    if (
-        props.form.type_identification &&
-        identification.length !== expectedLength &&
-        expectedLength !== 20
-    ) {
-        contactName.value = "";
-
-        contactError.value = null;
-
-        props.form.contact_id = null;
-
-=======
-// ── Contact resolve ────────────────────────────────────────────────────────
 
 const contactIdentification = ref(props.initialContactIdentification ?? "");
+
 const contactName = ref(props.initialContactName ?? "");
+
 const contactResolving = ref(false);
+
 const contactError = ref<string | null>(null);
 
-watch(contactIdentification, async (identification) => {
-    if (identification.length !== 10 && identification.length !== 13) {
-        contactName.value = "";
-        contactError.value = null;
-        props.form.contact_id = null;
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162
-        return;
-    }
+const showCreateContactModal = ref(false);
 
-    contactResolving.value = true;
-<<<<<<< HEAD
+const createContactForm = ref({
+  identification_type_id: "",
 
-=======
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162
-    contactError.value = null;
+  identification: "",
 
-    try {
-        const res = await fetch(
-            route("tenant.contacts.resolve", {
-                identification,
-            }),
-<<<<<<< HEAD
-            {
-                headers: {
-                    Accept: "application/json",
-                },
-            },
-=======
-            { headers: { Accept: "application/json" } },
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162
-        );
+  name: "",
 
-        if (!res.ok) {
-            contactName.value = "";
-<<<<<<< HEAD
+  phone: "",
 
-            props.form.contact_id = null;
+  email: "",
 
-=======
-            props.form.contact_id = null;
-            contactError.value =
-                "No se encontró el contacto con esa identificación.";
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162
-            return;
-        }
-
-        const data = await res.json();
-<<<<<<< HEAD
-
-        contactName.value = data.name;
-
-        props.form.contact_id = data.id;
-    } catch {
-        contactError.value =
-            "Error al consultar contacto.";
-=======
-        contactName.value = data.name;
-        props.form.contact_id = data.id;
-    } catch {
-        contactError.value = "Error al consultar el contacto.";
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162
-    } finally {
-        contactResolving.value = false;
-    }
+  address: "",
 });
 
-<<<<<<< HEAD
-// ─────────────────────────────────────────────
-// VALIDACIONES
-// ─────────────────────────────────────────────
+const maxIdentificationLength = computed(() => {
+  if (!props.form.type_identification) return 13;
 
+  const selected = props.identificationTypes.find(
+    (i) => i.id == props.form.type_identification
+  );
+
+  if (!selected) return 13;
+
+  const label = selected.description.toLowerCase();
+
+  if (label.includes("cedula")) return 10;
+
+  if (label.includes("ruc")) return 13;
+
+  return 20;
+});
+
+watch(contactIdentification, async (identification) => {
+  const expectedLength = maxIdentificationLength.value;
+
+  if (
+    props.form.type_identification &&
+    identification.length !== expectedLength &&
+    expectedLength !== 20
+  ) {
+    contactName.value = "";
+
+    props.form.contact_id = null;
+
+    return;
+  }
+
+  contactResolving.value = true;
+
+  try {
+    const res = await fetch(
+      route("tenant.contacts.resolve", {
+        identification,
+      }),
+      {
+        headers: {
+          Accept: "application/json",
+        },
+      }
+    );
+
+    if (!res.ok) {
+      contactName.value = "";
+
+      props.form.contact_id = null;
+
+      showCreateContactModal.value = true;
+
+      createContactForm.value.identification = identification;
+
+      return;
+    }
+
+    const data = await res.json();
+
+    contactName.value = data.name;
+
+    props.form.contact_id = data.id;
+  } catch {
+    contactError.value = "Error al consultar contacto.";
+  } finally {
+    contactResolving.value = false;
+  }
+});
+
+async function saveContact() {
+  try {
+    const res = await fetch(route("tenant.contacts.store"), {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+
+        Accept: "application/json",
+
+        "X-CSRF-TOKEN":
+          (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)
+            ?.content || "",
+      },
+
+      body: JSON.stringify(createContactForm.value),
+    });
+
+    if (!res.ok) {
+      alert("Error al guardar contacto");
+
+      return;
+    }
+
+    const data = await res.json();
+
+    props.form.contact_id = data.id;
+
+    contactName.value = data.name;
+
+    contactIdentification.value = data.identification;
+
+    showCreateContactModal.value = false;
+  } catch {
+    alert("Error al guardar contacto");
+  }
+}
+
+// ─────────────────────────────────────────────
+// VALIDACION
+// ─────────────────────────────────────────────
 function validateVoucherWithIdentification() {
-    const identification =
-        contactIdentification.value;
+  const identification = contactIdentification.value;
 
-    // FACTURA Y NOTA VENTA
+  const selectedIdentification = props.identificationTypes.find(
+    (i) => i.id == props.form.type_identification
+  );
 
-    if (
-        (voucherCode.value === "01" ||
-            voucherCode.value === "02") &&
-        identification.length !== 13
-    ) {
-        alert(
-            "Factura y Nota de Venta solo permiten RUC.",
-        );
+  const identificationLabel = selectedIdentification?.description?.toLowerCase() || "";
 
-        return false;
+  // FACTURA Y NOTA VENTA
+  // SOLO RUC
+
+  if (["01", "02"].includes(voucherCode.value)) {
+    if (!identificationLabel.includes("ruc") || identification.length !== 13) {
+      alert("Factura y Nota de Venta solo permiten RUC.");
+
+      return false;
     }
+  }
 
-    // LIQUIDACION
+  // LIQUIDACION DE COMPRA
+  // SOLO CEDULA O PASAPORTE
 
-    if (voucherCode.value === "03") {
-        const valid =
-            identification.length === 10 ||
-            identification.length === 13 ||
-            identification.length > 13;
+  if (voucherCode.value === "03") {
+    const isCedula = identificationLabel.includes("cedula");
 
-        if (!valid) {
-            alert(
-                "Liquidación requiere cédula, RUC o pasaporte.",
-            );
+    const isPassport = identificationLabel.includes("pasaporte");
 
-            return false;
-        }
+    if (!isCedula && !isPassport) {
+      alert("La liquidación de compra solo permite cédula o pasaporte.");
+
+      return false;
     }
+  }
 
-    return true;
+  return true;
 }
 
 function handleSubmit() {
-    if (!validateVoucherWithIdentification())
-        return;
+  if (!validateVoucherWithIdentification()) return;
 
-    emit("submit");
+  emit("submit");
 }
 
 // ─────────────────────────────────────────────
@@ -343,774 +338,348 @@ function handleSubmit() {
 
 const accountQuery = ref("");
 
-=======
-// ── Account search ─────────────────────────────────────────────────────────
-
-const accountQuery = ref("");
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162
 const accountDropdownOpen = ref(false);
 
 watch(
-    () => props.form.acount_id,
-    (id) => {
-        if (id && !accountQuery.value) {
-<<<<<<< HEAD
-            const found = props.accounts.find(
-                (a) => a.id === id,
-            );
+  () => props.form.acount_id,
+  (id) => {
+    if (id && !accountQuery.value) {
+      const found = props.accounts.find((a) => a.id === id);
 
-            if (found) {
-                accountQuery.value = `${found.code} - ${found.name}`;
-            }
-        }
-    },
-    {
-        immediate: true,
-    },
+      if (found) {
+        accountQuery.value = `${found.code} - ${found.name}`;
+      }
+    }
+  },
+  {
+    immediate: true,
+  }
 );
 
 function filteredAccounts(): Account[] {
-    const q =
-        accountQuery.value
-            .trim()
-            .toLowerCase();
+  const q = accountQuery.value.trim().toLowerCase();
 
-    if (!q) return props.accounts.slice(0, 8);
+  if (!q) return props.accounts.slice(0, 8);
 
-    return props.accounts
-        .filter(
-            (a) =>
-                a.code
-                    .toLowerCase()
-                    .includes(q) ||
-                a.name
-                    .toLowerCase()
-                    .includes(q),
-=======
-            const found = props.accounts.find((a) => a.id === id);
-            if (found) accountQuery.value = `${found.code} – ${found.name}`;
-        }
-    },
-    { immediate: true },
-);
-
-function filteredAccounts(): Account[] {
-    const q = accountQuery.value.trim().toLowerCase();
-    if (!q) return props.accounts.slice(0, 8);
-    return props.accounts
-        .filter(
-            (a) =>
-                a.code.toLowerCase().includes(q) ||
-                a.name.toLowerCase().includes(q),
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162
-        )
-        .slice(0, 8);
+  return props.accounts
+    .filter((a) => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q))
+    .slice(0, 8);
 }
 
 function selectAccount(account: Account) {
-    props.form.acount_id = account.id;
-<<<<<<< HEAD
+  props.form.acount_id = account.id;
 
-    accountQuery.value = `${account.code} - ${account.name}`;
+  accountQuery.value = `${account.code} - ${account.name}`;
 
-    accountDropdownOpen.value = false;
+  accountDropdownOpen.value = false;
 }
 
 // ─────────────────────────────────────────────
 // CALCULOS
 // ─────────────────────────────────────────────
 
-const n = (v: number | string) =>
-    parseFloat(String(v)) || 0;
-
-// NOTA VENTA SOLO IVA 0
-
-watch(isNotaVenta, (val) => {
-    if (val) {
-        props.form.base12 = 0;
-
-        props.form.base15 = 0;
-
-        props.form.iva12 = 0;
-
-        props.form.iva15 = 0;
-    }
-});
-
-// IVA 12
-=======
-    accountQuery.value = `${account.code} – ${account.name}`;
-    accountDropdownOpen.value = false;
-}
-
-function clearAccount() {
-    props.form.acount_id = null;
-    accountQuery.value = "";
-}
-
-function closeAccountDropdownDelayed() {
-    setTimeout(() => {
-        accountDropdownOpen.value = false;
-    }, 150);
-}
-
-// ── Numeric helpers ────────────────────────────────────────────────────────
-
 const n = (v: number | string) => parseFloat(String(v)) || 0;
 
 watch(
-    () => props.form.emision,
-    (val) => {
-        if (val && !props.form.autorized_at) {
-            props.form.autorized_at = `${val}T00:00`;
-        }
-    },
-);
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162
-
-watch(
-    () => props.form.base12,
-    (val) => {
-<<<<<<< HEAD
-        if (isNotaVenta.value) {
-            props.form.base12 = 0;
-
-            props.form.iva12 = 0;
-
-            return;
-        }
-
-        props.form.iva12 = parseFloat(
-            (n(val) * 0.12).toFixed(2),
-        );
-    },
-);
-
-// IVA 15
-
-watch(
-    () => props.form.base15,
-    (val) => {
-        if (isNotaVenta.value) {
-            props.form.base15 = 0;
-
-            props.form.iva15 = 0;
-
-            return;
-        }
-
-        props.form.iva15 = parseFloat(
-            (n(val) * 0.15).toFixed(2),
-        );
-=======
-        props.form.iva12 = parseFloat((n(val) * 0.12).toFixed(2));
-    },
-);
-
-watch(
-    () => props.form.base15,
-    (val) => {
-        props.form.iva15 = parseFloat((n(val) * 0.15).toFixed(2));
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162
-    },
+  () => props.form.base15,
+  (val) => {
+    props.form.iva15 = parseFloat((n(val) * 0.15).toFixed(2));
+  }
 );
 
 const computedSubTotal = computed(
-    () =>
-        n(props.form.no_iva) +
-        n(props.form.base0) +
-        n(props.form.base12) +
-        n(props.form.base15),
+  () =>
+    n(props.form.no_iva) +
+    n(props.form.base0) +
+    n(props.form.base12) +
+    n(props.form.base15)
 );
 
 const computedTotal = computed(
-    () =>
-        computedSubTotal.value +
-        n(props.form.iva12) +
-        n(props.form.iva15) +
-        n(props.form.ice) -
-        n(props.form.discount) -
-        n(props.form.aditional_discount),
+  () =>
+    computedSubTotal.value +
+    n(props.form.iva15) +
+    n(props.form.iva12) +
+    n(props.form.ice) -
+    n(props.form.discount) -
+    n(props.form.aditional_discount)
 );
 
 watchEffect(() => {
-<<<<<<< HEAD
-    props.form.sub_total = parseFloat(
-        computedSubTotal.value.toFixed(2),
-    );
+  props.form.sub_total = parseFloat(computedSubTotal.value.toFixed(2));
 
-    props.form.total = parseFloat(
-        computedTotal.value.toFixed(2),
-    );
+  props.form.total = parseFloat(computedTotal.value.toFixed(2));
 });
 
-// ─────────────────────────────────────────────
-// IDENTIFICACION
-// ─────────────────────────────────────────────
-
-const maxIdentificationLength = computed(() => {
-    if (!props.form.type_identification)
-        return 13;
-
-    const selected =
-        props.identificationTypes.find(
-            (i) =>
-                i.id ==
-                props.form.type_identification,
-        );
-
-    if (!selected) return 13;
-
-    const label =
-        selected.description.toLowerCase();
-
-    if (label.includes("cedula"))
-        return 10;
-
-    if (label.includes("ruc")) return 13;
-
-    return 20;
-});
+watch(
+  () => props.form.base12,
+  (val) => {
+    props.form.iva12 = parseFloat((n(val) * 0.12).toFixed(2));
+  }
+);
 </script>
 
 <template>
-    <form @submit.prevent="handleSubmit">
-        <!-- DOCUMENTO -->
+  <form @submit.prevent="handleSubmit">
+    <div class="p-6">
+      <h2
+        class="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+      >
+        Documento
+      </h2>
 
-        <div class="p-6">
-            <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Documento
-            </h2>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <FormSelect
+          label="Tipo identificación"
+          v-model="form.type_identification"
+          :options="identificationOptions"
+          required
+        />
 
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                <!-- IDENTIFICACION -->
+        <div class="flex flex-col gap-1.5">
+          <Label> Identificación </Label>
 
-                <FormSelect label="Tipo identificación" v-model="form.type_identification
-                    " :options="identificationOptions
-                        " required />
-
-                <!-- NUMERO -->
-
-                <div class="flex flex-col gap-1.5">
-                    <Label>
-                        Identificación
-                    </Label>
-
-                    <Input v-model="contactIdentification
-                        " :maxlength="maxIdentificationLength
-                            " />
-                </div>
-
-                <!-- NOMBRE -->
-
-                <div class="flex flex-col gap-1.5">
-                    <Label>Nombre</Label>
-
-                    <Input :model-value="contactName
-                        " readonly />
-                </div>
-
-                <!-- CUENTA -->
-
-                <div class="sm:col-span-2 lg:col-span-3">
-                    <Label>
-                        Cuenta contable
-                    </Label>
-
-                    <div class="relative">
-                        <Input v-model="accountQuery" placeholder="Buscar cuenta..." @focus="
-                            accountDropdownOpen = true
-                            " />
-
-                        <div v-if="
-                            accountDropdownOpen &&
-                            filteredAccounts()
-                                .length
-                        " class="absolute z-10 mt-1 w-full rounded-md border bg-white shadow">
-                            <button v-for="account in filteredAccounts()" :key="account.id" type="button"
-                                class="w-full px-3 py-2 text-left hover:bg-gray-100" @mousedown.prevent="
-                                    selectAccount(
-                                        account,
-                                    )
-                                    ">
-                                {{
-                                    account.code
-                                }}
-                                -
-                                {{
-                                    account.name
-                                }}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- COMPROBANTE -->
-
-                <FormSelect label="Tipo comprobante" v-model="form.voucher_type_id
-                    " :options="voucherTypeOptions
-                        " required />
-
-                <!-- SERIE -->
-
-                <FormField id="serie" label="Serie" v-model="form.serie" maxlength="17"
-                    placeholder="001-001-000000001" />
-
-                <!-- FECHA -->
-
-                <FormDatePicker id="emision" label="Fecha emisión" v-model="form.emision" />
-
-                <!-- AUTORIZACION -->
-
-                <div class="lg:col-span-2">
-                    <FormField id="autorization" label="Autorización" v-model="form.autorization
-                        " maxlength="49" />
-                </div>
-
-                <!-- FECHA AUTORIZACION -->
-
-                <FormDatePicker id="autorized_at" label="Fecha autorización" v-model="form.autorized_at
-                    " mode="datetime" />
-
-                <!-- DOCUMENTO MODIFICADO -->
-
-                <template v-if="
-                    showModifyDocumentFields
-                ">
-                    <div class="lg:col-span-3 mt-4">
-                        <h3 class="text-sm font-semibold">
-                            Documento Modificado
-                        </h3>
-                    </div>
-
-                    <FormSelect label="Comprobante original" v-model="form.voucher_type_modify_id
-                        " :options="modifyVoucherOptions
-                            " />
-
-                    <FormField id="est_modify" label="Establecimiento" v-model="form.est_modify
-                        " maxlength="3" />
-
-                    <FormField id="poi_modify" label="Punto emisión" v-model="form.poi_modify
-                        " maxlength="3" />
-
-                    <FormField id="sec_modify" label="Secuencial" v-model="form.sec_modify
-                        " maxlength="9" />
-
-                    <div class="lg:col-span-2">
-                        <FormField id="aut_modify" label="Autorización documento original" v-model="form.aut_modify
-                            " maxlength="49" />
-                    </div>
-                </template>
-            </div>
+          <Input v-model="contactIdentification" :maxlength="maxIdentificationLength" />
         </div>
 
-        <!-- VALORES -->
+        <div class="flex flex-col gap-1.5">
+          <Label>Nombre</Label>
 
-        <div class="border-t p-6">
-            <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Valores
-            </h2>
+          <Input :model-value="contactName" readonly />
+        </div>
 
-            <div class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-                <!-- NO IVA -->
+        <div class="sm:col-span-2 lg:col-span-3">
+          <Label> Cuenta contable </Label>
 
-                <FormField id="no_iva" label="No IVA" v-model="form.no_iva" type="number" step="0.01" />
+          <div class="relative">
+            <Input
+              v-model="accountQuery"
+              placeholder="Buscar cuenta..."
+              @focus="accountDropdownOpen = true"
+            />
 
-                <!-- BASE 0 -->
-
-                <FormField id="base0" label="Base 0%" v-model="form.base0" type="number" step="0.01" />
-
-                <!-- SOLO SI NO ES NOTA VENTA -->
-
-                <template v-if="!isNotaVenta">
-                    <!-- BASE 12 -->
-
-                    <FormField id="base12" label="Base 12%" v-model="form.base12
-                        " type="number" step="0.01" />
-
-                    <!-- IVA 12 -->
-
-                    <FormField id="iva12" label="IVA 12%" v-model="form.iva12
-                        " readonly />
-
-                    <!-- BASE 15 -->
-
-                    <FormField id="base15" label="Base 15%" v-model="form.base15
-                        " type="number" step="0.01" />
-
-                    <!-- IVA 15 -->
-
-                    <FormField id="iva15" label="IVA 15%" v-model="form.iva15
-                        " readonly />
-                </template>
-
-                <!-- DESCUENTO -->
-
-                <FormField id="discount" label="Descuento" v-model="form.discount" type="number" step="0.01" />
-
-                <!-- ICE -->
-
-                <FormField id="ice" label="ICE" v-model="form.ice" type="number" step="0.01" />
-
-                <!-- SUBTOTAL -->
-
-                <FormField id="sub_total" label="Subtotal" :model-value="form.sub_total
-                    " readonly />
-
-                <!-- TOTAL -->
-
-                <div class="rounded-lg bg-muted p-4">
-                    <Label>Total</Label>
-
-                    <Input :model-value="form.total
-                        " readonly class="text-right text-lg font-semibold" />
-=======
-    props.form.sub_total = parseFloat(computedSubTotal.value.toFixed(2));
-    props.form.total = parseFloat(computedTotal.value.toFixed(2));
-});
-
-const today = new Date().toISOString().slice(0, 10);
-const nowLocal = new Date(
-    new Date().getTime() - new Date().getTimezoneOffset() * 60000,
-)
-    .toISOString()
-    .slice(0, 16);
-</script>
-
-<template>
-    <form @submit.prevent="emit('submit')">
-        <!-- Sección: Documento -->
-        <div class="p-6">
-            <h2
-                class="text-muted-foreground mb-4 text-xs font-semibold tracking-widest uppercase"
+            <div
+              v-if="accountDropdownOpen && filteredAccounts().length"
+              class="absolute z-10 mt-1 w-full rounded-md border bg-white shadow"
             >
-                Documento
-            </h2>
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                <!-- Identificación -->
-                <div class="flex flex-col gap-1.5">
-                    <Label
-                        >Identificación
-                        <span class="text-destructive">*</span></Label
-                    >
-                    <div class="relative">
-                        <Input
-                            v-model="contactIdentification"
-                            type="text"
-                            maxlength="13"
-                            placeholder="RUC o cédula"
-                            class="pr-8 font-mono"
-                            :disabled="contactResolving"
-                        />
-                        <span
-                            v-if="contactResolving"
-                            class="text-muted-foreground absolute top-1/2 right-2.5 -translate-y-1/2"
-                        >
-                            <svg
-                                class="size-4 animate-spin"
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                            >
-                                <circle
-                                    class="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    stroke-width="4"
-                                />
-                                <path
-                                    class="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                                />
-                            </svg>
-                        </span>
-                    </div>
-                    <p
-                        v-if="contactError"
-                        class="text-muted-foreground text-xs"
-                    >
-                        {{ contactError }}
-                    </p>
-                    <p
-                        v-if="form.errors.contact_id"
-                        class="text-destructive text-xs"
-                    >
-                        {{ form.errors.contact_id }}
-                    </p>
-                </div>
-
-                <!-- Nombre -->
-                <div class="flex flex-col gap-1.5">
-                    <Label>Nombre</Label>
-                    <Input
-                        :model-value="contactName"
-                        type="text"
-                        readonly
-                        placeholder="Se completa automáticamente"
-                        class="bg-muted text-muted-foreground cursor-default"
-                    />
-                </div>
-
-                <!-- Cuenta contable -->
-                <div class="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-3">
-                    <Label>Cuenta contable (costo / gasto)</Label>
-                    <div class="relative">
-                        <Input
-                            v-model="accountQuery"
-                            type="text"
-                            placeholder="Buscar por código o nombre…"
-                            class="pr-8"
-                            @focus="accountDropdownOpen = true"
-                            @blur="closeAccountDropdownDelayed"
-                        />
-                        <button
-                            v-if="form.acount_id"
-                            type="button"
-                            class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2"
-                            @mousedown.prevent="clearAccount"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke-width="1.5"
-                                stroke="currentColor"
-                                class="size-4"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M6 18 18 6M6 6l12 12"
-                                />
-                            </svg>
-                        </button>
-                        <div
-                            v-if="
-                                accountDropdownOpen &&
-                                filteredAccounts().length > 0
-                            "
-                            class="border-border bg-popover absolute left-0 right-0 top-full z-10 mt-1 max-h-52 overflow-y-auto rounded-md border shadow-lg"
-                        >
-                            <button
-                                v-for="account in filteredAccounts()"
-                                :key="account.id"
-                                type="button"
-                                class="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors"
-                                @mousedown.prevent="selectAccount(account)"
-                            >
-                                <span
-                                    class="text-foreground w-28 shrink-0 font-mono text-xs font-medium"
-                                    >{{ account.code }}</span
-                                >
-                                <span
-                                    class="text-muted-foreground flex-1 truncate text-xs"
-                                    >{{ account.name }}</span
-                                >
-                            </button>
-                        </div>
-                    </div>
-                    <p
-                        v-if="form.errors.acount_id"
-                        class="text-destructive text-xs"
-                    >
-                        {{ form.errors.acount_id }}
-                    </p>
-                </div>
-
-                <!-- Tipo de comprobante -->
-                <FormSelect
-                    label="Tipo de comprobante"
-                    v-model="form.voucher_type_id"
-                    :options="voucherTypeOptions"
-                    :error="form.errors.voucher_type_id"
-                    placeholder="Seleccionar tipo"
-                    required
-                />
-
-                <!-- Serie -->
-                <FormField
-                    id="serie"
-                    label="Serie"
-                    v-model="form.serie"
-                    :error="form.errors.serie"
-                    maxlength="17"
-                    placeholder="001-001-000000001"
-                    required
-                    class="font-mono"
-                />
-
-                <!-- Fecha de emisión -->
-                <FormDatePicker
-                    id="emision"
-                    label="Fecha de emisión"
-                    v-model="form.emision"
-                    :error="form.errors.emision"
-                    default-today
-                    required
-                />
-
-                <!-- Autorización -->
-                <div class="flex flex-col gap-1.5 lg:col-span-2">
-                    <FormField
-                        id="autorization"
-                        label="Autorización"
-                        v-model="form.autorization"
-                        :error="form.errors.autorization"
-                        maxlength="49"
-                        required
-                        class="font-mono"
-                    />
-                </div>
-
-                <!-- Fecha de autorización -->
-                <FormDatePicker
-                    id="autorized_at"
-                    label="Fecha de autorización"
-                    v-model="form.autorized_at"
-                    :error="form.errors.autorized_at"
-                    default-today
-                    mode="datetime"
-                />
+              <button
+                v-for="account in filteredAccounts()"
+                :key="account.id"
+                type="button"
+                class="w-full px-3 py-2 text-left hover:bg-gray-100"
+                @mousedown.prevent="selectAccount(account)"
+              >
+                {{ account.code }}
+                -
+                {{ account.name }}
+              </button>
             </div>
+          </div>
         </div>
 
-        <!-- Sección: Valores -->
-        <div class="border-border border-t p-6">
-            <h2
-                class="text-muted-foreground mb-4 text-xs font-semibold tracking-widest uppercase"
-            >
-                Valores
-            </h2>
-            <div class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-                <FormField
-                    id="no_iva"
-                    label="No IVA"
-                    v-model="form.no_iva"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    class="text-right font-mono"
-                />
-                <FormField
-                    id="base0"
-                    label="Base 0%"
-                    v-model="form.base0"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    class="text-right font-mono"
-                />
-                <FormField
-                    id="base15"
-                    label="Base 15%"
-                    v-model="form.base15"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    class="text-right font-mono"
-                />
-                <FormField
-                    id="iva15"
-                    label="IVA 15%"
-                    v-model="form.iva15"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    class="text-right font-mono"
-                />
-                <FormField
-                    id="discount"
-                    label="Descuento"
-                    v-model="form.discount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    class="text-right font-mono"
-                />
-                <FormField
-                    id="sub_total"
-                    label="Subtotal"
-                    :model-value="form.sub_total"
-                    :error="form.errors.sub_total"
-                    type="number"
-                    step="0.01"
-                    readonly
-                    class="text-right font-mono"
-                />
-                <FormField
-                    id="ice"
-                    label="ICE"
-                    v-model="form.ice"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    class="text-right font-mono"
-                />
+        <FormSelect
+          label="Tipo comprobante"
+          v-model="form.voucher_type_id"
+          :options="voucherTypeOptions"
+          required
+        />
 
-                <!-- Total destacado -->
-                <div class="bg-muted flex flex-col gap-1 rounded-lg px-4 py-3">
-                    <Label
-                        class="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
-                    >
-                        Total
-                    </Label>
-                    <Input
-                        :model-value="form.total"
-                        type="number"
-                        step="0.01"
-                        readonly
-                        class="cursor-default border-0 bg-transparent p-0 text-right font-mono text-base font-semibold shadow-none focus-visible:ring-0"
-                    />
-                    <p
-                        v-if="form.errors.total"
-                        class="text-destructive text-xs"
-                    >
-                        {{ form.errors.total }}
-                    </p>
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162
-                </div>
-            </div>
+        <FormField
+          id="serie"
+          label="Serie"
+          v-model="form.serie"
+          maxlength="17"
+          placeholder="001-001-000000001"
+        />
+
+        <FormDatePicker id="emision" label="Fecha emisión" v-model="form.emision" />
+
+        <div class="lg:col-span-2">
+          <FormField
+            id="autorization"
+            label="Autorización"
+            v-model="form.autorization"
+            maxlength="49"
+          />
         </div>
 
-<<<<<<< HEAD
-        <!-- BOTONES -->
+        <FormDatePicker
+          id="autorized_at"
+          label="Fecha autorización"
+          v-model="form.autorized_at"
+          mode="datetime"
+        />
 
-        <div class="flex justify-end gap-3 border-t px-6 py-4">
-            <Button variant="outline" type="button" as-child>
-                <Link :href="route(
-                    'tenant.shops.index',
-                )
-                    ">
-                    Cancelar
-                </Link>
-            </Button>
+        <template v-if="showModifyDocumentFields">
+          <div class="mt-4 lg:col-span-3">
+            <h3 class="text-sm font-semibold">Documento Modificado</h3>
+          </div>
 
-            <Button type="submit" :disabled="form.processing
-                ">
-                {{
-                    form.processing
-                        ? "Guardando..."
-                        : submitLabel
-                }}
-            </Button>
+          <FormSelect
+            label="Comprobante original"
+            v-model="form.voucher_type_modify_id"
+            :options="modifyVoucherOptions"
+          />
+
+          <FormField
+            id="est_modify"
+            label="Establecimiento"
+            v-model="form.est_modify"
+            maxlength="3"
+          />
+
+          <FormField
+            id="poi_modify"
+            label="Punto emisión"
+            v-model="form.poi_modify"
+            maxlength="3"
+          />
+
+          <FormField
+            id="sec_modify"
+            label="Secuencial"
+            v-model="form.sec_modify"
+            maxlength="9"
+          />
+
+          <div class="lg:col-span-2">
+            <FormField
+              id="aut_modify"
+              label="Autorización documento original"
+              v-model="form.aut_modify"
+              maxlength="49"
+            />
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- VALORES -->
+
+    <div class="border-t p-6">
+      <h2
+        class="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+      >
+        Valores
+      </h2>
+
+      <div class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+        <FormField
+          id="no_iva"
+          label="No IVA"
+          v-model="form.no_iva"
+          type="number"
+          step="0.01"
+        />
+
+        <FormField
+          id="base0"
+          label="Base 0%"
+          v-model="form.base0"
+          type="number"
+          step="0.01"
+        />
+
+        <FormField
+          id="base12"
+          label="Base 12%"
+          v-model="form.base12"
+          type="number"
+          step="0.01"
+        />
+
+        <FormField id="iva12" label="IVA 12%" v-model="form.iva12" readonly />
+
+        <FormField
+          id="base15"
+          label="Base 15%"
+          v-model="form.base15"
+          type="number"
+          step="0.01"
+        />
+
+        <FormField id="iva15" label="IVA 15%" v-model="form.iva15" readonly />
+
+        <FormField
+          id="discount"
+          label="Descuento"
+          v-model="form.discount"
+          type="number"
+          step="0.01"
+        />
+
+        <FormField id="ice" label="ICE" v-model="form.ice" type="number" step="0.01" />
+
+        <FormField
+          id="sub_total"
+          label="Subtotal"
+          :model-value="form.sub_total"
+          readonly
+        />
+
+        <div class="rounded-lg bg-muted p-4">
+          <Label>Total</Label>
+
+          <Input
+            :model-value="form.total"
+            readonly
+            class="text-right text-lg font-semibold"
+          />
         </div>
-    </form>
+      </div>
+    </div>
+
+    <!-- MODAL -->
+
+    <div
+      v-if="showCreateContactModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
+      <div class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+        <h2 class="mb-4 text-lg font-semibold">Crear contacto</h2>
+
+        <div class="grid gap-4">
+          <FormSelect
+            label="Tipo identificación"
+            v-model="createContactForm.identification_type_id"
+            :options="identificationOptions"
+          />
+
+          <FormField
+            id="identification"
+            label="Identificación"
+            v-model="createContactForm.identification"
+          />
+
+          <FormField id="name" label="Nombre" v-model="createContactForm.name" />
+
+          <FormField id="phone" label="Teléfono" v-model="createContactForm.phone" />
+
+          <FormField id="email" label="Email" v-model="createContactForm.email" />
+
+          <FormField id="address" label="Dirección" v-model="createContactForm.address" />
+        </div>
+
+        <div class="mt-6 flex justify-end gap-3">
+          <Button type="button" variant="outline" @click="showCreateContactModal = false">
+            Cancelar
+          </Button>
+
+          <Button type="button" @click="saveContact"> Guardar contacto </Button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTONES -->
+
+    <div class="flex justify-end gap-3 border-t px-6 py-4">
+      <Button variant="outline" type="button" as-child>
+        <Link :href="route('tenant.shops.index')"> Cancelar </Link>
+      </Button>
+
+      <Button type="submit" :disabled="form.processing">
+        {{ form.processing ? "Guardando..." : submitLabel }}
+      </Button>
+    </div>
+  </form>
 </template>
-=======
-        <!-- Acciones -->
-        <div
-            class="border-border flex items-center justify-end gap-3 border-t px-6 py-4"
-        >
-            <Button variant="outline" type="button" as-child>
-                <Link :href="route('tenant.shops.index')"> Cancelar </Link>
-            </Button>
-            <Button type="submit" :disabled="form.processing">
-                {{ form.processing ? "Guardando..." : submitLabel }}
-            </Button>
-        </div>
-    </form>
-</template>
->>>>>>> a5eeffc4416b979264f8b671f94efc1524b61162

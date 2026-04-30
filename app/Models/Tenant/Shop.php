@@ -10,9 +10,9 @@ class Shop extends BaseModel
     protected $fillable = [
         'account_id',
         'company_id',
-        'contact_id',
         'voucher_type_id',
         'tax_support_id',
+        'contact_id',
         'emision',
         'autorization',
         'autorized_at',
@@ -39,7 +39,12 @@ class Shop extends BaseModel
         'autorization_retention',
         'retention_at',
 
-        //Documentos modificados
+        // ESTOS
+        'voucher_type_modify_id',
+        'est_modify',
+        'poi_modify',
+        'sec_modify',
+        'aut_modify',
     ];
 
     protected function casts(): array
