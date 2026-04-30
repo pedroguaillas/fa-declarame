@@ -17,7 +17,7 @@ git pull origin main
 composer install --no-dev --optimize-autoloader --no-interaction
 
 # ── 3. Frontend ──────────────────────────────────────────────────────────────
-npm ci --omit=dev
+npm ci
 npm run build
 
 # ── 4. Migraciones ───────────────────────────────────────────────────────────
