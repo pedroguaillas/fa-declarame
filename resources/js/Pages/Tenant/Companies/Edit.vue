@@ -54,7 +54,7 @@ function submit() {
 <template>
     <TenantLayout>
         <HeaderForm
-            title="Editar Empresa"
+            title="Editar Contribuyente"
             :link-href="route('tenant.companies.index')"
         />
 

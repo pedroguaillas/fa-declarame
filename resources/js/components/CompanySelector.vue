@@ -46,17 +46,17 @@ function selectCompany(company: CompanyScope) {
             >
                 <Building2 class="size-4 shrink-0" />
                 <span class="hidden max-w-40 truncate sm:inline-block">
-                    {{ currentCompany?.name ?? "Seleccionar empresa" }}
+                    {{ currentCompany?.name ?? "Seleccionar contribuyente" }}
                 </span>
                 <ChevronsUpDown class="size-3.5 shrink-0 opacity-50" />
             </Button>
         </PopoverTrigger>
         <PopoverContent class="w-72 p-0" align="start">
             <Command>
-                <CommandInput placeholder="Buscar empresa..." />
+                <CommandInput placeholder="Buscar contribuyente..." />
                 <CommandList>
-                    <CommandEmpty>No se encontró ninguna empresa.</CommandEmpty>
-                    <CommandGroup heading="Empresas">
+                    <CommandEmpty>No se encontró ningún contribuyente.</CommandEmpty>
+                    <CommandGroup heading="Contribuyentes">
                         <CommandItem
                             v-for="company in companies"
                             :key="company.id"

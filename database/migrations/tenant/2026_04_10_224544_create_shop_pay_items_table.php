@@ -17,6 +17,7 @@ return new class extends Migration
             $table->smallInteger('code');
             $table->string('value')->nullable();
             $table->string('description')->nullable();
+            $table->json('data_additional')->nullable();
             $table->timestamps();
         });
     }

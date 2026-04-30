@@ -18,6 +18,7 @@ return new class extends Migration
             $table->decimal('base');
             $table->decimal('percentage');
             $table->decimal('value');
+            $table->json('data_additional')->nullable();
             $table->timestamps();
         });
     }

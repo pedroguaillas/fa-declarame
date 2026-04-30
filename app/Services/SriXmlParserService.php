@@ -102,6 +102,7 @@ class SriXmlParserService
             'discount' => (float) ($info->totalDescuento ?? 0),
             'total' => (float) ($info->importeTotal ?? $info->valorModificacion ?? 0),
             ...$this->extractIva($info),
+            'detalles' => $this->extractDetalles($xml),
         ];
     }
 
@@ -126,6 +127,48 @@ class SriXmlParserService
 
         return $this->contributorTypeCache[$description]
             ??= ContributorType::where('description', $description)->value('id');
+    }
+
+    /**
+     * @return array<int, array{code: string, aux_code: string|null, description: string, quantity: float, unit_price: float, discount: float, total: float, tax_percentage: float, tax_value: float}>
+     */
+    private function extractDetalles(SimpleXMLElement $xml): array
+    {
+        $detalles = [];
+
+        if (! isset($xml->detalles->detalle)) {
+            return $detalles;
+        }
+
+        foreach ($xml->detalles->detalle as $detalle) {
+            $taxPercentage = 0.0;
+            $taxValue = 0.0;
+
+            if (isset($detalle->impuestos->impuesto)) {
+                foreach ($detalle->impuestos->impuesto as $impuesto) {
+                    if ((int) $impuesto->codigo === 2) {
+                        $taxPercentage = (float) $impuesto->tarifa;
+                        $taxValue += (float) $impuesto->valor;
+                    }
+                }
+            }
+
+            $detalles[] = [
+                'code'           => (string) ($detalle->codigoPrincipal ?? ''),
+                'aux_code'       => isset($detalle->codigoAuxiliar) && (string) $detalle->codigoAuxiliar !== ''
+                    ? (string) $detalle->codigoAuxiliar
+                    : null,
+                'description'    => (string) ($detalle->descripcion ?? ''),
+                'quantity'       => (float) ($detalle->cantidad ?? 0),
+                'unit_price'     => (float) ($detalle->precioUnitario ?? 0),
+                'discount'       => (float) ($detalle->descuento ?? 0),
+                'total'          => (float) ($detalle->precioTotalSinImpuesto ?? 0),
+                'tax_percentage' => $taxPercentage,
+                'tax_value'      => $taxValue,
+            ];
+        }
+
+        return $detalles;
     }
 
     /**

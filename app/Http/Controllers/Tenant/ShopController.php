@@ -15,6 +15,7 @@ use App\Services\ShopImportService;
 use App\Services\ShopRetentionImportService;
 use Constants;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -77,6 +78,11 @@ class ShopController extends Controller
 
         return redirect()->route('tenant.shops.index')
             ->with('success', 'Compra registrada correctamente.');
+    }
+
+    public function show(Shop $shop): JsonResponse
+    {
+        return response()->json($shop->load('items.product'));
     }
 
     public function edit(Shop $shop): Response

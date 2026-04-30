@@ -48,11 +48,11 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
         Route::post('shops/import', [ShopController::class, 'import'])->name('tenant.shops.import');
         Route::post('shops/import-retentions', [ShopController::class, 'importRetentions'])->name('tenant.shops.import-retentions');
         Route::resource('shops', ShopController::class)
-            ->except(['show'])
             ->names([
                 'index' => 'tenant.shops.index',
                 'create' => 'tenant.shops.create',
                 'store' => 'tenant.shops.store',
+                'show' => 'tenant.shops.show',
                 'edit' => 'tenant.shops.edit',
                 'update' => 'tenant.shops.update',
                 'destroy' => 'tenant.shops.destroy',

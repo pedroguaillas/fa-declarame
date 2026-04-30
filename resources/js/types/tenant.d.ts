@@ -41,6 +41,19 @@ export interface RetentionOption {
     percentage: number;
 }
 
+export interface ShopItem {
+    id: number;
+    shop_id: number;
+    product_id: number;
+    product: { id: number; code: string; aux_code: string | null; description: string };
+    quantity: string;
+    unit_price: string;
+    discount: string;
+    total: string;
+    tax_percentage: string;
+    tax_value: string;
+}
+
 export interface RetentionItem {
     id?: number;
     retention_id: number | null;
@@ -50,11 +63,11 @@ export interface RetentionItem {
     value: number | string;
 }
 
-export interface IdentificationType{
+export interface IdentificationType {
     id?: number;
-    code_order: string, 
-    code_shop: string, 
-    description: string
+    code_order: string;
+    code_shop: string;
+    description: string;
 }
 
 export interface Shop {
@@ -91,6 +104,7 @@ export interface Shop {
     retention_at: string | null;
     account: Account | null;
     retention_items: RetentionItem[];
+    items?: ShopItem[];
 }
 
 export interface VoucherType {
@@ -107,6 +121,7 @@ export interface Order {
     emision: string;
     autorization: string | null;
     autorized_at: string | null;
+    initial: string;
     serie: string;
     sub_total: string;
     no_iva: string;

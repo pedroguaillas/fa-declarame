@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant\Contact;
 use App\Models\Tenant\IdentificationType;
+use App\Models\Tenant\Product;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\VoucherType;
@@ -109,7 +110,7 @@ class ShopImportService
             $voucherTypeId ??= VoucherType::where('code', substr($claveAcceso, 8, 2))->value('id');
 
             if ($sriData !== null) {
-                Shop::create([
+                $shop = Shop::create([
                     'company_id' => $companyId,
                     'contact_id' => $contact->id,
                     'voucher_type_id' => $voucherTypeId,
@@ -133,6 +134,8 @@ class ShopImportService
                     'total' => $sriData['total'],
                     'state' => $sriData['estado'],
                 ]);
+
+                $this->createShopItems($shop, $sriData['detalles'] ?? [], $companyId);
             } else {
                 $subTotal = (float) $valorSinImpuestos;
                 $ivaAmount = (float) $iva;
@@ -160,5 +163,40 @@ class ShopImportService
         }
 
         return ['imported' => $imported, 'skipped' => $skipped];
+    }
+
+    /**
+     * @param array<int, array{code: string, aux_code: string|null, description: string, quantity: float, unit_price: float, discount: float, total: float, tax_percentage: float, tax_value: float}> $detalles
+     */
+    private function createShopItems(Shop $shop, array $detalles, int $companyId): void
+    {
+        if (empty($detalles)) {
+            return;
+        }
+
+        $items = [];
+
+        foreach ($detalles as $detalle) {
+            $product = Product::firstOrCreate(
+                [
+                    'code' => $detalle['code'],
+                    'description' => $detalle['description'],
+                    'company_id' => $companyId,
+                ],
+                ['aux_code' => $detalle['aux_code']],
+            );
+
+            $items[] = [
+                'product_id'     => $product->id,
+                'quantity'       => $detalle['quantity'],
+                'unit_price'     => $detalle['unit_price'],
+                'discount'       => $detalle['discount'],
+                'total'          => $detalle['total'],
+                'tax_percentage' => $detalle['tax_percentage'],
+                'tax_value'      => $detalle['tax_value'],
+            ];
+        }
+
+        $shop->items()->createMany($items);
     }
 }

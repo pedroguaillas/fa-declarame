@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 
 import type { ActionDef, ActionPayload, ColumnDef } from "@/types/shared";
 import { Paginator } from "@/types";
-import { Account, RetentionItem, RetentionOption, Shop } from "@/types/tenant";
+import { Account, RetentionItem, RetentionOption, Shop, ShopItem } from "@/types/tenant";
 import { FileText, Pencil, Receipt, Trash2 } from "lucide-vue-next";
 
 // ─── Props ─────────────────────────────────────────────────────────────────
@@ -191,7 +191,7 @@ const accountQuery = ref("");
 const accountDropdownOpen = ref(false);
 const accountForm = useForm<{ acount_id: number | null }>({ acount_id: null });
 
-function openAccountPanel(shop: Shop) {
+async function openAccountPanel(shop: Shop) {
     selectedShopForAccount.value = shop;
     accountForm.acount_id = shop.acount_id;
     accountPanelEditing.value = !shop.acount_id;
@@ -199,6 +199,20 @@ function openAccountPanel(shop: Shop) {
         ? `${shop.account.code} – ${shop.account.name}`
         : "";
     accountPanelOpen.value = true;
+
+    shopItems.value = [];
+    shopItemsLoading.value = true;
+    try {
+        const res = await fetch(route("tenant.shops.show", { shop: shop.id }), {
+            headers: { Accept: "application/json" },
+        });
+        if (res.ok) {
+            const data: Shop = await res.json();
+            shopItems.value = data.items ?? [];
+        }
+    } finally {
+        shopItemsLoading.value = false;
+    }
 }
 
 function closeAccountPanel() {
@@ -206,6 +220,7 @@ function closeAccountPanel() {
     accountPanelEditing.value = false;
     selectedShopForAccount.value = null;
     accountQuery.value = "";
+    shopItems.value = [];
 }
 
 function filteredAccounts(): Account[] {
@@ -241,6 +256,8 @@ function submitAccount() {
 const today = new Date().toISOString().slice(0, 10);
 const retentionPanelOpen = ref(false);
 const selectedShop = ref<Shop | null>(null);
+const shopItems = ref<ShopItem[]>([]);
+const shopItemsLoading = ref(false);
 
 interface ItemSearch {
     query: string;
@@ -268,19 +285,35 @@ const retentionForm = useForm<{
     items: [emptyItem()],
 });
 
-function openRetentionPanel(shop: Shop) {
+async function openRetentionPanel(shop: Shop) {
     selectedShop.value = shop;
+    shopItems.value = [];
+    shopItemsLoading.value = true;
+    retentionPanelOpen.value = true;
+
     if (!shop.serie_retention) {
         retentionForm.reset();
         retentionForm.items = [emptyItem(shop.sub_total)];
         itemSearches.value = [emptySearch()];
     }
-    retentionPanelOpen.value = true;
+
+    try {
+        const res = await fetch(route("tenant.shops.show", { shop: shop.id }), {
+            headers: { Accept: "application/json" },
+        });
+        if (res.ok) {
+            const data: Shop = await res.json();
+            shopItems.value = data.items ?? [];
+        }
+    } finally {
+        shopItemsLoading.value = false;
+    }
 }
 
 function closeRetentionPanel() {
     retentionPanelOpen.value = false;
     selectedShop.value = null;
+    shopItems.value = [];
 }
 
 function addItem() {
@@ -359,7 +392,7 @@ watch(
 <template>
     <TenantLayout>
         <div
-            class="flex flex-col gap-4 w-full max-w-full md:max-w-2xl xl:max-w-7xl mx-auto"
+            class="flex flex-col gap-4 w-full"
         >
             <!-- Header -->
             <HeaderList
@@ -487,159 +520,370 @@ watch(
             >
                 <div
                     v-if="accountPanelOpen && selectedShopForAccount"
-                    class="bg-background border-border fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l shadow-xl"
+                    class="bg-background border-border fixed inset-y-0 right-0 z-50 flex w-full max-w-4xl border-l shadow-xl"
                 >
+                    <!-- Left: invoice info -->
                     <div
-                        class="border-border flex items-start justify-between border-b px-6 py-4"
+                        class="border-border flex w-96 shrink-0 flex-col border-r"
                     >
-                        <div>
-                            <h2 class="text-foreground text-base font-semibold">
-                                Cuenta contable
-                            </h2>
+                        <div class="border-border border-b px-5 py-4">
                             <p
-                                class="text-muted-foreground mt-0.5 font-mono text-sm"
+                                class="text-muted-foreground text-xs font-semibold tracking-widest uppercase"
+                            >
+                                Factura
+                            </p>
+                            <p
+                                class="text-foreground mt-0.5 font-mono text-sm font-medium"
                             >
                                 {{ selectedShopForAccount.serie }}
                             </p>
                         </div>
-                        <button
-                            type="button"
-                            class="text-muted-foreground hover:text-foreground -mr-1 rounded-md p-1 transition-colors"
-                            @click="closeAccountPanel"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke-width="1.5"
-                                stroke="currentColor"
-                                class="size-5"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M6 18 18 6M6 6l12 12"
-                                />
-                            </svg>
-                        </button>
-                    </div>
-
-                    <!-- View mode -->
-                    <div
-                        v-if="
-                            selectedShopForAccount.account &&
-                            accountForm.acount_id ===
-                                selectedShopForAccount.acount_id &&
-                            !accountPanelEditing
-                        "
-                        class="flex flex-1 flex-col p-6"
-                    >
-                        <p
-                            class="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase"
-                        >
-                            Cuenta asignada
-                        </p>
-                        <div
-                            class="border-border bg-muted flex items-start gap-3 rounded-lg border px-4 py-3"
-                        >
-                            <span
-                                class="text-foreground font-mono text-sm font-semibold"
-                                >{{ selectedShopForAccount.account.code }}</span
-                            >
-                            <span class="text-foreground text-sm">{{
-                                selectedShopForAccount.account.name
-                            }}</span>
-                        </div>
-                        <button
-                            type="button"
-                            class="text-primary hover:text-primary/70 mt-4 self-start text-sm font-medium"
-                            @click="accountPanelEditing = true"
-                        >
-                            Cambiar cuenta
-                        </button>
-                    </div>
-
-                    <!-- Assign form -->
-                    <form
-                        v-else
-                        class="flex flex-1 flex-col overflow-hidden"
-                        @submit.prevent="submitAccount"
-                    >
-                        <div class="flex-1 overflow-y-auto p-6">
-                            <p
-                                class="text-muted-foreground mb-3 text-xs font-medium tracking-wider uppercase"
-                            >
-                                Buscar cuenta de costo o gasto
-                            </p>
-                            <div class="relative">
-                                <input
-                                    v-model="accountQuery"
-                                    type="text"
-                                    placeholder="Buscar por código o nombre…"
-                                    class="border-border bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring/30 h-9 w-full rounded-md border px-3 pr-8 text-sm focus:ring-2 focus:outline-none"
-                                    @focus="accountDropdownOpen = true"
-                                    @blur="
-                                        closeDropdownDelayed(
-                                            () => (accountDropdownOpen = false),
-                                        )
-                                    "
-                                />
-                                <button
-                                    v-if="accountForm.acount_id"
-                                    type="button"
-                                    class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2"
-                                    @mousedown.prevent="
-                                        () => {
-                                            accountForm.acount_id = null;
-                                            accountQuery = '';
-                                        }
-                                    "
+                        <div class="flex-1 space-y-4 overflow-y-auto p-5">
+                            <div>
+                                <p
+                                    class="text-muted-foreground mb-0.5 text-xs font-medium"
                                 >
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke-width="1.5"
-                                        stroke="currentColor"
-                                        class="size-4"
-                                    >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            d="M6 18 18 6M6 6l12 12"
-                                        />
-                                    </svg>
-                                </button>
+                                    Proveedor
+                                </p>
+                                <p class="text-foreground text-sm">
+                                    {{ selectedShopForAccount.contact?.name }}
+                                </p>
+                            </div>
+                            <div>
+                                <p
+                                    class="text-muted-foreground mb-0.5 text-xs font-medium"
+                                >
+                                    Fecha emisión
+                                </p>
+                                <p class="text-foreground text-sm tabular-nums">
+                                    {{ selectedShopForAccount.emision }}
+                                </p>
+                            </div>
+                            <div>
+                                <p
+                                    class="text-muted-foreground mb-0.5 text-xs font-medium"
+                                >
+                                    Clave de acceso
+                                </p>
+                                <p
+                                    class="text-foreground font-mono text-xs break-all"
+                                >
+                                    {{ selectedShopForAccount.autorization }}
+                                </p>
+                            </div>
+                            <!-- IVA breakdown -->
+                            <div
+                                class="border-border overflow-hidden rounded-lg border"
+                            >
+                                <table class="min-w-full text-xs">
+                                    <thead class="bg-muted">
+                                        <tr>
+                                            <th
+                                                class="text-muted-foreground px-3 py-2 text-left font-medium"
+                                            >
+                                                Concepto
+                                            </th>
+                                            <th
+                                                class="text-muted-foreground px-3 py-2 text-right font-medium"
+                                            >
+                                                Valor
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-border divide-y">
+                                        <tr
+                                            v-if="
+                                                Number(selectedShopForAccount.no_iva) > 0
+                                            "
+                                        >
+                                            <td
+                                                class="text-muted-foreground px-3 py-1.5"
+                                            >
+                                                No IVA
+                                            </td>
+                                            <td
+                                                class="text-foreground px-3 py-1.5 text-right font-mono"
+                                            >
+                                                ${{
+                                                    Number(
+                                                        selectedShopForAccount.no_iva,
+                                                    ).toFixed(2)
+                                                }}
+                                            </td>
+                                        </tr>
+                                        <tr
+                                            v-if="
+                                                Number(selectedShopForAccount.base0) > 0
+                                            "
+                                        >
+                                            <td
+                                                class="text-muted-foreground px-3 py-1.5"
+                                            >
+                                                Base 0%
+                                            </td>
+                                            <td
+                                                class="text-foreground px-3 py-1.5 text-right font-mono"
+                                            >
+                                                ${{
+                                                    Number(
+                                                        selectedShopForAccount.base0,
+                                                    ).toFixed(2)
+                                                }}
+                                            </td>
+                                        </tr>
+                                        <tr
+                                            v-if="
+                                                Number(selectedShopForAccount.base12) > 0
+                                            "
+                                        >
+                                            <td
+                                                class="text-muted-foreground px-3 py-1.5"
+                                            >
+                                                Base 12%
+                                            </td>
+                                            <td
+                                                class="text-foreground px-3 py-1.5 text-right font-mono"
+                                            >
+                                                ${{
+                                                    Number(
+                                                        selectedShopForAccount.base12,
+                                                    ).toFixed(2)
+                                                }}
+                                            </td>
+                                        </tr>
+                                        <tr
+                                            v-if="
+                                                Number(selectedShopForAccount.iva12) > 0
+                                            "
+                                        >
+                                            <td
+                                                class="text-muted-foreground px-3 py-1.5 pl-5"
+                                            >
+                                                IVA 12%
+                                            </td>
+                                            <td
+                                                class="text-foreground px-3 py-1.5 text-right font-mono"
+                                            >
+                                                ${{
+                                                    Number(
+                                                        selectedShopForAccount.iva12,
+                                                    ).toFixed(2)
+                                                }}
+                                            </td>
+                                        </tr>
+                                        <tr
+                                            v-if="
+                                                Number(selectedShopForAccount.base15) > 0
+                                            "
+                                        >
+                                            <td
+                                                class="text-muted-foreground px-3 py-1.5"
+                                            >
+                                                Base 15%
+                                            </td>
+                                            <td
+                                                class="text-foreground px-3 py-1.5 text-right font-mono"
+                                            >
+                                                ${{
+                                                    Number(
+                                                        selectedShopForAccount.base15,
+                                                    ).toFixed(2)
+                                                }}
+                                            </td>
+                                        </tr>
+                                        <tr
+                                            v-if="
+                                                Number(selectedShopForAccount.iva15) > 0
+                                            "
+                                        >
+                                            <td
+                                                class="text-muted-foreground px-3 py-1.5 pl-5"
+                                            >
+                                                IVA 15%
+                                            </td>
+                                            <td
+                                                class="text-foreground px-3 py-1.5 text-right font-mono"
+                                            >
+                                                ${{
+                                                    Number(
+                                                        selectedShopForAccount.iva15,
+                                                    ).toFixed(2)
+                                                }}
+                                            </td>
+                                        </tr>
+                                        <tr
+                                            v-if="
+                                                Number(selectedShopForAccount.discount) > 0
+                                            "
+                                        >
+                                            <td
+                                                class="text-muted-foreground px-3 py-1.5"
+                                            >
+                                                Descuento
+                                            </td>
+                                            <td
+                                                class="text-destructive px-3 py-1.5 text-right font-mono"
+                                            >
+                                                -${{
+                                                    Number(
+                                                        selectedShopForAccount.discount,
+                                                    ).toFixed(2)
+                                                }}
+                                            </td>
+                                        </tr>
+                                        <tr v-if="Number(selectedShopForAccount.ice) > 0">
+                                            <td
+                                                class="text-muted-foreground px-3 py-1.5"
+                                            >
+                                                ICE
+                                            </td>
+                                            <td
+                                                class="text-foreground px-3 py-1.5 text-right font-mono"
+                                            >
+                                                ${{
+                                                    Number(
+                                                        selectedShopForAccount.ice,
+                                                    ).toFixed(2)
+                                                }}
+                                            </td>
+                                        </tr>
+                                        <tr class="bg-muted font-semibold">
+                                            <td
+                                                class="text-foreground px-3 py-2"
+                                            >
+                                                Total
+                                            </td>
+                                            <td
+                                                class="text-foreground px-3 py-2 text-right font-mono"
+                                            >
+                                                ${{
+                                                    Number(
+                                                        selectedShopForAccount.total,
+                                                    ).toFixed(2)
+                                                }}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <!-- Products section -->
+                            <div>
+                                <p
+                                    class="text-muted-foreground mb-1.5 text-xs font-medium"
+                                >
+                                    Productos
+                                </p>
                                 <div
-                                    v-if="
-                                        accountDropdownOpen &&
-                                        filteredAccounts().length > 0
-                                    "
-                                    class="border-border bg-popover absolute top-full right-0 left-0 z-10 mt-1 max-h-60 overflow-y-auto rounded-md border shadow-lg"
+                                    v-if="shopItemsLoading"
+                                    class="text-muted-foreground text-xs"
                                 >
-                                    <button
-                                        v-for="account in filteredAccounts()"
-                                        :key="account.id"
-                                        type="button"
-                                        class="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors"
-                                        @mousedown.prevent="
-                                            selectAccount(account)
-                                        "
-                                    >
-                                        <span
-                                            class="text-foreground w-28 shrink-0 font-mono text-xs font-semibold"
-                                            >{{ account.code }}</span
-                                        >
-                                        <span
-                                            class="text-muted-foreground flex-1 truncate text-xs"
-                                            >{{ account.name }}</span
-                                        >
-                                    </button>
+                                    Cargando…
+                                </div>
+                                <div
+                                    v-else-if="shopItems.length === 0"
+                                    class="text-muted-foreground text-xs"
+                                >
+                                    Sin productos registrados
+                                </div>
+                                <div
+                                    v-else
+                                    class="border-border max-h-64 overflow-auto rounded-lg border"
+                                >
+                                    <table class="w-full text-xs">
+                                        <thead class="bg-muted sticky top-0">
+                                            <tr>
+                                                <th
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-left font-medium"
+                                                >
+                                                    Código
+                                                </th>
+                                                <th
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-left font-medium"
+                                                >
+                                                    Descripción
+                                                </th>
+                                                <th
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium"
+                                                >
+                                                    Cant.
+                                                </th>
+                                                <th
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium"
+                                                >
+                                                    P. Unit.
+                                                </th>
+                                                <th
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium"
+                                                >
+                                                    Total
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-border divide-y">
+                                            <tr
+                                                v-for="item in shopItems"
+                                                :key="item.id"
+                                            >
+                                                <td
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-1.5 font-mono"
+                                                >
+                                                    {{ item.product.code }}
+                                                </td>
+                                                <td
+                                                    class="text-foreground min-w-[12rem] px-3 py-1.5"
+                                                >
+                                                    {{ item.product.description }}
+                                                </td>
+                                                <td
+                                                    class="text-foreground whitespace-nowrap px-3 py-1.5 text-right font-mono"
+                                                >
+                                                    {{ Number(item.quantity) }}
+                                                </td>
+                                                <td
+                                                    class="text-foreground whitespace-nowrap px-3 py-1.5 text-right font-mono"
+                                                >
+                                                    ${{
+                                                        Number(
+                                                            item.unit_price,
+                                                        ).toFixed(2)
+                                                    }}
+                                                </td>
+                                                <td
+                                                    class="text-foreground whitespace-nowrap px-3 py-1.5 text-right font-mono"
+                                                >
+                                                    ${{
+                                                        Number(
+                                                            item.total,
+                                                        ).toFixed(2)
+                                                    }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
-                            <div
-                                v-if="accountForm.acount_id"
-                                class="border-border bg-muted mt-3 flex items-center gap-3 rounded-lg border px-4 py-2.5"
+                        </div>
+                    </div>
+
+                    <!-- Right: account form -->
+                    <div class="flex flex-1 flex-col">
+                        <div
+                            class="border-border flex items-start justify-between border-b px-6 py-4"
+                        >
+                            <div>
+                                <h2 class="text-foreground text-base font-semibold">
+                                    Cuenta contable
+                                </h2>
+                                <p
+                                    class="text-muted-foreground mt-0.5 font-mono text-sm"
+                                >
+                                    {{ selectedShopForAccount.serie }}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                class="text-muted-foreground hover:text-foreground -mr-1 rounded-md p-1 transition-colors"
+                                @click="closeAccountPanel"
                             >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -647,43 +891,178 @@ watch(
                                     viewBox="0 0 24 24"
                                     stroke-width="1.5"
                                     stroke="currentColor"
-                                    class="text-primary size-4 shrink-0"
+                                    class="size-5"
                                 >
                                     <path
                                         stroke-linecap="round"
                                         stroke-linejoin="round"
-                                        d="m4.5 12.75 6 6 9-13.5"
+                                        d="M6 18 18 6M6 6l12 12"
                                     />
                                 </svg>
+                            </button>
+                        </div>
+
+                        <!-- View mode -->
+                        <div
+                            v-if="
+                                selectedShopForAccount.account &&
+                                accountForm.acount_id ===
+                                    selectedShopForAccount.acount_id &&
+                                !accountPanelEditing
+                            "
+                            class="flex flex-1 flex-col p-6"
+                        >
+                            <p
+                                class="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase"
+                            >
+                                Cuenta asignada
+                            </p>
+                            <div
+                                class="border-border bg-muted flex items-start gap-3 rounded-lg border px-4 py-3"
+                            >
+                                <span
+                                    class="text-foreground font-mono text-sm font-semibold"
+                                    >{{ selectedShopForAccount.account.code }}</span
+                                >
                                 <span class="text-foreground text-sm">{{
-                                    accountQuery
+                                    selectedShopForAccount.account.name
                                 }}</span>
                             </div>
-                        </div>
-                        <div
-                            class="border-border flex items-center justify-end gap-3 border-t px-6 py-4"
-                        >
-                            <Button
-                                variant="outline"
+                            <button
                                 type="button"
-                                @click="closeAccountPanel"
-                                >Cancelar</Button
+                                class="text-primary hover:text-primary/70 mt-4 self-start text-sm font-medium"
+                                @click="accountPanelEditing = true"
                             >
-                            <Button
-                                type="submit"
-                                :disabled="
-                                    accountForm.processing ||
-                                    !accountForm.acount_id
-                                "
-                            >
-                                {{
-                                    accountForm.processing
-                                        ? "Guardando…"
-                                        : "Guardar cuenta"
-                                }}
-                            </Button>
+                                Cambiar cuenta
+                            </button>
                         </div>
-                    </form>
+
+                        <!-- Assign form -->
+                        <form
+                            v-else
+                            class="flex flex-1 flex-col overflow-hidden"
+                            @submit.prevent="submitAccount"
+                        >
+                            <div class="flex-1 overflow-y-auto p-6">
+                                <p
+                                    class="text-muted-foreground mb-3 text-xs font-medium tracking-wider uppercase"
+                                >
+                                    Buscar cuenta de costo o gasto
+                                </p>
+                                <div class="relative">
+                                    <input
+                                        v-model="accountQuery"
+                                        type="text"
+                                        placeholder="Buscar por código o nombre…"
+                                        class="border-border bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring/30 h-9 w-full rounded-md border px-3 pr-8 text-sm focus:ring-2 focus:outline-none"
+                                        @focus="accountDropdownOpen = true"
+                                        @blur="
+                                            closeDropdownDelayed(
+                                                () => (accountDropdownOpen = false),
+                                            )
+                                        "
+                                    />
+                                    <button
+                                        v-if="accountForm.acount_id"
+                                        type="button"
+                                        class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2"
+                                        @mousedown.prevent="
+                                            () => {
+                                                accountForm.acount_id = null;
+                                                accountQuery = '';
+                                            }
+                                        "
+                                    >
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke-width="1.5"
+                                            stroke="currentColor"
+                                            class="size-4"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                d="M6 18 18 6M6 6l12 12"
+                                            />
+                                        </svg>
+                                    </button>
+                                    <div
+                                        v-if="
+                                            accountDropdownOpen &&
+                                            filteredAccounts().length > 0
+                                        "
+                                        class="border-border bg-popover absolute top-full right-0 left-0 z-10 mt-1 max-h-60 overflow-y-auto rounded-md border shadow-lg"
+                                    >
+                                        <button
+                                            v-for="account in filteredAccounts()"
+                                            :key="account.id"
+                                            type="button"
+                                            class="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors"
+                                            @mousedown.prevent="
+                                                selectAccount(account)
+                                            "
+                                        >
+                                            <span
+                                                class="text-foreground w-28 shrink-0 font-mono text-xs font-semibold"
+                                                >{{ account.code }}</span
+                                            >
+                                            <span
+                                                class="text-muted-foreground flex-1 truncate text-xs"
+                                                >{{ account.name }}</span
+                                            >
+                                        </button>
+                                    </div>
+                                </div>
+                                <div
+                                    v-if="accountForm.acount_id"
+                                    class="border-border bg-muted mt-3 flex items-center gap-3 rounded-lg border px-4 py-2.5"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke-width="1.5"
+                                        stroke="currentColor"
+                                        class="text-primary size-4 shrink-0"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            d="m4.5 12.75 6 6 9-13.5"
+                                        />
+                                    </svg>
+                                    <span class="text-foreground text-sm">{{
+                                        accountQuery
+                                    }}</span>
+                                </div>
+                            </div>
+                            <div
+                                class="border-border flex items-center justify-end gap-3 border-t px-6 py-4"
+                            >
+                                <Button
+                                    variant="outline"
+                                    type="button"
+                                    @click="closeAccountPanel"
+                                    >Cancelar</Button
+                                >
+                                <Button
+                                    type="submit"
+                                    :disabled="
+                                        accountForm.processing ||
+                                        !accountForm.acount_id
+                                    "
+                                >
+                                    {{
+                                        accountForm.processing
+                                            ? "Guardando…"
+                                            : "Guardar cuenta"
+                                    }}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </Transition>
         </Teleport>
@@ -719,7 +1098,7 @@ watch(
                 >
                     <!-- Left: invoice info -->
                     <div
-                        class="border-border flex w-72 shrink-0 flex-col border-r"
+                        class="border-border flex w-96 shrink-0 flex-col border-r"
                     >
                         <div class="border-border border-b px-5 py-4">
                             <p
@@ -961,6 +1340,102 @@ watch(
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                            <!-- Products section -->
+                            <div>
+                                <p
+                                    class="text-muted-foreground mb-1.5 text-xs font-medium"
+                                >
+                                    Productos
+                                </p>
+                                <div
+                                    v-if="shopItemsLoading"
+                                    class="text-muted-foreground text-xs"
+                                >
+                                    Cargando…
+                                </div>
+                                <div
+                                    v-else-if="shopItems.length === 0"
+                                    class="text-muted-foreground text-xs"
+                                >
+                                    Sin productos registrados
+                                </div>
+                                <div
+                                    v-else
+                                    class="border-border max-h-64 overflow-auto rounded-lg border"
+                                >
+                                    <table class="w-full text-xs">
+                                        <thead class="bg-muted sticky top-0">
+                                            <tr>
+                                                <th
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-left font-medium"
+                                                >
+                                                    Código
+                                                </th>
+                                                <th
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-left font-medium"
+                                                >
+                                                    Descripción
+                                                </th>
+                                                <th
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium"
+                                                >
+                                                    Cant.
+                                                </th>
+                                                <th
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium"
+                                                >
+                                                    P. Unit.
+                                                </th>
+                                                <th
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium"
+                                                >
+                                                    Total
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-border divide-y">
+                                            <tr
+                                                v-for="item in shopItems"
+                                                :key="item.id"
+                                            >
+                                                <td
+                                                    class="text-muted-foreground whitespace-nowrap px-3 py-1.5 font-mono"
+                                                >
+                                                    {{ item.product.code }}
+                                                </td>
+                                                <td
+                                                    class="text-foreground min-w-[12rem] px-3 py-1.5"
+                                                >
+                                                    {{ item.product.description }}
+                                                </td>
+                                                <td
+                                                    class="text-foreground whitespace-nowrap px-3 py-1.5 text-right font-mono"
+                                                >
+                                                    {{ Number(item.quantity) }}
+                                                </td>
+                                                <td
+                                                    class="text-foreground whitespace-nowrap px-3 py-1.5 text-right font-mono"
+                                                >
+                                                    ${{
+                                                        Number(
+                                                            item.unit_price,
+                                                        ).toFixed(2)
+                                                    }}
+                                                </td>
+                                                <td
+                                                    class="text-foreground whitespace-nowrap px-3 py-1.5 text-right font-mono"
+                                                >
+                                                    ${{
+                                                        Number(
+                                                            item.total,
+                                                        ).toFixed(2)
+                                                    }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -77,7 +77,7 @@ export function useNavigation(user: User) {
             icon: LayoutDashboard,
         },
         {
-            title: "Empresas",
+            title: "Contribuyentes",
             url: route("tenant.companies.index"),
             icon: Building2,
         },

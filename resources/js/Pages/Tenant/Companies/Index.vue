@@ -64,12 +64,12 @@ function handlePageChange(page: number) {
 <template>
     <TenantLayout>
         <div
-            class="flex flex-col gap-4 w-full max-w-full md:max-w-2xl xl:max-w-7xl mx-auto"
+            class="flex flex-col gap-4 w-full"
         >
             <HeaderList
-                title="Empresas"
-                :description="`${companies.total} empresa${companies.total !== 1 ? 's' : ''} registrada${companies.total !== 1 ? 's' : ''}`"
-                link-label="Nueva empresa"
+                title="Contribuyentes"
+                :description="`${companies.total} contribuyente${companies.total !== 1 ? 's' : ''} registrado${companies.total !== 1 ? 's' : ''}`"
+                link-label="Nuevo contribuyente"
                 :link-href="route('tenant.companies.create')"
             />
 
@@ -82,7 +82,7 @@ function handlePageChange(page: number) {
                         :columns="columns"
                         :items="companies.data"
                         :actions="actions"
-                        empty-text="No hay empresas registradas."
+                        empty-text="No hay contribuyentes registrados."
                         @select="handleSelect"
                         @action="handleAction"
                     />
@@ -94,7 +94,7 @@ function handlePageChange(page: number) {
                         :columns="columns"
                         :items="companies.data"
                         :actions="actions"
-                        empty-text="No hay empresas registradas."
+                        empty-text="No hay contribuyentes registrados."
                         @select="handleSelect"
                         @action="handleAction"
                     />

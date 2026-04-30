@@ -23,10 +23,10 @@ function select(company: CompanyScope) {
             <div class="text-center">
                 <Building2 class="text-muted-foreground mx-auto mb-3 size-10" />
                 <h2 class="text-xl font-black tracking-tight uppercase">
-                    Selecciona una empresa
+                    Selecciona un contribuyente
                 </h2>
                 <p class="text-muted-foreground mt-1 text-sm">
-                    Elige la empresa con la que deseas trabajar.
+                    Elige el contribuyente con el que deseas trabajar.
                 </p>
             </div>
 

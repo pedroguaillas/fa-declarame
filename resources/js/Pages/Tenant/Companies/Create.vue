@@ -103,7 +103,7 @@ function submit() {
 <template>
     <TenantLayout>
         <HeaderForm
-            title="Nueva Empresa"
+            title="Nuevo Contribuyente"
             :link-href="route('tenant.companies.index')"
         />
 

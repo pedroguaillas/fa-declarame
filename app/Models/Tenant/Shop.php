@@ -72,6 +72,11 @@ class Shop extends BaseModel
         return $this->hasMany(ShopRetentionItem::class);
     }
 
+    public function items(): HasMany
+    {
+        return $this->hasMany(ShopItem::class);
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

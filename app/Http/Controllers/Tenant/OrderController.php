@@ -19,34 +19,11 @@ class OrderController extends Controller
 {
     public function index(): Response
     {
-        $orders = Order::with(['contact:id,name', 'retentionItems.retention'])
+        $orders = Order::selectRaw('orders.id, contact_id, serie, emision, autorization, initial, sub_total, no_iva, base0, base5, base12, base15, iva5, iva12, iva15, discount, ice, total, state, serie_retention, date_retention, state_retention, autorization_retention')
+            ->with(['contact:id,name', 'retentionItems.retention'])
             ->join('voucher_types AS vt', 'vt.id', 'voucher_type_id')
             ->orderByDesc('emision')
-            ->paginate(25, [
-                'orders.id',
-                'contact_id',
-                'serie',
-                'emision',
-                'autorization',
-                'initial',
-                'sub_total',
-                'no_iva',
-                'base0',
-                'base5',
-                'base12',
-                'base15',
-                'iva5',
-                'iva12',
-                'iva15',
-                'discount',
-                'ice',
-                'total',
-                'state',
-                'serie_retention',
-                'date_retention',
-                'state_retention',
-                'autorization_retention',
-            ]);
+            ->paginate(25);
 
         return Inertia::render('Tenant/Orders/Index', [
             'orders' => $orders,
