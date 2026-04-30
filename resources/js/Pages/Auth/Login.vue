@@ -17,7 +17,7 @@ defineProps<{
 }>();
 
 const form = useForm({
-    email: "",
+    username: "",
     password: "",
     remember: false,
 });
@@ -121,12 +121,12 @@ const submit = () => {
 
                 <form @submit.prevent="submit" class="space-y-6">
                     <FormField
-                        id="email"
-                        label="Correo electrónico"
-                        v-model="form.email"
-                        type="email"
-                        placeholder="nombre@ejemplo.com"
-                        :error="form.errors.email"
+                        id="username"
+                        label="Usuario"
+                        v-model="form.username"
+                        type="text"
+                        placeholder="nombre.usuario"
+                        :error="form.errors.username"
                         required
                     />
 

@@ -17,6 +17,7 @@ return new class extends Migration
             $table->foreignId('admin_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('name');
             $table->string('email')->unique();
+            $table->string('username')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->boolean('is_active')->default(true);
