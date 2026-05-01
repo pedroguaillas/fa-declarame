@@ -18,14 +18,14 @@ class UserController extends Controller
     public function index(): Response
     {
         $users = User::with(['role', 'admin', 'tenant', 'activeSubscriptionRelation.plan'])
-            ->whereHas('role', fn($q) => $q->whereIn('slug', ['admin', 'employee']))
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', ['admin', 'employee']))
             ->latest()
             ->paginate(15);
 
         return Inertia::render('Users/Index', [
-            'users'  => $users,
-            'roles'  => Role::whereIn('slug', ['admin', 'employee'])->get(),
-            'admins' => User::whereHas('role', fn($q) => $q->where('slug', 'admin'))
+            'users' => $users,
+            'roles' => Role::whereIn('slug', ['admin', 'employee'])->get(),
+            'admins' => User::whereHas('role', fn ($q) => $q->where('slug', 'admin'))
                 ->select('id', 'name', 'email')
                 ->orderBy('name')
                 ->get(),
@@ -38,18 +38,19 @@ class UserController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'name'      => 'required|string|max:255',
-            'email'     => 'required|email|unique:users,email',
-            'password'  => ['required', Password::min(8)],
-            'role_id'   => 'required|exists:roles,id',
+            'name' => 'required|string|max:255',
+            'username' => 'required|string|max:255|unique:users,username',
+            'email' => 'required|email|unique:users,email',
+            'password' => ['required', Password::min(8)],
+            'role_id' => 'required|exists:roles,id',
             'tenant_id' => [
                 'nullable',
                 'exists:tenants,id',
                 Rule::unique('users', 'tenant_id')->whereNotNull('tenant_id'),
             ],
-            'admin_id'  => 'nullable|exists:users,id',
+            'admin_id' => 'nullable|exists:users,id',
             'is_active' => 'boolean',
-        ], ['tenant_id.unique' => 'Este tenant ya está asignado a otro administrador.',]);
+        ], ['tenant_id.unique' => 'Este tenant ya está asignado a otro administrador.']);
 
         $role = Role::findOrFail($validated['role_id']);
 
@@ -63,7 +64,7 @@ class UserController extends Controller
         ]);
 
         // Si es admin y tiene tenant asignado, vincular tenant->user_id
-        if ($role->slug === 'admin' && !empty($validated['tenant_id'])) {
+        if ($role->slug === 'admin' && ! empty($validated['tenant_id'])) {
             Tenant::where('id', $validated['tenant_id'])
                 ->update(['user_id' => $user->id]);
         }
@@ -74,27 +75,29 @@ class UserController extends Controller
     public function update(Request $request, User $user): RedirectResponse
     {
         $validated = $request->validate([
-            'name'      => 'required|string|max:255',
-            'email'     => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
-            'password'  => ['nullable', Password::min(8)],
-            'role_id'   => 'required|exists:roles,id',
+            'name' => 'required|string|max:255',
+            'username' => ['required', 'string', 'max:255', Rule::unique('users', 'username')->ignore($user->id)],
+            'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+            'password' => ['nullable', Password::min(8)],
+            'role_id' => 'required|exists:roles,id',
             'tenant_id' => [
                 'nullable',
                 'exists:tenants,id',
                 Rule::unique('users', 'tenant_id')->ignore($user->id)->whereNotNull('tenant_id'),
             ],
-            'admin_id'  => 'nullable|exists:users,id',
+            'admin_id' => 'nullable|exists:users,id',
             'is_active' => 'boolean',
-        ], ['tenant_id.unique' => 'Este tenant ya está asignado a otro administrador.',]);
+        ], ['tenant_id.unique' => 'Este tenant ya está asignado a otro administrador.']);
 
         $role = Role::findOrFail($validated['role_id']);
 
         $user->update([
-            'name'      => $validated['name'],
-            'email'     => $validated['email'],
-            'role_id'   => $validated['role_id'],
+            'name' => $validated['name'],
+            'username' => $validated['username'],
+            'email' => $validated['email'],
+            'role_id' => $validated['role_id'],
             'tenant_id' => $validated['tenant_id'] ?? null,
-            'admin_id'  => $validated['admin_id'],
+            'admin_id' => $validated['admin_id'],
             'is_active' => $validated['is_active'],
             ...($validated['password']
                 ? ['password' => Hash::make($validated['password'])]
@@ -109,7 +112,7 @@ class UserController extends Controller
                 ->update(['user_id' => null]);
 
             // Vincular nuevo tenant
-            if (!empty($validated['tenant_id'])) {
+            if (! empty($validated['tenant_id'])) {
                 Tenant::where('id', $validated['tenant_id'])
                     ->update(['user_id' => $user->id]);
             }
@@ -135,7 +138,7 @@ class UserController extends Controller
             return back()->with('error', 'No se puede desactivar al Super Admin.');
         }
 
-        $user->update(['is_active' => !$user->is_active]);
+        $user->update(['is_active' => ! $user->is_active]);
 
         return back()->with('success', 'Estado del usuario actualizado.');
     }
@@ -145,7 +148,7 @@ class UserController extends Controller
         $admin = User::findOrFail($adminId);
         $subscription = $admin->activeSubscription();
 
-        if (!$subscription) {
+        if (! $subscription) {
             abort(422, 'El administrador no tiene una suscripción activa.');
         }
 
