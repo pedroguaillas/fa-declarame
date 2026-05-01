@@ -14,24 +14,23 @@ class CheckTenantSubscription
     {
         $tenant = currentTenant();
 
-        if (!$tenant) {
-            return redirect()->route('tenant.login');
+        if (! $tenant) {
+            return redirect()->route('login');
         }
 
-        if (!isAuthenticated()) {
-            return redirect()->route('tenant.login');
+        if (! isAuthenticated()) {
+            return redirect()->route('login');
         }
 
         $admin = CentralUser::find($tenant->user_id);
 
-        if (!$admin || !$admin->hasActiveSubscription()) {
+        if (! $admin || ! $admin->hasActiveSubscription()) {
             Auth::guard('web')->logout();
-            Auth::guard('tenant')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
-            return redirect()->route('tenant.login')->withErrors([
-                'email' => 'La suscripción de esta empresa ha vencido. Contacta al administrador.',
+            return redirect()->route('login')->withErrors([
+                'username' => 'La suscripción de esta empresa ha vencido. Contacta al administrador.',
             ]);
         }
 
