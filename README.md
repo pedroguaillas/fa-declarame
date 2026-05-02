@@ -14,4 +14,11 @@ Sistema Tributario para el procesamiento de información de Compras, Ventas y Re
 # Copiar .env.example a .env
 
 `cp .env.example .env`
-hola
+
+# Descargar cambios del repositorio
+
+`git fetch origin`
+
+# Aplicar cambios para correguir
+
+`git merge origin/main`
