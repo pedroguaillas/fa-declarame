@@ -44,6 +44,7 @@ const props = defineProps<{
 const createDialog = ref(false);
 const createForm = useForm({
     name: "",
+    username: "",
     email: "",
     password: "",
     role_id: "",
@@ -75,6 +76,7 @@ const editDialog = ref(false);
 const editing = ref<User | null>(null);
 const editForm = useForm({
     name: "",
+    username: "",
     email: "",
     password: "",
     role_id: "",
@@ -90,6 +92,7 @@ const editRoleSlug = computed(
 function openEdit(user: User) {
     editing.value = user;
     editForm.name = user.name;
+    editForm.username = user.username ?? "";
     editForm.email = user.email;
     editForm.password = "";
     editForm.role_id = String(user.role.id);
@@ -293,6 +296,23 @@ function getRoleBadgeVariant(slug: string) {
                             </p>
                         </div>
                         <div class="space-y-2">
+                            <Label>Usuario</Label>
+                            <Input
+                                v-model="createForm.username"
+                                placeholder="nombre_usuario"
+                                :class="{
+                                    'border-destructive':
+                                        createForm.errors.username,
+                                }"
+                            />
+                            <p
+                                v-if="createForm.errors.username"
+                                class="text-xs text-destructive"
+                            >
+                                {{ createForm.errors.username }}
+                            </p>
+                        </div>
+                        <div class="space-y-2">
                             <Label>Correo electrónico</Label>
                             <Input
                                 v-model="createForm.email"
@@ -482,6 +502,22 @@ function getRoleBadgeVariant(slug: string) {
                                 class="text-xs text-destructive"
                             >
                                 {{ editForm.errors.name }}
+                            </p>
+                        </div>
+                        <div class="space-y-2">
+                            <Label>Usuario</Label>
+                            <Input
+                                v-model="editForm.username"
+                                :class="{
+                                    'border-destructive':
+                                        editForm.errors.username,
+                                }"
+                            />
+                            <p
+                                v-if="editForm.errors.username"
+                                class="text-xs text-destructive"
+                            >
+                                {{ editForm.errors.username }}
                             </p>
                         </div>
                         <div class="space-y-2">

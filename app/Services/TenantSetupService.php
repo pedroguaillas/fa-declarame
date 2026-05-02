@@ -9,7 +9,6 @@ use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\VoucherType;
 use Database\Seeders\RetentionSeeder;
 
-
 class TenantSetupService
 {
     public function setup(Tenant $tenant): void
@@ -54,9 +53,9 @@ class TenantSetupService
             ]);
 
             IdentificationType::insert([
-                ['code_order' => '04', 'code_shop' => '01','description' => 'RUC'],
-                ['code_order' => '05', 'code_shop' => '02','description' => 'CEDULA'],
-                ['code_order' => '06', 'code_shop' => '03','description' => 'PASAPORTE'],
+                ['code_order' => '04', 'code_shop' => '01', 'description' => 'RUC'],
+                ['code_order' => '05', 'code_shop' => '02', 'description' => 'CEDULA'],
+                ['code_order' => '06', 'code_shop' => '03', 'description' => 'PASAPORTE'],
             ]);
 
             $identificationType = IdentificationType::create([

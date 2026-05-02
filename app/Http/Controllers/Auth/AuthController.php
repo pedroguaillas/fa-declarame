@@ -23,13 +23,13 @@ class AuthController extends Controller
     public function login(Request $request): Response
     {
         $credentials = $request->validate([
-            'email'    => ['required', 'email'],
+            'username' => ['required', 'string'],
             'password' => ['required'],
         ]);
 
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             return back()->withErrors([
-                'email' => __('auth.failed'),
+                'username' => __('auth.failed'),
             ]);
         }
 
@@ -39,14 +39,14 @@ class AuthController extends Controller
 
         return match (true) {
             $user->isSuperAdmin() => redirect()->intended(route('dashboard')),
-            $user->isAdmin()      => $this->redirectToTenant($user),
-            default               => Inertia::location(route('login')),
+            $user->isAdmin() => $this->redirectToTenant($user),
+            default => Inertia::location(route('login')),
         };
     }
 
     public function logout(Request $request): Response
     {
-        //$guard = tenant() ? 'tenant' : 'web';
+        // $guard = tenant() ? 'tenant' : 'web';
 
         $guard = 'web';
 

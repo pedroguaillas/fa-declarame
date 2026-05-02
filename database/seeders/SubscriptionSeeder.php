@@ -11,8 +11,8 @@ class SubscriptionSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin      = User::where('email', 'admin@admin.com')->first();
-        $superAdmin = User::where('email', 'abelandrade677@gmail.com')->first();
+        $admin      = User::where('email', 'info@facec.ec')->first();
+        $superAdmin = User::where('email', 'peter.tufi@gmail.com')->first();
         $proPlan    = Plan::where('slug', 'pro')->first();
 
         if (!$admin || !$superAdmin || !$proPlan) return;

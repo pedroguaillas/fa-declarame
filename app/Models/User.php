@@ -13,16 +13,17 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
-    public $connection ="central";
+    public $connection = 'central';
 
     protected $fillable = [
         'name',
         'email',
+        'username',
         'password',
         'role_id',
         'admin_id',
         'is_active',
-        'tenant_id'
+        'tenant_id',
     ];
 
     protected $hidden = [
@@ -69,7 +70,7 @@ class User extends Authenticatable
 
     public function hasTenant(): bool
     {
-        return !is_null($this->tenant_id);
+        return ! is_null($this->tenant_id);
     }
 
     // Helpers de rol
@@ -114,11 +115,13 @@ class User extends Authenticatable
     // Verificar permiso
     public function hasPermission(string $permissionSlug, string $modelSlug): bool
     {
-        if ($this->isSuperAdmin()) return true;
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
 
         return ModelPermission::where('role_id', $this->role_id)
-            ->whereHas('permission', fn($q) => $q->where('slug', $permissionSlug))
-            ->whereHas('modelEntity', fn($q) => $q->where('slug', $modelSlug))
+            ->whereHas('permission', fn ($q) => $q->where('slug', $permissionSlug))
+            ->whereHas('modelEntity', fn ($q) => $q->where('slug', $modelSlug))
             ->exists();
     }
 }
