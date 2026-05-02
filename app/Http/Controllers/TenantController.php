@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Services\TenantSetupService;
 
 class TenantController extends Controller
 {
@@ -47,6 +48,10 @@ class TenantController extends Controller
         $tenant->domains()->create([
             'domain' => $validated['subdomain'] . '.' . $domain,
         ]);
+
+        if ($tenant) {
+            app(TenantSetupService::class)->setup($tenant);
+        }
 
         return back()->with('success', 'Tenant creado. La base de datos se está preparando.');
     }
