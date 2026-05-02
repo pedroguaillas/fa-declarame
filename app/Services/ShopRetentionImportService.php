@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Tenant\Contact;
 use App\Models\Tenant\Retention;
 use App\Models\Tenant\Shop;
 use Carbon\Carbon;
@@ -102,12 +103,21 @@ class ShopRetentionImportService
 
         foreach ($xml->docsSustento->docSustento as $docSustento) {
             $numAutDocSustento = trim((string) $docSustento->numAutDocSustento);
+            $identificacionSujetoRetenido = trim((string) $docSustento->identificacionSujetoRetenido);
 
             $num = $docSustento->numDocSustento; // "002901000019695"
             $formated = substr($num, 0, 3).'-'.substr($num, 3, 3).'-'.substr($num, 6);
 
+            // Para determinar la compra real hay que tener las siguientes consideraciones:
+            // Primero que la compra pertenezca al contribuyente pero eso esta en el Scope
+            // Si tiene el numero de autorizacion en la retencion busca presisa
             $shop = Shop::where('autorization', $numAutDocSustento)
-                ->orWhere('serie', $formated)->first();
+                ->orWhere([
+                    // o la serie sea de la factura sea igual a numDocSustento formateado
+                    'serie' => $formated,
+                    // y la identificacion del proveedor (contact) sea igual a $identificacionSujetoRetenido
+                    'contact_id' => Contact::where('identification', $identificacionSujetoRetenido)->value('id')
+                ])->first();
 
             if (! $shop) {
                 $skipped++;

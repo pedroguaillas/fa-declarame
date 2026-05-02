@@ -49,6 +49,9 @@ class SriXmlParserService
      *   iva8: float,
      *   iva12: float,
      *   iva15: float,
+     *   est_modify: int|null,
+     *   poi_modify: int|null,
+     *   sec_modify: int|null,
      * }|null
      */
     public function parse(object $autorizacion): ?array
@@ -68,7 +71,6 @@ class SriXmlParserService
         }
 
         $infoTributaria = $xml->infoTributaria;
-        $infoFactura = $xml->infoFactura;
         $codDoc = (string) $infoTributaria->codDoc;
         $infoNodeName = $this->infoNodeMap[$codDoc] ?? null;
 
@@ -95,13 +97,14 @@ class SriXmlParserService
             'cod_doc' => $codDoc,
             'fecha_emision' => Carbon::createFromFormat('d/m/Y', trim((string) $info->fechaEmision))->format('Y-m-d'),
             'serie' => $serie,
-            'tipoIdentificacionComprador' => $this->resolveTipoIdentificacionComprador($infoFactura),
+            'tipoIdentificacionComprador' => $this->resolveTipoIdentificacionComprador($info),
             'identificacion_comprador' => trim((string) ($info->identificacionComprador ?? '')),
             'razon_social_comprador' => trim((string) ($info->razonSocialComprador ?? '')),
             'sub_total' => (float) ($info->totalSinImpuestos ?? 0),
             'discount' => (float) ($info->totalDescuento ?? 0),
-            'total' => (float) ($info->importeTotal ?? $info->valorModificacion ?? 0),
+            'total' => (float) ($info->importeTotal ?? $info->valorModificacion ?? $info->valorTotal ?? 0),
             ...$this->extractIva($info),
+            ...$this->extractDocModificado($info),
             'detalles' => $this->extractDetalles($xml),
         ];
     }
@@ -132,6 +135,26 @@ class SriXmlParserService
     /**
      * @return array<int, array{code: string, aux_code: string|null, description: string, quantity: float, unit_price: float, discount: float, total: float, tax_percentage: float, tax_value: float}>
      */
+    /**
+     * @return array{est_modify: int|null, poi_modify: int|null, sec_modify: int|null}
+     */
+    private function extractDocModificado(SimpleXMLElement $info): array
+    {
+        $numDoc = trim((string) ($info->numDocModificado ?? ''));
+
+        if ($numDoc === '') {
+            return ['est_modify' => null, 'poi_modify' => null, 'sec_modify' => null];
+        }
+
+        $parts = explode('-', $numDoc);
+
+        return [
+            'est_modify' => isset($parts[0]) ? (int) $parts[0] : null,
+            'poi_modify' => isset($parts[1]) ? (int) $parts[1] : null,
+            'sec_modify' => isset($parts[2]) ? (int) $parts[2] : null,
+        ];
+    }
+
     private function extractDetalles(SimpleXMLElement $xml): array
     {
         $detalles = [];
@@ -154,17 +177,17 @@ class SriXmlParserService
             }
 
             $detalles[] = [
-                'code'           => (string) ($detalle->codigoPrincipal ?? ''),
-                'aux_code'       => isset($detalle->codigoAuxiliar) && (string) $detalle->codigoAuxiliar !== ''
+                'code' => (string) ($detalle->codigoPrincipal ?? $detalle->codigoInterno ?? ''),
+                'aux_code' => isset($detalle->codigoAuxiliar) && (string) $detalle->codigoAuxiliar !== ''
                     ? (string) $detalle->codigoAuxiliar
                     : null,
-                'description'    => (string) ($detalle->descripcion ?? ''),
-                'quantity'       => (float) ($detalle->cantidad ?? 0),
-                'unit_price'     => (float) ($detalle->precioUnitario ?? 0),
-                'discount'       => (float) ($detalle->descuento ?? 0),
-                'total'          => (float) ($detalle->precioTotalSinImpuesto ?? 0),
+                'description' => (string) ($detalle->descripcion ?? ''),
+                'quantity' => (float) ($detalle->cantidad ?? 0),
+                'unit_price' => (float) ($detalle->precioUnitario ?? 0),
+                'discount' => (float) ($detalle->descuento ?? 0),
+                'total' => (float) ($detalle->precioTotalSinImpuesto ?? 0),
                 'tax_percentage' => $taxPercentage,
-                'tax_value'      => $taxValue,
+                'tax_value' => $taxValue,
             ];
         }
 
@@ -182,11 +205,17 @@ class SriXmlParserService
             'iva5' => 0.0, 'iva8' => 0.0, 'iva12' => 0.0, 'iva15' => 0.0,
         ];
 
-        if (! isset($info->totalConImpuestos->totalImpuesto)) {
+        // Facturas/Liquidaciones/Notas de Crédito usan totalConImpuestos>totalImpuesto
+        // Notas de Débito usan impuestos>impuesto directamente en el nodo info
+        if (isset($info->totalConImpuestos->totalImpuesto)) {
+            $impuestos = $info->totalConImpuestos->totalImpuesto;
+        } elseif (isset($info->impuestos->impuesto)) {
+            $impuestos = $info->impuestos->impuesto;
+        } else {
             return $result;
         }
 
-        foreach ($info->totalConImpuestos->totalImpuesto as $impuesto) {
+        foreach ($impuestos as $impuesto) {
             // codigo 2 = IVA; skip ICE (code 3) and others
             if ((int) $impuesto->codigo !== 2) {
                 continue;

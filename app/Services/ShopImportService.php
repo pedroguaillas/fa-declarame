@@ -133,6 +133,9 @@ class ShopImportService
                     'discount' => $sriData['discount'],
                     'total' => $sriData['total'],
                     'state' => $sriData['estado'],
+                    'est_modify' => $sriData['est_modify'],
+                    'poi_modify' => $sriData['poi_modify'],
+                    'sec_modify' => $sriData['sec_modify'],
                 ]);
 
                 $this->createShopItems($shop, $sriData['detalles'] ?? [], $contact->id);
@@ -166,7 +169,7 @@ class ShopImportService
     }
 
     /**
-     * @param array<int, array{code: string, aux_code: string|null, description: string, quantity: float, unit_price: float, discount: float, total: float, tax_percentage: float, tax_value: float}> $detalles
+     * @param  array<int, array{code: string, aux_code: string|null, description: string, quantity: float, unit_price: float, discount: float, total: float, tax_percentage: float, tax_value: float}>  $detalles
      */
     private function createShopItems(Shop $shop, array $detalles, int $contactId): void
     {
@@ -187,13 +190,13 @@ class ShopImportService
             );
 
             $items[] = [
-                'product_id'     => $product->id,
-                'quantity'       => $detalle['quantity'],
-                'unit_price'     => $detalle['unit_price'],
-                'discount'       => $detalle['discount'],
-                'total'          => $detalle['total'],
+                'product_id' => $product->id,
+                'quantity' => $detalle['quantity'],
+                'unit_price' => $detalle['unit_price'],
+                'discount' => $detalle['discount'],
+                'total' => $detalle['total'],
                 'tax_percentage' => $detalle['tax_percentage'],
-                'tax_value'      => $detalle['tax_value'],
+                'tax_value' => $detalle['tax_value'],
             ];
         }
 
