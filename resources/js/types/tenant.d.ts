@@ -72,7 +72,7 @@ export interface IdentificationType {
 
 export interface Shop {
     id: number;
-    acount_id: number | null;
+    account_id: number | null;
     contact_id: number;
     contact: { id: number; identification: string; name: string } | null;
     voucher_type_id: number;

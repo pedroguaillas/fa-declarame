@@ -49,6 +49,7 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
 
         Route::get('retentions/search', [RetentionController::class, 'search'])->name('tenant.retentions.search');
 
+        Route::get('shops/export', [ShopController::class, 'export'])->name('tenant.shops.export');
         Route::post('shops/import', [ShopController::class, 'import'])->name('tenant.shops.import');
         Route::post('shops/import-retentions', [ShopController::class, 'importRetentions'])->name('tenant.shops.import-retentions');
         Route::resource('shops', ShopController::class)

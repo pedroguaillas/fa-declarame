@@ -40,8 +40,11 @@ class AccountController extends Controller
     public function search(Request $request): JsonResponse
     {
         $q = $request->get('q', '');
+        $voucherTypeCode = $request->get('code', '');
 
-        $accounts = Account::where('code', 'like', '5%')
+        $prefix = $this->accountPrefixForVoucherType($voucherTypeCode);
+
+        $accounts = Account::where('code', 'like', "{$prefix}%")
             ->where('is_detail', true)
             ->when($q, fn ($query) => $query->where(function ($query) use ($q) {
                 $query->where('code', 'like', "%{$q}%")
@@ -52,5 +55,13 @@ class AccountController extends Controller
             ->get(['id', 'code', 'name']);
 
         return response()->json($accounts);
+    }
+
+    private function accountPrefixForVoucherType(string $code): string
+    {
+        return match ($code) {
+            '04' => '4', // Nota de crédito: cuentas de ingreso
+            default => '5', // Factura, Liq. compra, Nota venta, Nota débito: cuentas de gasto
+        };
     }
 }

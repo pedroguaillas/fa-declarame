@@ -22,3 +22,7 @@ Sistema Tributario para el procesamiento de información de Compras, Ventas y Re
 # Aplicar cambios para correguir
 
 `git merge origin/main`
+
+# Instalar una dependencia ignorando la incompatibilidad
+
+`./vendor/bin/sail composer require maatwebsite/excel --ignore-platform-reqs`

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Tenant;
 
+use App\Exports\ShopsExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreShopRequest;
 use App\Http\Requests\Tenant\UpdateShopRequest;
@@ -13,12 +14,15 @@ use App\Models\Tenant\VoucherType;
 use App\Services\ShopImportService;
 use App\Services\ShopRetentionImportService;
 use Constants;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ShopController extends Controller
 {
@@ -26,37 +30,9 @@ class ShopController extends Controller
     {
         $filters = $request->only(['search', 'period', 'state', 'retention']);
 
-        $shops = Shop::selectRaw('shops.id, account_id, contact_id, serie, emision, vt.code, total, shops.state, serie_retention')
+        $shops = $this->filteredShopsQuery($filters)
+            ->selectRaw('shops.id, account_id, contact_id, serie, emision, vt.code, total, shops.state, serie_retention')
             ->with(['contact:id,name'])
-            ->join('voucher_types AS vt', 'vt.id', 'shops.voucher_type_id')
-            ->when($filters['search'] ?? null, function ($q, $s) {
-                $hasLetters = (bool) preg_match('/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/u', $s);
-                $isOnlyDigits = ctype_digit($s);
-                $len = strlen($s);
-
-                if ($hasLetters) {
-                    $q->join('contacts AS sc', 'sc.id', '=', 'shops.contact_id')
-                        ->where('sc.name', 'ilike', "%{$s}%");
-                } elseif ($isOnlyDigits && $len === 49) {
-                    $q->where('shops.autorization', $s);
-                } elseif ($isOnlyDigits && $len >= 5) {
-                    $q->where(function ($q) use ($s) {
-                        $q->where('shops.serie', 'ilike', "%{$s}%")
-                            ->orWhere('shops.autorization', 'ilike', "%{$s}%");
-                    });
-                } else {
-                    $q->where('shops.serie', 'ilike', "%{$s}%");
-                }
-            })
-            ->when($filters['period'] ?? null, function ($q, $p) {
-                $q->whereYear('emision', substr($p, 0, 4))
-                    ->whereMonth('emision', substr($p, 5, 2));
-            })
-            ->when($filters['state'] ?? null, fn ($q, $s) => $q->where('shops.state', $s))
-            ->when($filters['retention'] ?? null, fn ($q, $r) => $r === 'with'
-                ? $q->whereNotNull('serie_retention')
-                : $q->whereNull('serie_retention')
-            )
             ->orderByDesc('emision')
             ->paginate(25)
             ->withQueryString();
@@ -133,7 +109,40 @@ class ShopController extends Controller
             ->with('success', 'Compra eliminada correctamente.');
     }
 
-    /** @return Collection<int, Account> */
+    /** @param array<string, string> $filters */
+    private function filteredShopsQuery(array $filters): Builder
+    {
+        return Shop::join('voucher_types AS vt', 'vt.id', 'shops.voucher_type_id')
+            ->when($filters['search'] ?? null, function ($q, $s) {
+                $hasLetters = (bool) preg_match('/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/u', $s);
+                $isOnlyDigits = ctype_digit($s);
+                $len = strlen($s);
+
+                if ($hasLetters) {
+                    $q->join('contacts AS sc', 'sc.id', '=', 'shops.contact_id')
+                        ->where('sc.name', 'ilike', "%{$s}%");
+                } elseif ($isOnlyDigits && $len === 49) {
+                    $q->where('shops.autorization', $s);
+                } elseif ($isOnlyDigits && $len >= 5) {
+                    $q->where(function ($q) use ($s) {
+                        $q->where('shops.serie', 'ilike', "%{$s}%")
+                            ->orWhere('shops.autorization', 'ilike', "%{$s}%");
+                    });
+                } else {
+                    $q->where('shops.serie', 'ilike', "%{$s}%");
+                }
+            })
+            ->when($filters['period'] ?? null, function ($q, $p) {
+                $q->whereYear('emision', substr($p, 0, 4))
+                    ->whereMonth('emision', substr($p, 5, 2));
+            })
+            ->when($filters['state'] ?? null, fn ($q, $s) => $q->where('shops.state', $s))
+            ->when($filters['retention'] ?? null, fn ($q, $r) => $r === 'with'
+                ? $q->whereNotNull('serie_retention')
+                : $q->whereNull('serie_retention')
+            );
+    }
+
     private function expenseAccounts(): Collection
     {
         return Account::where('code', 'like', '5%')
@@ -212,13 +221,24 @@ class ShopController extends Controller
             ->with('success', "Retenciones importadas: {$imported} procesadas, {$skipped} omitidas, {$errors} errores.");
     }
 
+    public function export(Request $request): BinaryFileResponse
+    {
+        $filters = $request->only(['search', 'period', 'state', 'retention']);
+        $allColumns = array_keys(ShopsExport::$availableColumns);
+        $columns = $request->has('columns')
+            ? array_intersect((array) $request->get('columns'), $allColumns)
+            : $allColumns;
+
+        return Excel::download(new ShopsExport($this->filteredShopsQuery($filters), array_values($columns)), 'compras.xlsx');
+    }
+
     public function updateAccount(Request $request, Shop $shop): RedirectResponse
     {
         $request->validate([
-            'acount_id' => ['nullable', 'integer', 'exists:acounts,id'],
+            'account_id' => ['nullable', 'integer', 'exists:accounts,id'],
         ]);
 
-        $shop->update(['acount_id' => $request->acount_id]);
+        $shop->update(['account_id' => $request->account_id]);
 
         return redirect()->route('tenant.shops.index')
             ->with('success', 'Cuenta contable asignada correctamente.');

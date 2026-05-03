@@ -13,11 +13,12 @@ import { Button } from "@/components/ui/button";
 import AccountSlideOver from "./components/AccountSlideOver.vue";
 import RetentionSlideOver from "./components/RetentionSlideOver.vue";
 import FilterBar from "./components/FilterBar.vue";
+import ShopExportModal from "./components/ShopExportModal.vue";
 
 import type { ActionDef, ActionPayload, ColumnDef } from "@/types/shared";
 import { Paginator } from "@/types";
 import { RetentionItem, Shop } from "@/types/tenant";
-import { FileText, Pencil, Receipt, Trash2 } from "lucide-vue-next";
+import { Download, FileText, Pencil, Receipt, Trash2 } from "lucide-vue-next";
 
 // ─── Props ─────────────────────────────────────────────────────────────────
 
@@ -114,13 +115,20 @@ const activeColumns = computed(() => (props.isActiveRetention ? columnsWithReten
 
 const actions: ActionDef<Shop>[] = [
     { event: "edit", label: "Editar", icon: Pencil },
-    { event: "account", label: "Cuenta contable", icon: Receipt },
+    {
+        event: "account",
+        label: "Cuenta contable",
+        icon: Receipt,
+        class: (item) =>
+            item.account_id ? "text-blue-600! hover:bg-blue-100!" : "bg-muted text-muted-foreground hover:bg-muted/80",
+    },
     ...(props.isActiveRetention
         ? [
               {
                   event: "retention",
                   label: "Retención",
                   icon: FileText,
+                  show: (item) => (item as any).code !== "02",
                   class: (item) =>
                       item.serie_retention
                           ? "text-green-600! hover:bg-green-100!"
@@ -151,6 +159,7 @@ function applyFilters(filters: ShopFilters) {
 
 const accountSlideOver = ref<InstanceType<typeof AccountSlideOver> | null>(null);
 const retentionSlideOver = ref<InstanceType<typeof RetentionSlideOver> | null>(null);
+const shopExportModal = ref<InstanceType<typeof ShopExportModal> | null>(null);
 
 // ─── Actions ────────────────────────────────────────────────────────────────
 
@@ -254,6 +263,10 @@ watch(
                 @click-import="importFileInput?.click()"
             >
                 <template #extra-actions>
+                    <Button variant="outline" size="sm" @click="shopExportModal?.open()">
+                        <Download class="size-4" />
+                        Descargar
+                    </Button>
                     <Button
                         v-if="isActiveRetention"
                         variant="outline"
@@ -330,5 +343,8 @@ watch(
         <!-- Slide-overs -->
         <AccountSlideOver ref="accountSlideOver" />
         <RetentionSlideOver ref="retentionSlideOver" />
+
+        <!-- Export modal -->
+        <ShopExportModal ref="shopExportModal" :filters="filters" />
     </TenantLayout>
 </template>
