@@ -3,29 +3,27 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\Tenant\CompanyController;
 use App\Http\Controllers\SsoController;
+use App\Http\Controllers\Tenant\AccountController;
+use App\Http\Controllers\Tenant\AtsController;
+use App\Http\Controllers\Tenant\CompanyController;
 use App\Http\Controllers\Tenant\CompanyScopeController;
 use App\Http\Controllers\Tenant\ContactController;
 use App\Http\Controllers\Tenant\DashboardController as TenantDashboardController;
 use App\Http\Controllers\Tenant\EmployeeController;
-use App\Http\Controllers\Tenant\AtsController;
 use App\Http\Controllers\Tenant\OrderController;
 use App\Http\Controllers\Tenant\ProfileController as TenantProfileController;
+use App\Http\Controllers\Tenant\RetentionController;
 use App\Http\Controllers\Tenant\ShopController;
 use App\Http\Middleware\Tenant\RequireCompanyScope;
 use Illuminate\Support\Facades\Route;
 
-
 Route::get('/auth/sso', [SsoController::class, 'handle'])
     ->name('tenant.sso');
 
-
 Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function () {
 
-
     Route::middleware(RequireCompanyScope::class)->group(function () {
-
 
         Route::get('orders/export-ats', [AtsController::class, 'export'])->name('tenant.orders.export-ats');
         Route::post('orders/import', [OrderController::class, 'import'])->name('tenant.orders.import');
@@ -45,6 +43,12 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
         Route::post('orders/{order}/retention', [OrderController::class, 'storeRetention'])
             ->name('tenant.orders.retention.store');
 
+        Route::get('accounts', [AccountController::class, 'index'])->name('tenant.accounts.index');
+        Route::post('accounts/import', [AccountController::class, 'import'])->name('tenant.accounts.import');
+        Route::get('accounts/search', [AccountController::class, 'search'])->name('tenant.accounts.search');
+
+        Route::get('retentions/search', [RetentionController::class, 'search'])->name('tenant.retentions.search');
+
         Route::post('shops/import', [ShopController::class, 'import'])->name('tenant.shops.import');
         Route::post('shops/import-retentions', [ShopController::class, 'importRetentions'])->name('tenant.shops.import-retentions');
         Route::resource('shops', ShopController::class)
@@ -62,7 +66,6 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
         Route::patch('shops/{shop}/account', [ShopController::class, 'updateAccount'])
             ->name('tenant.shops.account.update');
     });
-
 
     Route::get('/company-scope/select', [CompanyScopeController::class, 'select'])
         ->name('tenant.company-scope.select');

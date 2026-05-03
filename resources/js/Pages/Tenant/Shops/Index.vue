@@ -12,30 +12,68 @@ import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Button } from "@/components/ui/button";
 import AccountSlideOver from "./components/AccountSlideOver.vue";
 import RetentionSlideOver from "./components/RetentionSlideOver.vue";
+import FilterBar from "./components/FilterBar.vue";
 
 import type { ActionDef, ActionPayload, ColumnDef } from "@/types/shared";
 import { Paginator } from "@/types";
-import { Account, RetentionItem, RetentionOption, Shop } from "@/types/tenant";
+import { RetentionItem, Shop } from "@/types/tenant";
 import { FileText, Pencil, Receipt, Trash2 } from "lucide-vue-next";
 
 // ─── Props ─────────────────────────────────────────────────────────────────
 
+interface ShopFilters {
+    search: string;
+    period: string;
+    state: string;
+    retention: string;
+}
+
 const props = defineProps<{
     shops: Paginator<Shop>;
-    retentions: RetentionOption[];
-    accounts: Account[];
     isActiveRetention: boolean;
+    filters: ShopFilters;
 }>();
 
 // ─── Table columns ──────────────────────────────────────────────────────────
 
+const voucherTypes: Record<string, { label: string; class: string }> = {
+    "01": {
+        label: "Factura",
+        class: "bg-blue-100   text-blue-700   dark:bg-blue-900/30   dark:text-blue-400   border-0",
+    },
+    "02": {
+        label: "Nota Venta",
+        class: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 border-0",
+    },
+    "03": {
+        label: "Liq. Compra",
+        class: "bg-amber-100  text-amber-700  dark:bg-amber-900/30  dark:text-amber-400  border-0",
+    },
+    "04": {
+        label: "Nota Créd.",
+        class: "bg-red-100    text-red-700    dark:bg-red-900/30    dark:text-red-400    border-0",
+    },
+    "05": {
+        label: "Nota Déb.",
+        class: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-0",
+    },
+};
+
 const columns: ColumnDef<Shop>[] = [
     { key: "emision", label: "Emisión" },
     {
+        key: "code",
+        label: "Tipo",
+        badge: {
+            value: (item) => voucherTypes[item.code]?.label ?? item.code,
+            class: (item) => voucherTypes[item.code]?.class ?? "",
+        },
+    },
+    {
         key: "serie",
         label: "Serie",
-        format: (_, item) => `${item.initial}-${item.serie}`,
-        labelDescription: (_, item) => (item.serie_retention ? `${item.serie_retention}` : ""),
+        format: (_, item) => item.serie,
+        labelDescription: (_, item) => (item.serie_retention ? `Ret. ${item.serie_retention}` : ""),
     },
     {
         key: "contact",
@@ -99,6 +137,16 @@ const actions: ActionDef<Shop>[] = [
     },
 ];
 
+// ─── Filters ────────────────────────────────────────────────────────────────
+
+function applyFilters(filters: ShopFilters) {
+    router.get(route("tenant.shops.index"), filters as Record<string, string>, {
+        preserveScroll: true,
+        preserveState: true,
+        replace: true,
+    });
+}
+
 // ─── Slide-over refs ────────────────────────────────────────────────────────
 
 const accountSlideOver = ref<InstanceType<typeof AccountSlideOver> | null>(null);
@@ -126,9 +174,13 @@ function handleSelect(item: Shop) {
 }
 
 function handlePageChange(page: number) {
-    router.visit(route("tenant.shops.index", { page }), {
-        preserveScroll: true,
-    });
+    router.get(
+        route("tenant.shops.index"),
+        { ...filters, page },
+        {
+            preserveScroll: true,
+        },
+    );
 }
 
 function confirmDelete() {
@@ -215,6 +267,9 @@ watch(
                 </template>
             </HeaderList>
 
+            <!-- Filters -->
+            <FilterBar :filters="filters" :show-retention="isActiveRetention" @change="applyFilters" />
+
             <!-- Hidden file inputs -->
             <input ref="importFileInput" type="file" accept=".txt" class="hidden" @change="handleFileSelected" />
             <input
@@ -263,13 +318,17 @@ watch(
             title="¿Eliminar compra?"
             :description="`Se eliminará la compra ${deleteTarget?.serie}. Esta acción no se puede deshacer.`"
             :loading="deleteLoading"
-            @update:open="(v) => { if (!v) deleteTarget = null; }"
+            @update:open="
+                (v) => {
+                    if (!v) deleteTarget = null;
+                }
+            "
             @confirm="confirmDelete"
             @cancel="deleteTarget = null"
         />
 
         <!-- Slide-overs -->
-        <AccountSlideOver ref="accountSlideOver" :accounts="accounts" />
-        <RetentionSlideOver ref="retentionSlideOver" :retentions="retentions" />
+        <AccountSlideOver ref="accountSlideOver" />
+        <RetentionSlideOver ref="retentionSlideOver" />
     </TenantLayout>
 </template>

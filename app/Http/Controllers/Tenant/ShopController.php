@@ -7,9 +7,8 @@ use App\Http\Requests\Tenant\StoreShopRequest;
 use App\Http\Requests\Tenant\UpdateShopRequest;
 use App\Models\Tenant\Account;
 use App\Models\Tenant\IdentificationType;
-use App\Models\Tenant\Retention;
-use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\Shop;
+use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\VoucherType;
 use App\Services\ShopImportService;
 use App\Services\ShopRetentionImportService;
@@ -23,31 +22,55 @@ use Inertia\Response;
 
 class ShopController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $shops = Shop::selectRaw('shops.id, account_id, contact_id, serie, emision, autorization, initial, vt.code, sub_total, no_iva, base0, base5, base12, base15, iva5, iva12, iva15, discount, ice, total, state, serie_retention, date_retention, state_retention, autorization_retention')
-            ->with(['contact:id,name', 'retentionItems.retention', 'account:id,code,name'])
-            ->join('voucher_types AS vt', 'vt.id', 'voucher_type_id')
+        $filters = $request->only(['search', 'period', 'state', 'retention']);
+
+        $shops = Shop::selectRaw('shops.id, account_id, contact_id, serie, emision, vt.code, total, shops.state, serie_retention')
+            ->with(['contact:id,name'])
+            ->join('voucher_types AS vt', 'vt.id', 'shops.voucher_type_id')
+            ->when($filters['search'] ?? null, function ($q, $s) {
+                $hasLetters = (bool) preg_match('/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/u', $s);
+                $isOnlyDigits = ctype_digit($s);
+                $len = strlen($s);
+
+                if ($hasLetters) {
+                    $q->join('contacts AS sc', 'sc.id', '=', 'shops.contact_id')
+                        ->where('sc.name', 'ilike', "%{$s}%");
+                } elseif ($isOnlyDigits && $len === 49) {
+                    $q->where('shops.autorization', $s);
+                } elseif ($isOnlyDigits && $len >= 5) {
+                    $q->where(function ($q) use ($s) {
+                        $q->where('shops.serie', 'ilike', "%{$s}%")
+                            ->orWhere('shops.autorization', 'ilike', "%{$s}%");
+                    });
+                } else {
+                    $q->where('shops.serie', 'ilike', "%{$s}%");
+                }
+            })
+            ->when($filters['period'] ?? null, function ($q, $p) {
+                $q->whereYear('emision', substr($p, 0, 4))
+                    ->whereMonth('emision', substr($p, 5, 2));
+            })
+            ->when($filters['state'] ?? null, fn ($q, $s) => $q->where('shops.state', $s))
+            ->when($filters['retention'] ?? null, fn ($q, $r) => $r === 'with'
+                ? $q->whereNotNull('serie_retention')
+                : $q->whereNull('serie_retention')
+            )
             ->orderByDesc('emision')
-            ->paginate(25);
+            ->paginate(25)
+            ->withQueryString();
 
         $company = company();
         $isRetentionAgent = (bool) $company?->retention_agent;
         $isSpecialAgent = (bool) $company?->special_contribution;
         $containLC = $shops->contains('code', Constants::LIQUIDACION_COMPRA);
-        $isActiveRetention = false;
-        $retentions = [];
-
-        if ($isRetentionAgent || $isSpecialAgent || $containLC) {
-            $isActiveRetention = true;
-            $retentions = Retention::orderBy('code')->get(['id', 'code', 'type', 'description', 'percentage']);
-        }
+        $isActiveRetention = $isRetentionAgent || $isSpecialAgent || $containLC;
 
         return Inertia::render('Tenant/Shops/Index', [
             'shops' => $shops,
-            'retentions' => $retentions,
-            'accounts' => $this->expenseAccounts(),
             'isActiveRetention' => $isActiveRetention,
+            'filters' => $filters,
         ]);
     }
 
@@ -56,7 +79,7 @@ class ShopController extends Controller
         return Inertia::render('Tenant/Shops/Create', [
             'voucherTypes' => VoucherType::whereIn('code', ['01', '02', '03', '04', '05'])->get(),
             'accounts' => $this->expenseAccounts(),
-            'identificationTypes' => $this->identificationTypes()
+            'identificationTypes' => $this->identificationTypes(),
         ]);
     }
 
@@ -82,7 +105,7 @@ class ShopController extends Controller
 
     public function show(Shop $shop): JsonResponse
     {
-        return response()->json($shop->load('items.product'));
+        return response()->json($shop->load(['contact:id,name', 'account:id,code,name', 'items.product', 'retentionItems.retention']));
     }
 
     public function edit(Shop $shop): Response

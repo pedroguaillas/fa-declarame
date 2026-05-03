@@ -9,12 +9,6 @@ import SlideOver from "./SlideOver.vue";
 
 import type { RetentionItem, RetentionOption, Shop, ShopItem } from "@/types/tenant";
 
-// ─── Props ───────────────────────────────────────────────────────────────────
-
-const props = defineProps<{
-    retentions: RetentionOption[];
-}>();
-
 // ─── State ───────────────────────────────────────────────────────────────────
 
 const today = new Date().toISOString().slice(0, 10);
@@ -26,15 +20,30 @@ const shopItemsLoading = ref(false);
 interface ItemSearch {
     query: string;
     open: boolean;
+    rect: { top: number; left: number; width: number } | null;
 }
 const itemSearches = ref<ItemSearch[]>([]);
+const searchResults = ref<RetentionOption[]>([]);
+let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+async function fetchRetentions(query: string) {
+    const url = new URL(route("tenant.retentions.search"), window.location.origin);
+    if (query) url.searchParams.set("q", query);
+    const res = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    if (res.ok) searchResults.value = await res.json();
+}
+
+function onRetentionInput(idx: number) {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => fetchRetentions(itemSearches.value[idx]?.query ?? ""), 300);
+}
 
 function emptyItem(subTotal: string | number = 0): RetentionItem {
     return { retention_id: null, base: subTotal, percentage: "", value: "" };
 }
 
 function emptySearch(): ItemSearch {
-    return { query: "", open: false };
+    return { query: "", open: false, rect: null };
 }
 
 const retentionForm = useForm<{
@@ -59,10 +68,12 @@ async function open(shop: Shop) {
     shopItemsLoading.value = true;
     panelOpen.value = true;
 
+    // Inicializar sincrónicamente para que el template no encuentre itemSearches[idx] undefined
     if (!shop.serie_retention) {
         retentionForm.reset();
-        retentionForm.items = [emptyItem(shop.sub_total)];
+        retentionForm.items = [emptyItem()];
         itemSearches.value = [emptySearch()];
+        fetchRetentions("");
     }
 
     try {
@@ -71,7 +82,14 @@ async function open(shop: Shop) {
         });
         if (res.ok) {
             const data: Shop = await res.json();
+            selectedShop.value = data;
             shopItems.value = data.items ?? [];
+
+            // Actualizar base con el sub_total real una vez que llega del servidor
+            if (!data.serie_retention && retentionForm.items.length > 0) {
+                retentionForm.items[0].base = Number(data.sub_total) || 0;
+                recalcValue(0);
+            }
         }
     } finally {
         shopItemsLoading.value = false;
@@ -98,19 +116,36 @@ function removeItem(index: number) {
     itemSearches.value.splice(index, 1);
 }
 
-function filteredRetentions(idx: number): RetentionOption[] {
-    const q = itemSearches.value[idx]?.query.trim().toLowerCase();
-    if (!q) return props.retentions.slice(0, 8);
-    return props.retentions
-        .filter((r) => r.code.toLowerCase().includes(q) || r.description.toLowerCase().includes(q))
-        .slice(0, 8);
+function filteredRetentions(_idx: number): RetentionOption[] {
+    return searchResults.value;
+}
+
+function baseForRetention(type: string): number {
+    const shop = selectedShop.value;
+    if (!shop) return 0;
+    if (type === "iva") {
+        return (
+            Number(shop.iva5 ?? 0) +
+            Number(shop.iva8 ?? 0) +
+            Number(shop.iva12 ?? 0) +
+            Number(shop.iva15 ?? 0)
+        );
+    }
+    return Number(shop.sub_total ?? 0);
 }
 
 function selectRetention(idx: number, retention: RetentionOption) {
-    const item = retentionForm.items[idx];
-    item.retention_id = retention.id;
-    item.percentage = retention.percentage;
-    recalcValue(idx);
+    const base = baseForRetention(retention.type);
+    const value = parseFloat(((base * retention.percentage) / 100).toFixed(2));
+
+    retentionForm.items.splice(idx, 1, {
+        ...retentionForm.items[idx],
+        retention_id: retention.id,
+        base,
+        percentage: retention.percentage,
+        value,
+    });
+
     itemSearches.value[idx].query = `${retention.code} – ${retention.description}`;
     itemSearches.value[idx].open = false;
 }
@@ -128,6 +163,23 @@ function submitRetention() {
         route("tenant.shops.retention.store", { shop: selectedShop.value.id }),
         { onSuccess: () => close() },
     );
+}
+
+function openSearch(idx: number, event: FocusEvent) {
+    const input = event.target as HTMLInputElement;
+    const rect = input.getBoundingClientRect();
+    itemSearches.value[idx].rect = { top: rect.bottom, left: rect.left, width: rect.width };
+    itemSearches.value[idx].open = true;
+}
+
+function getDropdownStyle(idx: number): Record<string, string> {
+    const rect = itemSearches.value[idx]?.rect;
+    if (!rect) return {};
+    return {
+        top: `${rect.top + 4}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+    };
 }
 
 function closeItemSearchDelayed(idx: number) {
@@ -373,31 +425,36 @@ function closeItemSearchDelayed(idx: number) {
                                                 type="text"
                                                 placeholder="Buscar por código o concepto…"
                                                 class="border-border bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring/30 h-9 w-full rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
-                                                @focus="itemSearches[idx].open = true"
+                                                @focus="openSearch(idx, $event)"
+                                                @input="onRetentionInput(idx)"
                                                 @blur="closeItemSearchDelayed(idx)"
                                             />
-                                            <div
-                                                v-if="itemSearches[idx].open && filteredRetentions(idx).length > 0"
-                                                class="border-border bg-popover absolute top-full right-0 left-0 z-10 mt-1 max-h-52 overflow-y-auto rounded-md border shadow-lg"
-                                            >
-                                                <button
-                                                    v-for="ret in filteredRetentions(idx)"
-                                                    :key="ret.id"
-                                                    type="button"
-                                                    class="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors"
-                                                    @mousedown.prevent="selectRetention(idx, ret)"
+                                            <Teleport to="body">
+                                                <div
+                                                    v-if="itemSearches[idx].open && filteredRetentions(idx).length > 0"
+                                                    :style="getDropdownStyle(idx)"
+                                                    class="border-border bg-popover fixed z-[200] max-h-52 overflow-y-auto rounded-md border shadow-lg"
                                                 >
-                                                    <span class="text-foreground w-14 shrink-0 font-mono font-medium">{{
-                                                        ret.code
-                                                    }}</span>
-                                                    <span class="text-muted-foreground flex-1 truncate text-xs">{{
-                                                        ret.description
-                                                    }}</span>
-                                                    <span class="text-foreground shrink-0 font-mono text-xs font-medium"
-                                                        >{{ ret.percentage }}%</span
+                                                    <button
+                                                        v-for="ret in filteredRetentions(idx)"
+                                                        :key="ret.id"
+                                                        type="button"
+                                                        class="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors"
+                                                        @mousedown.prevent
+                                                        @click="selectRetention(idx, ret)"
                                                     >
-                                                </button>
-                                            </div>
+                                                        <span class="text-foreground w-14 shrink-0 font-mono font-medium">{{
+                                                            ret.code
+                                                        }}</span>
+                                                        <span class="text-muted-foreground flex-1 truncate text-xs">{{
+                                                            ret.description
+                                                        }}</span>
+                                                        <span class="text-foreground shrink-0 font-mono text-xs font-medium"
+                                                            >{{ ret.percentage }}%</span
+                                                        >
+                                                    </button>
+                                                </div>
+                                            </Teleport>
                                         </div>
                                         <div class="grid grid-cols-3 gap-2">
                                             <div class="flex flex-col gap-1">

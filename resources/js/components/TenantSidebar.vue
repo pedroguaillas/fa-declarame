@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { Link, usePage } from "@inertiajs/vue3";
+import { usePage } from "@inertiajs/vue3";
 import { computed } from "vue";
 import type { PageProps } from "@/types";
 import {
     Sidebar,
     SidebarContent,
-    SidebarGroup,
-    SidebarGroupLabel,
     SidebarHeader,
     SidebarMenu,
     SidebarMenuButton,
@@ -34,16 +32,9 @@ const tenant = computed(() => page.props.tenant);
                         >
                             <Building2 class="size-4" />
                         </div>
-                        <div
-                            class="grid flex-1 text-left text-sm leading-tight"
-                        >
-                            <span class="truncate font-semibold">{{
-                                tenant?.name
-                            }}</span>
-                            <span
-                                class="truncate text-xs text-sidebar-foreground/60"
-                                >Panel de empresa</span
-                            >
+                        <div class="grid flex-1 text-left text-sm leading-tight">
+                            <span class="truncate font-semibold">{{ tenant?.name }}</span>
+                            <span class="truncate text-xs text-sidebar-foreground/60">Panel de empresa</span>
                         </div>
                     </SidebarMenuButton>
                 </SidebarMenuItem>

@@ -8,12 +8,6 @@ import SlideOver from "./SlideOver.vue";
 
 import type { Account, Shop, ShopItem } from "@/types/tenant";
 
-// ─── Props ───────────────────────────────────────────────────────────────────
-
-const props = defineProps<{
-    accounts: Account[];
-}>();
-
 // ─── State ───────────────────────────────────────────────────────────────────
 
 const panelOpen = ref(false);
@@ -26,14 +20,35 @@ const accountQuery = ref("");
 const accountDropdownOpen = ref(false);
 const accountForm = useForm<{ acount_id: number | null }>({ acount_id: null });
 
+const searchResults = ref<Account[]>([]);
+let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+// ─── API search ──────────────────────────────────────────────────────────────
+
+async function fetchAccounts(query: string) {
+    const res = await fetch(route("tenant.accounts.search") + `?q=${encodeURIComponent(query)}`, {
+        headers: { Accept: "application/json" },
+    });
+    if (res.ok) {
+        searchResults.value = await res.json();
+    }
+}
+
+function onAccountInput() {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => fetchAccounts(accountQuery.value), 300);
+}
+
 // ─── Exposed API ─────────────────────────────────────────────────────────────
 
 async function open(shop: Shop) {
     selectedShop.value = shop;
     accountForm.acount_id = shop.acount_id;
     panelEditing.value = !shop.acount_id;
-    accountQuery.value = shop.account ? `${shop.account.code} – ${shop.account.name}` : "";
+    accountQuery.value = "";
     panelOpen.value = true;
+
+    fetchAccounts("");
 
     shopItems.value = [];
     shopItemsLoading.value = true;
@@ -43,7 +58,9 @@ async function open(shop: Shop) {
         });
         if (res.ok) {
             const data: Shop = await res.json();
+            selectedShop.value = data;
             shopItems.value = data.items ?? [];
+            accountQuery.value = data.account ? `${data.account.code} – ${data.account.name}` : "";
         }
     } finally {
         shopItemsLoading.value = false;
@@ -61,14 +78,6 @@ function close() {
 defineExpose({ open, close });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function filteredAccounts(): Account[] {
-    const q = accountQuery.value.trim().toLowerCase();
-    if (!q) return props.accounts.slice(0, 8);
-    return props.accounts
-        .filter((a) => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q))
-        .slice(0, 8);
-}
 
 function selectAccount(account: Account) {
     accountForm.acount_id = account.id;
@@ -163,6 +172,7 @@ function closeDropdownDelayed(closeFn: () => void) {
                                     class="border-border bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring/30 h-9 w-full rounded-md border px-3 pr-8 text-sm focus:ring-2 focus:outline-none"
                                     @focus="accountDropdownOpen = true"
                                     @blur="closeDropdownDelayed(() => (accountDropdownOpen = false))"
+                                    @input="onAccountInput"
                                 />
                                 <button
                                     v-if="accountForm.acount_id"
@@ -191,11 +201,11 @@ function closeDropdownDelayed(closeFn: () => void) {
                                     </svg>
                                 </button>
                                 <div
-                                    v-if="accountDropdownOpen && filteredAccounts().length > 0"
+                                    v-if="accountDropdownOpen && searchResults.length > 0"
                                     class="border-border bg-popover absolute top-full right-0 left-0 z-10 mt-1 max-h-60 overflow-y-auto rounded-md border shadow-lg"
                                 >
                                     <button
-                                        v-for="account in filteredAccounts()"
+                                        v-for="account in searchResults"
                                         :key="account.id"
                                         type="button"
                                         class="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors"

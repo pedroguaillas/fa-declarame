@@ -5,7 +5,6 @@ import {
     CreditCard,
     Settings,
     Building2,
-    UserCog,
     ShoppingCart,
     ReceiptIndianRupee,
 } from "lucide-vue-next";
@@ -91,7 +90,11 @@ export function useNavigation(user: User) {
             url: route("tenant.orders.index"),
             icon: ReceiptIndianRupee,
         },
-
+        {
+            title: "Plan de cuentas",
+            url: route("tenant.accounts.index"),
+            icon: ReceiptIndianRupee,
+        },
         {
             title: "Configuración",
             url: "#",
