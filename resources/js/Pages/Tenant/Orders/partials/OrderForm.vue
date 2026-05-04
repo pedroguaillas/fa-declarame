@@ -1,3 +1,4 @@
+```vue
 <script setup lang="ts">
 import { computed, ref, watch, watchEffect } from "vue";
 import { Link } from "@inertiajs/vue3";
@@ -139,6 +140,10 @@ const createContactForm = ref({
   address: "",
 });
 
+// ─────────────────────────────────────────────
+// LONGITUD IDENTIFICACION
+// ─────────────────────────────────────────────
+
 const maxIdentificationLength = computed(() => {
   if (!props.form.type_identification) return 13;
 
@@ -148,16 +153,118 @@ const maxIdentificationLength = computed(() => {
 
   if (!selected) return 13;
 
-  const label = selected.description.toLowerCase();
+  const label = selected.description.trim().toLowerCase();
 
   if (label.includes("cedula")) return 10;
 
   if (label.includes("ruc")) return 13;
 
+  if (label === "consumidor final" || label.includes("consumidor")) {
+    return 13;
+  }
+
+  if (label.includes("pasaporte")) return 20;
+
   return 20;
 });
 
+// ─────────────────────────────────────────────
+// CONSUMIDOR FINAL AUTOMATICO
+// ─────────────────────────────────────────────
+
+watch(
+  () => props.form.type_identification,
+  async (val) => {
+    const selected = props.identificationTypes.find((i) => i.id == val);
+
+    if (!selected) return;
+
+    const label = selected.description.trim().toLowerCase();
+
+    // CONSUMIDOR FINAL
+    if (label === "consumidor final" || label.includes("consumidor")) {
+      // PONE AUTOMATICAMENTE LOS 13 NUEVES
+      contactIdentification.value = "9999999999999";
+
+      contactName.value = "";
+
+      props.form.contact_id = null;
+
+      // EJECUTA AUTOMATICAMENTE
+      // EL BUSCADOR DE CONTACTOS
+
+      contactResolving.value = true;
+
+      try {
+        const res = await fetch(
+          route("tenant.contacts.resolve", {
+            identification: "9999999999999",
+          }),
+          {
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
+
+        if (!res.ok) {
+          contactName.value = "CONSUMIDOR FINAL";
+
+          props.form.contact_id = null;
+
+          return;
+        }
+
+        const data = await res.json();
+
+        contactName.value = data.name;
+
+        props.form.contact_id = data.id;
+      } catch {
+        contactName.value = "CONSUMIDOR FINAL";
+      } finally {
+        contactResolving.value = false;
+      }
+
+      return;
+    }
+
+    // PASAPORTE
+    if (label.includes("pasaporte")) {
+      contactIdentification.value = "";
+
+      contactName.value = "";
+
+      props.form.contact_id = null;
+
+      return;
+    }
+
+    // OTROS
+    contactIdentification.value = "";
+
+    contactName.value = "";
+
+    props.form.contact_id = null;
+  }
+);
+
+// ─────────────────────────────────────────────
+// BUSQUEDA CONTACTO
+// ─────────────────────────────────────────────
+
 watch(contactIdentification, async (identification) => {
+  const selected = props.identificationTypes.find(
+    (i) => i.id == props.form.type_identification
+  );
+
+  const label = selected?.description?.trim().toLowerCase() || "";
+
+  // CONSUMIDOR FINAL
+  if (label === "consumidor final" || label.includes("consumidor")) {
+    return;
+  }
+
   const expectedLength = maxIdentificationLength.value;
 
   if (
@@ -212,6 +319,10 @@ watch(contactIdentification, async (identification) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// GUARDAR CONTACTO
+// ─────────────────────────────────────────────
+
 async function saveContact() {
   try {
     const res = await fetch(route("tenant.contacts.store"), {
@@ -255,8 +366,6 @@ async function saveContact() {
 // ─────────────────────────────────────────────
 
 function validateVoucherWithIdentification() {
-  const identification = contactIdentification.value;
-
   const selectedIdentification = props.identificationTypes.find(
     (i) => i.id == props.form.type_identification
   );
@@ -264,8 +373,11 @@ function validateVoucherWithIdentification() {
   const identificationLabel = selectedIdentification?.description?.toLowerCase() || "";
 
   if (["01", "02"].includes(String(props.form.voucher_type_id))) {
-    if (!identificationLabel.includes("ruc") || identification.length !== 13) {
-      alert("Factura y Nota de Venta solo permiten RUC.");
+    if (
+      !identificationLabel.includes("ruc") &&
+      !identificationLabel.includes("consumidor")
+    ) {
+      alert("Factura y Nota de Venta solo permiten RUC o Consumidor Final.");
 
       return false;
     }
@@ -337,6 +449,8 @@ watchEffect(() => {
       </h2>
 
       <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <!-- TIPO IDENTIFICACION -->
+
         <FormSelect
           label="Tipo identificación"
           v-model="form.type_identification"
@@ -349,7 +463,11 @@ watchEffect(() => {
         <div class="flex flex-col gap-1.5">
           <Label> Identificación </Label>
 
-          <Input v-model="contactIdentification" :maxlength="maxIdentificationLength" />
+          <Input
+            v-model="contactIdentification"
+            type="text"
+            :maxlength="maxIdentificationLength"
+          />
         </div>
 
         <!-- NOMBRE -->
@@ -534,3 +652,4 @@ watchEffect(() => {
     </div>
   </form>
 </template>
+```

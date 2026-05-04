@@ -120,12 +120,47 @@ const identificationOptions = computed(() =>
   }))
 );
 
-const voucherTypeOptions = computed(() =>
-  props.voucherTypes.map((v) => ({
-    id: v.id,
-    label: `${v.code} - ${v.description}`,
-  }))
-);
+const voucherTypeOptions = computed(() => {
+  const selectedIdentification = props.identificationTypes.find(
+    (i) => i.id == props.form.type_identification
+  );
+
+  // SI NO HAY IDENTIFICACION
+  if (!selectedIdentification) {
+    return props.voucherTypes.map((v) => ({
+      id: v.id,
+      label: `${v.code} - ${v.description}`,
+    }));
+  }
+
+  const label = selectedIdentification.description.trim().toLowerCase();
+
+  // ─────────────────────────────
+  // CEDULA O PASAPORTE
+  // SOLO LIQUIDACION DE COMPRAS
+  // ─────────────────────────────
+
+  if (label.includes("cedula") || label.includes("pasaporte")) {
+    return props.voucherTypes
+      .filter((v) => v.code === "03")
+      .map((v) => ({
+        id: v.id,
+        label: `${v.code} - ${v.description}`,
+      }));
+  }
+
+  // ─────────────────────────────
+  // RUC Y OTROS
+  // OCULTAR LIQUIDACION
+  // ─────────────────────────────
+
+  return props.voucherTypes
+    .filter((v) => v.code !== "03")
+    .map((v) => ({
+      id: v.id,
+      label: `${v.code} - ${v.description}`,
+    }));
+});
 
 const modifyVoucherOptions = computed(() =>
   props.voucherTypes
