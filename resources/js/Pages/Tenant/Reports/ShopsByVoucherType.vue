@@ -1,0 +1,222 @@
+<script setup lang="ts">
+import TenantLayout from "@/layouts/TenantLayout.vue";
+import { Head, router } from "@inertiajs/vue3";
+import { computed, ref } from "vue";
+import { Download } from "lucide-vue-next";
+import { Button } from "@/components/ui/button";
+
+interface Row {
+    code: string;
+    description: string;
+    count: number;
+    subtotal: number;
+    iva: number;
+    total: number;
+    retentions: number;
+    a_pagar: number;
+}
+
+interface Filters {
+    start_date: string | null;
+    end_date: string | null;
+}
+
+const props = defineProps<{
+    rows: Row[];
+    filters: Filters;
+}>();
+
+const startDate = ref(props.filters.start_date ?? "");
+const endDate = ref(props.filters.end_date ?? "");
+
+function applyFilters() {
+    router.get(
+        route("tenant.reports.shops-by-voucher-type"),
+        {
+            start_date: startDate.value || undefined,
+            end_date: endDate.value || undefined,
+        },
+        { preserveState: true },
+    );
+}
+
+function clearFilters() {
+    startDate.value = "";
+    endDate.value = "";
+    router.get(route("tenant.reports.shops-by-voucher-type"), {}, { preserveState: true });
+}
+
+function download() {
+    const params = new URLSearchParams();
+    if (props.filters.start_date) params.set("start_date", props.filters.start_date);
+    if (props.filters.end_date) params.set("end_date", props.filters.end_date);
+    window.location.href = route("tenant.reports.shops-by-voucher-type.export") + "?" + params.toString();
+}
+
+const fmt = (v: number) => v.toLocaleString("es-EC", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const totals = computed(() => ({
+    count: props.rows.reduce((s, r) => s + r.count, 0),
+    subtotal: props.rows.reduce((s, r) => s + r.subtotal, 0),
+    iva: props.rows.reduce((s, r) => s + r.iva, 0),
+    total: props.rows.reduce((s, r) => s + r.total, 0),
+    retentions: props.rows.reduce((s, r) => s + r.retentions, 0),
+    a_pagar: props.rows.reduce((s, r) => s + r.a_pagar, 0),
+}));
+</script>
+
+<template>
+    <Head title="Compras por Tipo de Comprobante" />
+
+    <TenantLayout>
+        <div class="mb-6 flex items-center justify-between">
+            <div>
+                <h1 class="text-foreground text-2xl font-semibold">Compras por Tipo de Comprobante</h1>
+                <p class="text-muted-foreground mt-1 text-sm">Resumen de compras agrupado por tipo de comprobante</p>
+            </div>
+            <Button variant="outline" size="sm" @click="download">
+                <Download class="size-4" />
+                Descargar
+            </Button>
+        </div>
+
+        <!-- Filters -->
+        <div class="border-border bg-card mb-4 flex flex-wrap items-end gap-3 rounded-lg border p-4">
+            <div class="flex flex-col gap-1">
+                <label class="text-muted-foreground text-xs font-medium">Fecha desde</label>
+                <input
+                    v-model="startDate"
+                    type="date"
+                    class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
+                />
+            </div>
+            <div class="flex flex-col gap-1">
+                <label class="text-muted-foreground text-xs font-medium">Fecha hasta</label>
+                <input
+                    v-model="endDate"
+                    type="date"
+                    class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
+                />
+            </div>
+            <button
+                type="button"
+                class="bg-primary text-primary-foreground hover:bg-primary/90 h-8 rounded-md px-4 text-sm font-medium"
+                @click="applyFilters"
+            >
+                Filtrar
+            </button>
+            <button
+                v-if="filters.start_date || filters.end_date"
+                type="button"
+                class="text-muted-foreground hover:text-foreground h-8 rounded-md px-3 text-sm"
+                @click="clearFilters"
+            >
+                Limpiar
+            </button>
+        </div>
+
+        <!-- Table -->
+        <div class="border-border bg-card overflow-hidden rounded-lg border">
+            <div v-if="rows.length === 0" class="text-muted-foreground p-6 text-sm">
+                No hay compras registradas para los filtros seleccionados.
+            </div>
+
+            <table v-else class="divide-border min-w-full divide-y">
+                <thead class="bg-muted">
+                    <tr>
+                        <th
+                            class="text-muted-foreground px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                        >
+                            Tipo de Comprobante
+                        </th>
+                        <th
+                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
+                            Cantidad
+                        </th>
+                        <th
+                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
+                            Subtotal
+                        </th>
+                        <th
+                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
+                            IVA
+                        </th>
+                        <th
+                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
+                            Total
+                        </th>
+                        <th
+                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
+                            Retenciones
+                        </th>
+                        <th
+                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
+                            A Pagar
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="divide-border bg-card divide-y">
+                    <tr v-for="row in rows" :key="row.code">
+                        <td class="px-4 py-3 text-sm">
+                            <span class="text-muted-foreground mr-2 font-mono text-xs">{{ row.code }}</span>
+                            <span class="text-foreground font-medium">{{ row.description }}</span>
+                        </td>
+                        <td class="text-muted-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">
+                            {{ row.count }}
+                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">
+                            {{ fmt(row.subtotal) }}
+                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">
+                            {{ fmt(row.iva) }}
+                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">
+                            {{ fmt(row.total) }}
+                        </td>
+                        <td
+                            class="px-4 py-3 text-right font-mono text-sm tabular-nums"
+                            :class="row.retentions > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'"
+                        >
+                            {{ fmt(row.retentions) }}
+                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
+                            {{ fmt(row.a_pagar) }}
+                        </td>
+                    </tr>
+                </tbody>
+                <tfoot class="bg-muted border-border border-t-2">
+                    <tr>
+                        <td class="text-foreground px-4 py-3 text-sm font-semibold">Total general</td>
+                        <td class="text-muted-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
+                            {{ totals.count }}
+                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
+                            {{ fmt(totals.subtotal) }}
+                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
+                            {{ fmt(totals.iva) }}
+                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
+                            {{ fmt(totals.total) }}
+                        </td>
+                        <td
+                            class="px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums"
+                            :class="totals.retentions > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'"
+                        >
+                            {{ fmt(totals.retentions) }}
+                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-bold tabular-nums">
+                            {{ fmt(totals.a_pagar) }}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </TenantLayout>
+</template>

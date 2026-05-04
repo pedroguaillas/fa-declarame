@@ -7,13 +7,11 @@ const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padS
 interface Filters {
     search: string;
     period: string;
-    retention: string;
     voucher_type: string;
 }
 
 const props = defineProps<{
     filters: Filters;
-    showRetention?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -24,14 +22,12 @@ const local = reactive<Filters>({ ...props.filters });
 
 const hasActiveFilters = () => Object.values(local).some(Boolean);
 
-// Debounce for search field
 let searchTimer: ReturnType<typeof setTimeout>;
 function onSearchInput() {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => emit("change", { ...local }), 400);
 }
 
-// Immediate emit for selects and period
 function onFilterChange() {
     emit("change", { ...local });
 }
@@ -39,12 +35,10 @@ function onFilterChange() {
 function clearFilters() {
     local.search = "";
     local.period = "";
-    local.retention = "";
     local.voucher_type = "";
     emit("change", { ...local });
 }
 
-// Sync if parent navigates back with different filters
 watch(
     () => props.filters,
     (f) => Object.assign(local, f),
@@ -72,7 +66,7 @@ watch(
             <input
                 v-model="local.search"
                 type="text"
-                placeholder="Proveedor, serie o autorización…"
+                placeholder="Cliente, serie o autorización…"
                 class="border-border bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring/30 h-9 w-full rounded-md border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:outline-none"
                 @input="onSearchInput"
             />
@@ -96,22 +90,8 @@ watch(
         >
             <option value="">Todos los tipos</option>
             <option value="01">Factura</option>
-            <option value="02">Nota de Venta</option>
-            <option value="03">Liq. Compra</option>
             <option value="04">Nota de Crédito</option>
             <option value="05">Nota de Débito</option>
-        </select>
-
-        <!-- Retention -->
-        <select
-            v-if="showRetention"
-            v-model="local.retention"
-            class="border-border bg-background text-foreground focus:ring-ring/30 h-9 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
-            @change="onFilterChange"
-        >
-            <option value="">Todas las retenciones</option>
-            <option value="with">Con retención</option>
-            <option value="without">Sin retención</option>
         </select>
 
         <!-- Clear -->

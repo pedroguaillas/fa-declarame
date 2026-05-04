@@ -120,7 +120,6 @@ export type PageProps<
         error: string | null;
     };
     currentCompany: CompanyScope | null;
-    companiesScope: CompanyScope[];
     tenant: {
         id: string;
         name: string;

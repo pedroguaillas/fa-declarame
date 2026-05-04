@@ -28,7 +28,14 @@ class ShopController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only(['search', 'period', 'state', 'retention']);
+        $filters = $request->only(['search', 'period', 'retention', 'voucher_type']);
+
+        if (empty($filters['period'])) {
+            $lastEmision = Shop::max('emision');
+            $filters['period'] = $lastEmision
+                ? substr($lastEmision, 0, 7)
+                : now()->format('Y-m');
+        }
 
         $shops = $this->filteredShopsQuery($filters)
             ->selectRaw('shops.id, account_id, contact_id, serie, emision, vt.code, total, shops.state, serie_retention')
@@ -136,11 +143,11 @@ class ShopController extends Controller
                 $q->whereYear('emision', substr($p, 0, 4))
                     ->whereMonth('emision', substr($p, 5, 2));
             })
-            ->when($filters['state'] ?? null, fn ($q, $s) => $q->where('shops.state', $s))
             ->when($filters['retention'] ?? null, fn ($q, $r) => $r === 'with'
                 ? $q->whereNotNull('serie_retention')
                 : $q->whereNull('serie_retention')
-            );
+            )
+            ->when($filters['voucher_type'] ?? null, fn ($q, $v) => $q->where('vt.code', $v));
     }
 
     private function expenseAccounts(): Collection
@@ -168,7 +175,7 @@ class ShopController extends Controller
         ['imported' => $imported, 'skipped' => $skipped] = $service->import($content, $company->id, $company->ruc);
 
         return redirect()->route('tenant.shops.index')
-            ->with('success', "Importación completada: {$imported} compras importadas, {$skipped} omitidas.");
+            ->with($skipped > 0 ? 'error' : 'success', "Importación completada: {$imported} compras importadas, {$skipped} omitidas.");
     }
 
     public function importRetentions(Request $request, ShopRetentionImportService $service): RedirectResponse
@@ -223,7 +230,7 @@ class ShopController extends Controller
 
     public function export(Request $request): BinaryFileResponse
     {
-        $filters = $request->only(['search', 'period', 'state', 'retention']);
+        $filters = $request->only(['search', 'period', 'retention', 'voucher_type']);
         $allColumns = array_keys(ShopsExport::$availableColumns);
         $columns = $request->has('columns')
             ? array_intersect((array) $request->get('columns'), $allColumns)

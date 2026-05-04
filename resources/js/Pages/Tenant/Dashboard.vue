@@ -1,361 +1,394 @@
 <script setup lang="ts">
-import { format, parseISO } from "date-fns";
-import { es } from "date-fns/locale";
-import { ref } from "vue";
-import type { Subscription } from "@/types";
 import TenantLayout from "@/layouts/TenantLayout.vue";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import { Users, CreditCard, CalendarCheck, Clock, Download } from "lucide-vue-next";
+import { Head } from "@inertiajs/vue3";
+import { computed, ref } from "vue";
+import { FileDown } from "lucide-vue-next";
 
-interface TenantUser {
-    id: number;
-    name: string;
-    email: string;
-    is_active: boolean;
-    created_at: string;
+interface PeriodStats {
+    count: number;
+    total: number;
+    iva: number;
 }
 
-defineProps<{
-    tenant: { id: string; name: string };
-    subscription: Subscription | null;
-    stats: {
-        employee_count: number;
-        max_employees: number;
-        slots_used_pct: number;
-        days_remaining: number;
-    };
-    recent_employees: TenantUser[];
+interface Period {
+    sales: PeriodStats;
+    purchases: PeriodStats;
+}
+
+interface TrendPoint {
+    month: string;
+    sales: number;
+    purchases: number;
+}
+
+interface Provider {
+    name: string;
+    identification: string;
+    total: number;
+    count: number;
+}
+
+const props = defineProps<{
+    month: Period;
+    year: Period;
+    monthLabel: string;
+    yearLabel: string;
+    trend: TrendPoint[];
+    topProviders: Provider[];
 }>();
 
-function formatDate(date: string) {
-    return format(parseISO(date), "dd MMM yyyy", { locale: es });
+const activePeriod = ref<"month" | "year">("month");
+const stats = computed(() => (activePeriod.value === "month" ? props.month : props.year));
+
+const balance = computed(() => stats.value.sales.total - stats.value.purchases.total);
+const ivaNet = computed(() => stats.value.sales.iva - stats.value.purchases.iva);
+
+function money(n: number): string {
+    return new Intl.NumberFormat("es-EC", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
-function getDaysVariant(days: number) {
-    if (days <= 0) return "destructive" as const;
-    if (days <= 7) return "outline" as const;
-    return "default" as const;
+// ── Chart ─────────────────────────────────────────────────────────────────────
+
+const MONTHS_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+function chartMonthLabel(ym: string): string {
+    const [, m] = ym.split("-");
+    return MONTHS_ES[parseInt(m) - 1];
 }
 
-// ─── ATS Export ──────────────────────────────────────────────────────────────
+function formatPeriodLabel(ym: string): string {
+    const [y, m] = ym.split("-");
+    return `${MONTHS_ES[parseInt(m) - 1]} ${y}`;
+}
 
-const atsDialogOpen = ref(false);
-const currentYear = new Date().getFullYear();
-const atsYear = ref(String(currentYear));
-const atsMonth = ref(String(new Date().getMonth() + 1));
+const chartMax = computed(() => {
+    const max = Math.max(...props.trend.flatMap((t) => [t.sales, t.purchases]), 1);
+    // Round up to a nice number
+    const magnitude = Math.pow(10, Math.floor(Math.log10(max)));
+    return Math.ceil(max / magnitude) * magnitude;
+});
 
-const yearOptions = Array.from({ length: 10 }, (_, i) => currentYear - i);
-const monthOptions = [
-    { value: "1", label: "Enero" },
-    { value: "2", label: "Febrero" },
-    { value: "3", label: "Marzo" },
-    { value: "4", label: "Abril" },
-    { value: "5", label: "Mayo" },
-    { value: "6", label: "Junio" },
-    { value: "7", label: "Julio" },
-    { value: "8", label: "Agosto" },
-    { value: "9", label: "Septiembre" },
-    { value: "10", label: "Octubre" },
-    { value: "11", label: "Noviembre" },
-    { value: "12", label: "Diciembre" },
-];
+function barHeight(value: number): number {
+    return Math.round((value / chartMax.value) * 100);
+}
+
+// ── ATS Modal ─────────────────────────────────────────────────────────────────
+
+const atsModalOpen = ref(false);
+const atsMonth = ref(props.monthLabel); // "YYYY-MM"
+
+function openAtsModal() {
+    atsMonth.value = props.monthLabel;
+    atsModalOpen.value = true;
+}
 
 function downloadAts() {
-    window.location.href = route("tenant.orders.export-ats", {
-        year: atsYear.value,
-        month: atsMonth.value,
-    });
-    atsDialogOpen.value = false;
+    const [year, month] = atsMonth.value.split("-");
+    const params = new URLSearchParams({ year, month: String(parseInt(month)) });
+    window.location.href = route("tenant.export-ats") + "?" + params.toString();
+    atsModalOpen.value = false;
 }
 </script>
 
 <template>
+    <Head title="Dashboard" />
+
     <TenantLayout>
-        <div class="space-y-6">
-            <!-- Header -->
-            <div class="flex items-start justify-between">
-                <div>
-                    <h1 class="text-2xl font-bold text-foreground">Dashboard</h1>
-                    <p class="text-muted-foreground text-sm mt-1">
-                        Bienvenido al panel de {{ tenant.name }}.
-                    </p>
-                </div>
-                <Button variant="outline" size="sm" class="font-bold" @click="atsDialogOpen = true">
-                    <Download class="size-4" />
-                    <span class="hidden sm:inline">Exportar ATS</span>
-                </Button>
+        <!-- Header -->
+        <div class="mb-6 flex items-center justify-between">
+            <h1 class="text-foreground text-2xl font-semibold">Dashboard</h1>
+
+            <div class="flex items-center gap-3">
+                <!-- ATS download button -->
+                <button
+                    type="button"
+                    class="border-border text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors"
+                    @click="openAtsModal"
+                >
+                    <FileDown class="size-4" />
+                    Descargar ATS
+                </button>
+
+            <!-- Period toggle -->
+            <div class="border-border flex rounded-lg border p-0.5">
+                <button
+                    type="button"
+                    class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors"
+                    :class="
+                        activePeriod === 'month'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                    "
+                    @click="activePeriod = 'month'"
+                >
+                    {{ formatPeriodLabel(monthLabel) }}
+                </button>
+                <button
+                    type="button"
+                    class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors"
+                    :class="
+                        activePeriod === 'year'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                    "
+                    @click="activePeriod = 'year'"
+                >
+                    {{ yearLabel }}
+                </button>
             </div>
-
-            <!-- Alerta sin suscripción -->
-            <div
-                v-if="!subscription"
-                class="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive"
-            >
-                No hay una suscripción activa. Contacta al administrador del
-                sistema.
             </div>
-
-            <!-- Stats -->
-            <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <Card>
-                    <CardHeader
-                        class="flex flex-row items-center justify-between pb-2"
-                    >
-                        <CardTitle
-                            class="text-sm font-medium text-muted-foreground"
-                            >Empleados</CardTitle
-                        >
-                        <Users class="size-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <p class="text-3xl font-bold">
-                            {{ stats.employee_count }}
-                        </p>
-                        <p class="text-xs text-muted-foreground mt-1">
-                            de {{ stats.max_employees }} permitidos
-                        </p>
-                        <div
-                            class="mt-2 h-1.5 rounded-full bg-muted overflow-hidden"
-                        >
-                            <div
-                                class="h-full rounded-full bg-primary transition-all"
-                                :style="{ width: `${stats.slots_used_pct}%` }"
-                            />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader
-                        class="flex flex-row items-center justify-between pb-2"
-                    >
-                        <CardTitle
-                            class="text-sm font-medium text-muted-foreground"
-                            >Plan</CardTitle
-                        >
-                        <CreditCard class="size-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <p class="text-3xl font-bold">
-                            {{ subscription?.plan?.name ?? "—" }}
-                        </p>
-                        <p class="text-xs text-muted-foreground mt-1">
-                            plan activo
-                        </p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader
-                        class="flex flex-row items-center justify-between pb-2"
-                    >
-                        <CardTitle
-                            class="text-sm font-medium text-muted-foreground"
-                            >Vencimiento</CardTitle
-                        >
-                        <CalendarCheck class="size-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <p class="text-3xl font-bold">
-                            {{
-                                subscription
-                                    ? formatDate(subscription.end_date)
-                                    : "—"
-                            }}
-                        </p>
-                        <p class="text-xs text-muted-foreground mt-1">
-                            fecha de vencimiento
-                        </p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader
-                        class="flex flex-row items-center justify-between pb-2"
-                    >
-                        <CardTitle
-                            class="text-sm font-medium text-muted-foreground"
-                            >Días restantes</CardTitle
-                        >
-                        <Clock class="size-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div class="flex items-center gap-2">
-                            <p class="text-3xl font-bold">
-                                {{ stats.days_remaining }}
-                            </p>
-                            <Badge
-                                :variant="getDaysVariant(stats.days_remaining)"
-                                class="text-xs"
-                            >
-                                {{
-                                    stats.days_remaining <= 0
-                                        ? "Vencida"
-                                        : stats.days_remaining <= 7
-                                          ? "Por vencer"
-                                          : "Al día"
-                                }}
-                            </Badge>
-                        </div>
-                        <p class="text-xs text-muted-foreground mt-1">
-                            días restantes
-                        </p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <!-- Empleados recientes -->
-            <Card>
-                <CardHeader>
-                    <CardTitle>Empleados recientes</CardTitle>
-                    <CardDescription
-                        >Últimos empleados registrados en el
-                        sistema.</CardDescription
-                    >
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Nombre</TableHead>
-                                <TableHead>Correo</TableHead>
-                                <TableHead class="text-center"
-                                    >Estado</TableHead
-                                >
-                                <TableHead class="text-center"
-                                    >Registrado</TableHead
-                                >
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow
-                                v-for="employee in recent_employees"
-                                :key="employee.id"
-                            >
-                                <TableCell class="font-medium">{{
-                                    employee.name
-                                }}</TableCell>
-                                <TableCell
-                                    class="text-muted-foreground text-sm"
-                                    >{{ employee.email }}</TableCell
-                                >
-                                <TableCell class="text-center">
-                                    <Badge
-                                        :variant="
-                                            employee.is_active
-                                                ? 'default'
-                                                : 'secondary'
-                                        "
-                                    >
-                                        {{
-                                            employee.is_active
-                                                ? "Activo"
-                                                : "Inactivo"
-                                        }}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell
-                                    class="text-center text-sm text-muted-foreground"
-                                >
-                                    {{ formatDate(employee.created_at) }}
-                                </TableCell>
-                            </TableRow>
-                            <TableRow v-if="recent_employees.length === 0">
-                                <TableCell
-                                    colspan="4"
-                                    class="text-center text-muted-foreground py-6"
-                                >
-                                    No hay empleados registrados.
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
         </div>
 
-        <!-- ATS Export dialog -->
-        <Dialog v-model:open="atsDialogOpen">
-            <DialogContent class="max-w-sm">
-                <DialogHeader>
-                    <DialogTitle>Exportar ATS XML</DialogTitle>
-                </DialogHeader>
-                <div class="grid grid-cols-2 gap-4 py-2">
-                    <div class="flex flex-col gap-1.5">
-                        <label class="text-sm font-medium">Año</label>
-                        <Select v-model="atsYear">
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="y in yearOptions"
-                                    :key="y"
-                                    :value="String(y)"
-                                >
-                                    {{ y }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                        <label class="text-sm font-medium">Mes</label>
-                        <Select v-model="atsMonth">
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="m in monthOptions"
-                                    :key="m.value"
-                                    :value="m.value"
-                                >
-                                    {{ m.label }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
+        <!-- KPI row 1: Ventas / Compras / Balance -->
+        <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <!-- Ventas -->
+            <div class="border-border bg-card rounded-xl border p-5">
+                <div class="mb-3 flex items-center justify-between">
+                    <p class="text-muted-foreground text-sm font-medium">Ventas</p>
+                    <div class="bg-blue-100 dark:bg-blue-900/30 rounded-lg p-2">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="text-blue-600 dark:text-blue-400 size-4"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z"
+                            />
+                        </svg>
                     </div>
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" @click="atsDialogOpen = false">
-                        Cancelar
-                    </Button>
-                    <Button @click="downloadAts">
-                        <Download class="size-4" />
-                        Descargar XML
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                <p class="text-foreground text-2xl font-bold tabular-nums">${{ money(stats.sales.total) }}</p>
+                <p class="text-muted-foreground mt-1 text-sm">
+                    {{ stats.sales.count }} comprobante{{ stats.sales.count !== 1 ? "s" : "" }}
+                </p>
+            </div>
+
+            <!-- Compras -->
+            <div class="border-border bg-card rounded-xl border p-5">
+                <div class="mb-3 flex items-center justify-between">
+                    <p class="text-muted-foreground text-sm font-medium">Compras</p>
+                    <div class="bg-orange-100 dark:bg-orange-900/30 rounded-lg p-2">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="text-orange-600 dark:text-orange-400 size-4"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+                            />
+                        </svg>
+                    </div>
+                </div>
+                <p class="text-foreground text-2xl font-bold tabular-nums">${{ money(stats.purchases.total) }}</p>
+                <p class="text-muted-foreground mt-1 text-sm">
+                    {{ stats.purchases.count }} comprobante{{ stats.purchases.count !== 1 ? "s" : "" }}
+                </p>
+            </div>
+
+            <!-- Balance -->
+            <div class="border-border bg-card rounded-xl border p-5">
+                <div class="mb-3 flex items-center justify-between">
+                    <p class="text-muted-foreground text-sm font-medium">Balance comercial</p>
+                    <div
+                        class="rounded-lg p-2"
+                        :class="balance >= 0 ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="size-4"
+                            :class="
+                                balance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                            "
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z"
+                            />
+                        </svg>
+                    </div>
+                </div>
+                <p
+                    class="text-2xl font-bold tabular-nums"
+                    :class="balance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
+                >
+                    {{ balance >= 0 ? "+" : "" }}${{ money(balance) }}
+                </p>
+                <p class="text-muted-foreground mt-1 text-sm">ventas − compras</p>
+            </div>
+        </div>
+
+        <!-- KPI row 2: IVA cobrado / IVA pagado / IVA neto -->
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="border-border bg-card rounded-xl border p-5">
+                <p class="text-muted-foreground mb-1 text-xs font-medium uppercase tracking-wider">IVA cobrado</p>
+                <p class="text-foreground text-xl font-semibold tabular-nums">${{ money(stats.sales.iva) }}</p>
+                <p class="text-muted-foreground mt-0.5 text-xs">en ventas</p>
+            </div>
+
+            <div class="border-border bg-card rounded-xl border p-5">
+                <p class="text-muted-foreground mb-1 text-xs font-medium uppercase tracking-wider">IVA pagado</p>
+                <p class="text-foreground text-xl font-semibold tabular-nums">${{ money(stats.purchases.iva) }}</p>
+                <p class="text-muted-foreground mt-0.5 text-xs">en compras</p>
+            </div>
+
+            <div class="border-border bg-card rounded-xl border p-5">
+                <p class="text-muted-foreground mb-1 text-xs font-medium uppercase tracking-wider">IVA neto</p>
+                <p
+                    class="text-xl font-semibold tabular-nums"
+                    :class="ivaNet >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'"
+                >
+                    ${{ money(Math.abs(ivaNet)) }}
+                </p>
+                <p class="text-muted-foreground mt-0.5 text-xs">
+                    {{ ivaNet >= 0 ? "a pagar al SRI" : "a favor" }}
+                </p>
+            </div>
+        </div>
+
+        <!-- Bottom row: Chart + Top Providers -->
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-5">
+            <!-- Monthly trend chart -->
+            <div class="border-border bg-card lg:col-span-3 rounded-xl border p-5">
+                <p class="text-foreground mb-4 text-sm font-semibold">Tendencia 12 meses</p>
+
+                <!-- Legend -->
+                <div class="mb-4 flex items-center gap-4">
+                    <div class="flex items-center gap-1.5">
+                        <span class="bg-blue-500 inline-block h-2.5 w-2.5 rounded-sm"></span>
+                        <span class="text-muted-foreground text-xs">Ventas</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="bg-orange-400 inline-block h-2.5 w-2.5 rounded-sm"></span>
+                        <span class="text-muted-foreground text-xs">Compras</span>
+                    </div>
+                </div>
+
+                <!-- Bars -->
+                <div class="flex h-40 items-end gap-1.5">
+                    <div
+                        v-for="point in trend"
+                        :key="point.month"
+                        class="group flex flex-1 flex-col items-center gap-0.5"
+                    >
+                        <!-- Bars container -->
+                        <div class="flex h-32 w-full items-end gap-0.5">
+                            <div
+                                class="bg-blue-500 hover:bg-blue-600 relative flex-1 cursor-default rounded-t-sm transition-colors"
+                                :style="{ height: barHeight(point.sales) + '%' }"
+                                :title="`Ventas: $${money(point.sales)}`"
+                            >
+                                <!-- Tooltip on hover -->
+                                <div
+                                    class="absolute bottom-full left-1/2 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background group-hover:block"
+                                >
+                                    ${{ money(point.sales) }}
+                                </div>
+                            </div>
+                            <div
+                                class="bg-orange-400 hover:bg-orange-500 relative flex-1 cursor-default rounded-t-sm transition-colors"
+                                :style="{ height: barHeight(point.purchases) + '%' }"
+                                :title="`Compras: $${money(point.purchases)}`"
+                            >
+                                <div
+                                    class="absolute bottom-full left-1/2 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background group-hover:block"
+                                >
+                                    ${{ money(point.purchases) }}
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Month label -->
+                        <span class="text-muted-foreground text-[10px]">{{ chartMonthLabel(point.month) }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top providers -->
+            <div class="border-border bg-card lg:col-span-2 rounded-xl border p-5">
+                <p class="text-foreground mb-4 text-sm font-semibold">Top proveedores {{ yearLabel }}</p>
+
+                <div v-if="topProviders.length === 0" class="text-muted-foreground py-8 text-center text-sm">
+                    Sin compras registradas
+                </div>
+
+                <ul v-else class="space-y-3">
+                    <li
+                        v-for="(provider, idx) in topProviders"
+                        :key="provider.identification"
+                        class="flex items-center gap-3"
+                    >
+                        <span class="text-muted-foreground w-4 shrink-0 text-right text-xs font-medium">{{
+                            idx + 1
+                        }}</span>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-foreground truncate text-sm font-medium">{{ provider.name }}</p>
+                            <p class="text-muted-foreground font-mono text-xs">{{ provider.identification }}</p>
+                        </div>
+                        <div class="shrink-0 text-right">
+                            <p class="text-foreground text-sm font-semibold tabular-nums">
+                                ${{ money(provider.total) }}
+                            </p>
+                            <p class="text-muted-foreground text-xs">
+                                {{ provider.count }} doc{{ provider.count !== 1 ? "s" : "" }}
+                            </p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ATS Modal -->
+        <Teleport to="body">
+            <div v-if="atsModalOpen" class="fixed inset-0 z-50 flex items-center justify-center">
+                <!-- Backdrop -->
+                <div class="bg-foreground/20 absolute inset-0 backdrop-blur-sm" @click="atsModalOpen = false" />
+
+                <!-- Dialog -->
+                <div class="bg-card border-border relative z-10 w-full max-w-sm rounded-xl border p-6 shadow-lg">
+                    <h2 class="text-foreground mb-4 text-base font-semibold">Descargar ATS</h2>
+
+                    <div class="mb-6 flex flex-col gap-1">
+                        <label class="text-muted-foreground text-xs font-medium">Mes</label>
+                        <input
+                            v-model="atsMonth"
+                            type="month"
+                            class="border-border bg-background text-foreground focus:ring-ring/30 h-9 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
+                        />
+                    </div>
+
+                    <div class="flex justify-end gap-2">
+                        <button
+                            type="button"
+                            class="border-border text-muted-foreground hover:text-foreground h-8 rounded-md border px-4 text-sm"
+                            @click="atsModalOpen = false"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            class="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 h-8 rounded-md px-4 text-sm font-medium"
+                            @click="downloadAts"
+                        >
+                            <FileDown class="size-4" />
+                            Descargar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </TenantLayout>
 </template>

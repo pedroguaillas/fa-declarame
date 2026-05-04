@@ -2,68 +2,71 @@
 
 namespace App\Http\Controllers\Tenant;
 
+use App\Exports\OrdersExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreOrderRequest;
 use App\Http\Requests\Tenant\UpdateOrderRequest;
 use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Order;
-use App\Models\Tenant\Retention;
 use App\Models\Tenant\VoucherType;
 use App\Services\OrderImportService;
 use App\Services\OrderRetentionImportService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class OrderController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $orders = Order::selectRaw('
-            orders.id,
-            contact_id,
-            serie,
-            emision,
-            autorization,
-            initial,
-            sub_total,
-            no_iva,
-            base0,
-            base5,
-            base12,
-            base15,
-            iva5,
-            iva12,
-            iva15,
-            discount,
-            ice,
-            total,
-            state,
-            serie_retention,
-            date_retention,
-            state_retention,
-            autorization_retention
-        ')
-            ->with([
-                'contact:id,name',
-                'retentionItems.retention'
-            ])
+        $filters = $request->only(['search', 'period', 'voucher_type']);
+
+        if (empty($filters['period'])) {
+            $lastEmision = Order::max('emision');
+            $filters['period'] = $lastEmision
+                ? substr($lastEmision, 0, 7)
+                : now()->format('Y-m');
+        }
+
+        $orders = Order::selectRaw('orders.id, contact_id, serie, emision, autorization, total, state, serie_retention, state_retention, vt.code')
+            ->with(['contact:id,name'])
             ->join('voucher_types AS vt', 'vt.id', 'voucher_type_id')
+            ->when($filters['search'] ?? null, function ($q, $s) {
+                $hasLetters = (bool) preg_match('/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/u', $s);
+                $isOnlyDigits = ctype_digit($s);
+                $len = strlen($s);
+
+                if ($hasLetters) {
+                    $q->join('contacts AS sc', 'sc.id', '=', 'orders.contact_id')
+                        ->where('sc.name', 'ilike', "%{$s}%");
+                } elseif ($isOnlyDigits && $len === 49) {
+                    $q->where('orders.autorization', $s);
+                } elseif ($isOnlyDigits && $len >= 5) {
+                    $q->where(function ($q) use ($s) {
+                        $q->where('orders.serie', 'ilike', "%{$s}%")
+                            ->orWhere('orders.autorization', 'ilike', "%{$s}%");
+                    });
+                } else {
+                    $q->where('orders.serie', 'ilike', "%{$s}%");
+                }
+            })
+            ->when($filters['period'] ?? null, function ($q, $p) {
+                $q->whereYear('emision', substr($p, 0, 4))
+                    ->whereMonth('emision', substr($p, 5, 2));
+            })
+            ->when($filters['voucher_type'] ?? null, fn ($q, $v) => $q->where('vt.code', $v))
             ->orderByDesc('emision')
-            ->paginate(25);
+            ->paginate(25)
+            ->withQueryString();
 
         return Inertia::render('Tenant/Orders/Index', [
             'orders' => $orders,
-
-            'retentions' => Retention::orderBy('code')
-                ->get([
-                    'id',
-                    'code',
-                    'type',
-                    'description',
-                    'percentage'
-                ]),
+            'filters' => $filters,
         ]);
     }
 
@@ -77,7 +80,7 @@ class OrderController extends Controller
         return Inertia::render('Tenant/Orders/Create', [
             'voucherTypes' => $voucherTypes,
 
-            'identificationTypes' => IdentificationType::get()
+            'identificationTypes' => IdentificationType::get(),
         ]);
     }
 
@@ -96,6 +99,11 @@ class OrderController extends Controller
                 'success',
                 'Venta registrada correctamente.'
             );
+    }
+
+    public function show(Order $order): JsonResponse
+    {
+        return response()->json($order->load(['contact:id,name', 'retentionItems.retention']));
     }
 
     public function edit(Order $order): Response
@@ -172,7 +180,7 @@ class OrderController extends Controller
             ) {
 
                 return redirect()
-                    ->route('tenant.shops.index')
+                    ->route('tenant.orders.index')
                     ->with(
                         'error',
                         'No se pudo abrir el archivo ZIP.'
@@ -270,6 +278,47 @@ class OrderController extends Controller
             );
     }
 
+    public function export(Request $request): BinaryFileResponse
+    {
+        $filters = $request->only(['search', 'period', 'voucher_type']);
+        $allColumns = array_keys(OrdersExport::$availableColumns);
+        $columns = $request->has('columns')
+            ? array_intersect((array) $request->get('columns'), $allColumns)
+            : $allColumns;
+
+        return Excel::download(new OrdersExport($this->filteredOrdersQuery($filters), array_values($columns)), 'ventas.xlsx');
+    }
+
+    /** @param array<string, string> $filters */
+    private function filteredOrdersQuery(array $filters): Builder
+    {
+        return Order::join('voucher_types AS vt', 'vt.id', 'voucher_type_id')
+            ->when($filters['search'] ?? null, function ($q, $s) {
+                $hasLetters = (bool) preg_match('/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/u', $s);
+                $isOnlyDigits = ctype_digit($s);
+                $len = strlen($s);
+
+                if ($hasLetters) {
+                    $q->join('contacts AS sc', 'sc.id', '=', 'orders.contact_id')
+                        ->where('sc.name', 'ilike', "%{$s}%");
+                } elseif ($isOnlyDigits && $len === 49) {
+                    $q->where('orders.autorization', $s);
+                } elseif ($isOnlyDigits && $len >= 5) {
+                    $q->where(function ($q) use ($s) {
+                        $q->where('orders.serie', 'ilike', "%{$s}%")
+                            ->orWhere('orders.autorization', 'ilike', "%{$s}%");
+                    });
+                } else {
+                    $q->where('orders.serie', 'ilike', "%{$s}%");
+                }
+            })
+            ->when($filters['period'] ?? null, function ($q, $p) {
+                $q->whereYear('emision', substr($p, 0, 4))
+                    ->whereMonth('emision', substr($p, 5, 2));
+            })
+            ->when($filters['voucher_type'] ?? null, fn ($q, $v) => $q->where('vt.code', $v));
+    }
+
     public function storeRetention(
         Request $request,
         Order $order
@@ -279,63 +328,59 @@ class OrderController extends Controller
             'serie_retention' => [
                 'required',
                 'string',
-                'max:17'
+                'max:17',
             ],
 
             'date_retention' => [
                 'required',
-                'date'
+                'date',
             ],
 
             'autorization_retention' => [
                 'required',
                 'string',
-                'max:49'
+                'max:49',
             ],
 
             'items' => [
                 'required',
                 'array',
-                'min:1'
+                'min:1',
             ],
 
             'items.*.retention_id' => [
                 'required',
                 'integer',
-                'exists:retentions,id'
+                'exists:retentions,id',
             ],
 
             'items.*.base' => [
                 'required',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'items.*.percentage' => [
                 'required',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'items.*.value' => [
                 'required',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
         ]);
 
         $order->update([
-            'serie_retention' =>
-            $validated['serie_retention'],
+            'serie_retention' => $validated['serie_retention'],
 
-            'date_retention' =>
-            $validated['date_retention'],
+            'date_retention' => $validated['date_retention'],
 
-            'autorization_retention' =>
-            $validated['autorization_retention'],
+            'autorization_retention' => $validated['autorization_retention'],
 
-            'state_retention' =>
-            'AUTORIZADO',
+            'state_retention' => 'AUTORIZADO',
         ]);
 
         $order->retentionItems()->delete();

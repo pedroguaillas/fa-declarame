@@ -86,15 +86,19 @@ class ShopImportService
             }
 
             // Validate that this document was issued TO this company
-            if ($sriData !== null) {
-                $buyerId = $sriData['identificacion_comprador'];
-                $cedula = substr($companyRuc, 0, 10);
+            if ($sriData === null) {
+                $skipped++;
 
-                if ($buyerId !== $companyRuc && $buyerId !== $cedula) {
-                    $skipped++;
+                continue;
+            }
 
-                    continue;
-                }
+            $buyerId = $sriData['identificacion_comprador'];
+            $cedula = substr($companyRuc, 0, 10);
+
+            if ($buyerId !== $companyRuc && $buyerId !== $cedula) {
+                $skipped++;
+
+                continue;
             }
 
             $contact = Contact::firstOrCreate(

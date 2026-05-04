@@ -101,7 +101,7 @@ function visibleActions(item: T): ActionDef<T>[] {
                             </TableHead>
                             <TableHead
                                 v-if="actions?.length"
-                                class="bg-muted sticky right-0 z-10 w-10 text-center"
+                                class="bg-muted sticky right-0 z-10 w-10 text-right"
                             >
                                 Acciones
                             </TableHead>
@@ -216,7 +216,7 @@ function visibleActions(item: T): ActionDef<T>[] {
                             <!-- Acciones -->
                             <TableCell
                                 v-if="actions?.length"
-                                class="bg-card sticky right-0 z-10 w-10 text-center"
+                                class="bg-card sticky right-0 z-10 w-10 text-right"
                                 @click.stop
                             >
                                 <!-- Si todas las acciones visibles son tipo check, mostrarlas inline -->
@@ -230,11 +230,11 @@ function visibleActions(item: T): ActionDef<T>[] {
                                     "
                                 >
                                     <div
-                                        class="flex items-center justify-center gap-1"
+                                        class="flex items-center justify-end gap-1"
                                     >
                                         <TooltipProvider>
                                             <div
-                                                class="flex items-center justify-center gap-1"
+                                                class="flex items-center justify-end gap-1"
                                             >
                                                 <Tooltip
                                                     v-for="action in visibleActions(

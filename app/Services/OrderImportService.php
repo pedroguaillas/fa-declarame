@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Tenant\Contact;
-use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
@@ -23,7 +22,7 @@ class OrderImportService
     ) {}
 
     /**
-     * @return array{imported: int, skipped: int}
+     * @return array{imported: int, skipped: int, errors: int}
      */
     public function import(string $content, int $companyId, string $companyRuc): array
     {
@@ -34,6 +33,7 @@ class OrderImportService
         $lines = preg_split('/\r?\n/', $content);
         $imported = 0;
         $skipped = 0;
+        $errors = 0;
         $voucherTypeId = null;
 
         foreach (array_slice($lines, 1) as $line) {
@@ -79,6 +79,7 @@ class OrderImportService
                 $sriData = $this->xmlParser->parse($autorizacion);
             }
 
+            $voucherTypeId ??= VoucherType::where('code', substr($claveAcceso, 8, 2))->value('id');
 
             if ($sriData !== null) {
                 $contact = Contact::firstOrCreate(
@@ -89,8 +90,6 @@ class OrderImportService
                         'provider_type' => strlen($sriData['identificacion_comprador']) === 13 && in_array($sriData['identificacion_comprador'][2], ['6', '9']) ? '02' : '01',
                     ],
                 );
-
-                $voucherTypeId ??= VoucherType::where('code', substr($claveAcceso, 8, 2))->value('id');
 
                 Order::create([
                     'company_id' => $companyId,
@@ -128,7 +127,7 @@ class OrderImportService
                 Order::create([
                     'company_id' => $companyId,
                     'contact_id' => $consumidorFinal->id,
-                    'voucher_type_id' => $voucherType->id,
+                    'voucher_type_id' => $voucherTypeId,
                     'emision' => Carbon::createFromFormat('d/m/Y H:i:s', trim($fechaEmision))->format('Y-m-d'),
                     'autorization' => $claveAcceso,
                     'autorized_at' => Carbon::createFromFormat('d/m/Y H:i:s', trim($fechaAutorizacion))->format('Y-m-d H:i:s'),
@@ -142,6 +141,6 @@ class OrderImportService
             $imported++;
         }
 
-        return ['imported' => $imported, 'skipped' => $skipped];
+        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
     }
 }

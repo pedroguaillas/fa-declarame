@@ -3,6 +3,9 @@ import {
     Users,
     ShieldCheck,
     CreditCard,
+    Sheet,
+    LucideSheet,
+    Book,
     Settings,
     Building2,
     ShoppingCart,
@@ -93,16 +96,43 @@ export function useNavigation(user: User) {
         {
             title: "Plan de cuentas",
             url: route("tenant.accounts.index"),
-            icon: ReceiptIndianRupee,
+            icon: Book,
         },
         {
-            title: "Configuración",
+            title: "Reportes Compras",
             url: "#",
-            icon: Settings,
+            icon: Sheet,
             items: [
                 {
-                    title: "Mi perfil",
-                    url: route("tenant.profile.edit"),
+                    title: "Mayor analítico",
+                    url: route("tenant.reports.shops-by-account"),
+                },
+                {
+                    title: "Por tipo de comprobante",
+                    url: route("tenant.reports.shops-by-voucher-type"),
+                },
+                {
+                    title: "Por proveedor",
+                    url: route("tenant.reports.shops-by-provider"),
+                },
+                {
+                    title: "Retenciones",
+                    url: route("tenant.reports.shops-by-retention"),
+                },
+            ],
+        },
+        {
+            title: "Reportes Ventas",
+            url: "#",
+            icon: LucideSheet,
+            items: [
+                {
+                    title: "Por tipo de comprobante",
+                    url: route("tenant.reports.orders-by-voucher-type"),
+                },
+                {
+                    title: "Por cliente",
+                    url: route("tenant.reports.orders-by-client"),
                 },
             ],
         },

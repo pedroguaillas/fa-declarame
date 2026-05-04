@@ -2,14 +2,16 @@
 
 namespace App\Exports;
 
-use App\Models\Tenant\Shop;
+use App\Models\Tenant\Order;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ShopsExport implements FromCollection, WithHeadings, WithMapping
+class OrdersExport implements FromCollection, WithHeadings, WithMapping, WithStyles
 {
     /** @var array<int, string> */
     private array $columns;
@@ -22,24 +24,21 @@ class ShopsExport implements FromCollection, WithHeadings, WithMapping
         'voucher_type' => 'Tipo Comprobante',
         'serie' => 'Serie',
         'contact_identification' => 'RUC / Cédula',
-        'contact_name' => 'Proveedor',
+        'contact_name' => 'Cliente',
         'autorization' => 'Autorización',
         'sub_total' => 'Sub Total',
         'no_iva' => 'No IVA',
         'base0' => 'Base 0%',
         'base5' => 'Base 5%',
-        'base8' => 'Base 8%',
         'base12' => 'Base 12%',
         'base15' => 'Base 15%',
         'iva5' => 'IVA 5%',
-        'iva8' => 'IVA 8%',
         'iva12' => 'IVA 12%',
         'iva15' => 'IVA 15%',
         'discount' => 'Descuento',
         'ice' => 'ICE',
         'total' => 'Total',
         'state' => 'Estado',
-        'account' => 'Cuenta Contable',
         'serie_retention' => 'Serie Retención',
         'date_retention' => 'Fecha Retención',
         'state_retention' => 'Estado Retención',
@@ -56,8 +55,8 @@ class ShopsExport implements FromCollection, WithHeadings, WithMapping
     public function collection(): Collection
     {
         return $this->query
-            ->with(['contact:id,identification,name', 'account:id,code,name', 'voucherType:id,description'])
-            ->select('shops.*')
+            ->with(['contact:id,identification,name', 'voucherType:id,description'])
+            ->select('orders.*')
             ->orderBy('emision')
             ->get();
     }
@@ -72,25 +71,31 @@ class ShopsExport implements FromCollection, WithHeadings, WithMapping
     }
 
     /** @return array<int, mixed> */
-    public function map($shop): array
+    public function map($order): array
     {
-        /** @var Shop $shop */
+        /** @var Order $order */
         $row = [];
 
         foreach ($this->columns as $col) {
             $row[] = match ($col) {
-                'emision' => $shop->emision?->format('d-m-Y') ?? '',
-                'date_retention' => $shop->date_retention?->format('d-m-Y') ?? '',
-                'voucher_type' => $shop->voucherType?->description ?? '',
-                'contact_identification' => $shop->contact?->identification ?? '',
-                'contact_name' => $shop->contact?->name ?? '',
-                'account' => $shop->account
-                    ? "{$shop->account->code} – {$shop->account->name}"
-                    : '',
-                default => $shop->{$col} ?? '',
+                'emision' => $order->emision?->format('d-m-Y') ?? '',
+                'date_retention' => $order->date_retention?->format('d-m-Y') ?? '',
+                'voucher_type' => $order->voucherType?->description ?? '',
+                'serie' => ($order->initial ? "{$order->initial}-" : '').($order->serie ?? ''),
+                'contact_identification' => $order->contact?->identification ?? '',
+                'contact_name' => $order->contact?->name ?? '',
+                default => $order->{$col} ?? '',
             };
         }
 
         return $row;
+    }
+
+    /** @return array<int|string, mixed> */
+    public function styles(Worksheet $sheet): array
+    {
+        return [
+            1 => ['font' => ['bold' => true]],
+        ];
     }
 }

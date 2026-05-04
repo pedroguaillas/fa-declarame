@@ -13,6 +13,7 @@ use App\Http\Controllers\Tenant\DashboardController as TenantDashboardController
 use App\Http\Controllers\Tenant\EmployeeController;
 use App\Http\Controllers\Tenant\OrderController;
 use App\Http\Controllers\Tenant\ProfileController as TenantProfileController;
+use App\Http\Controllers\Tenant\ReportController;
 use App\Http\Controllers\Tenant\RetentionController;
 use App\Http\Controllers\Tenant\ShopController;
 use App\Http\Middleware\Tenant\RequireCompanyScope;
@@ -25,7 +26,35 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
 
     Route::middleware(RequireCompanyScope::class)->group(function () {
 
-        Route::get('orders/export-ats', [AtsController::class, 'export'])->name('tenant.orders.export-ats');
+        Route::get('reports/shops-by-account', [ReportController::class, 'shopsByAccount'])
+            ->name('tenant.reports.shops-by-account');
+        Route::get('reports/shops-by-account/export', [ReportController::class, 'exportShopsByAccount'])
+            ->name('tenant.reports.shops-by-account.export');
+        Route::get('reports/shops-by-voucher-type', [ReportController::class, 'shopsByVoucherType'])
+            ->name('tenant.reports.shops-by-voucher-type');
+        Route::get('reports/shops-by-voucher-type/export', [ReportController::class, 'exportShopsByVoucherType'])
+            ->name('tenant.reports.shops-by-voucher-type.export');
+        Route::get('reports/shops-by-provider', [ReportController::class, 'shopsByProvider'])
+            ->name('tenant.reports.shops-by-provider');
+        Route::get('reports/shops-by-provider/export', [ReportController::class, 'exportShopsByProvider'])
+            ->name('tenant.reports.shops-by-provider.export');
+        Route::get('reports/shops-by-retention', [ReportController::class, 'shopsByRetention'])
+            ->name('tenant.reports.shops-by-retention');
+        Route::get('reports/shops-by-retention/export', [ReportController::class, 'exportShopsByRetention'])
+            ->name('tenant.reports.shops-by-retention.export');
+
+        Route::get('reports/orders-by-voucher-type', [ReportController::class, 'ordersByVoucherType'])
+            ->name('tenant.reports.orders-by-voucher-type');
+        Route::get('reports/orders-by-voucher-type/export', [ReportController::class, 'exportOrdersByVoucherType'])
+            ->name('tenant.reports.orders-by-voucher-type.export');
+        Route::get('reports/orders-by-client', [ReportController::class, 'ordersByClient'])
+            ->name('tenant.reports.orders-by-client');
+        Route::get('reports/orders-by-client/export', [ReportController::class, 'exportOrdersByClient'])
+            ->name('tenant.reports.orders-by-client.export');
+
+        Route::get('export-ats', [AtsController::class, 'export'])->name('tenant.export-ats');
+        Route::get('orders/export', [OrderController::class, 'export'])->name('tenant.orders.export');
+        Route::get('orders/{order}', [OrderController::class, 'show'])->name('tenant.orders.show');
         Route::post('orders/import', [OrderController::class, 'import'])->name('tenant.orders.import');
         Route::post('orders/import-retentions', [OrderController::class, 'importRetentions'])->name('tenant.orders.import-retentions');
 
@@ -70,6 +99,9 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
 
     Route::get('/company-scope/select', [CompanyScopeController::class, 'select'])
         ->name('tenant.company-scope.select');
+
+    Route::get('/company-scope/search', [CompanyScopeController::class, 'search'])
+        ->name('tenant.company-scope.search');
 
     Route::post('/company-scope', [CompanyScopeController::class, 'store'])
         ->name('tenant.company-scope.store');

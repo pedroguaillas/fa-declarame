@@ -9,14 +9,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-interface ShopFilters {
+interface OrderFilters {
     search?: string;
     period?: string;
     voucher_type?: string;
-    retention?: string;
 }
 
-const props = defineProps<{ filters: ShopFilters }>();
+const props = defineProps<{ filters: OrderFilters }>();
 
 const open = ref(false);
 
@@ -25,24 +24,21 @@ const availableColumns: { key: string; label: string }[] = [
     { key: "voucher_type", label: "Tipo Comprobante" },
     { key: "serie", label: "Serie" },
     { key: "contact_identification", label: "RUC / Cédula" },
-    { key: "contact_name", label: "Proveedor" },
+    { key: "contact_name", label: "Cliente" },
     { key: "autorization", label: "Autorización" },
     { key: "sub_total", label: "Sub Total" },
     { key: "no_iva", label: "No IVA" },
     { key: "base0", label: "Base 0%" },
     { key: "base5", label: "Base 5%" },
-    { key: "base8", label: "Base 8%" },
     { key: "base12", label: "Base 12%" },
     { key: "base15", label: "Base 15%" },
     { key: "iva5", label: "IVA 5%" },
-    { key: "iva8", label: "IVA 8%" },
     { key: "iva12", label: "IVA 12%" },
     { key: "iva15", label: "IVA 15%" },
     { key: "discount", label: "Descuento" },
     { key: "ice", label: "ICE" },
     { key: "total", label: "Total" },
     { key: "state", label: "Estado" },
-    { key: "account", label: "Cuenta Contable" },
     { key: "serie_retention", label: "Serie Retención" },
     { key: "date_retention", label: "Fecha Retención" },
     { key: "state_retention", label: "Estado Retención" },
@@ -64,8 +60,7 @@ function download() {
     if (f.search) params.set("search", f.search);
     if (f.period) params.set("period", f.period);
     if (f.voucher_type) params.set("voucher_type", f.voucher_type);
-    if (f.retention) params.set("retention", f.retention);
-    window.location.href = route("tenant.shops.export") + "?" + params.toString();
+    window.location.href = route("tenant.orders.export") + "?" + params.toString();
 }
 
 defineExpose({ open: () => (open.value = true) });
@@ -75,7 +70,7 @@ defineExpose({ open: () => (open.value = true) });
     <Dialog v-model:open="open">
         <DialogContent class="max-w-md">
             <DialogHeader>
-                <DialogTitle>Descargar compras</DialogTitle>
+                <DialogTitle>Descargar ventas</DialogTitle>
             </DialogHeader>
 
             <div class="space-y-3 py-2">

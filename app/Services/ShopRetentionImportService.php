@@ -80,7 +80,7 @@ class ShopRetentionImportService
     /**
      * @return array{imported: int, skipped: int}
      */
-    private function processRetention(object $autorizacion): array
+    private function processRetention(object $autorizacion, string $companyRuc): array
     {
         $comprobanteXml = (string) $autorizacion->comprobante;
         $xml = new SimpleXMLElement($comprobanteXml);
@@ -98,6 +98,107 @@ class ShopRetentionImportService
             $autorizacionRetention = (string) $xml->infoTributaria->claveAcceso;
         }
 
+        $version = (string) ($xml->attributes()['version'] ?? '2.0.0');
+
+        if ($version === '1.0.0') {
+            return $this->processV1($xml, $autorizacion, $serieRetention, $dateRetention, $autorizacionRetention);
+        }
+
+        return $this->processV2($xml, $autorizacion, $serieRetention, $dateRetention, $autorizacionRetention);
+    }
+
+    /**
+     * Process v1.0.0: impuestos/impuesto — each item carries its own document reference.
+     * Groups items by numDocSustento so all retentions for the same document are applied together.
+     *
+     * @return array{imported: int, skipped: int}
+     */
+    private function processV1(
+        SimpleXMLElement $xml,
+        object $autorizacion,
+        string $serieRetention,
+        string $dateRetention,
+        string $autorizacionRetention,
+    ): array {
+        $docGroups = [];
+        foreach ($xml->impuestos->impuesto as $impuesto) {
+            $numDoc = trim((string) $impuesto->numDocSustento);
+            if (! isset($docGroups[$numDoc])) {
+                $docGroups[$numDoc] = [
+                    'impuestos' => [],
+                ];
+            }
+            $docGroups[$numDoc]['impuestos'][] = $impuesto;
+        }
+
+        $imported = 0;
+        $skipped = 0;
+
+        foreach ($docGroups as $numDoc => $group) {
+            $serie = substr($numDoc, 0, 3).'-'.substr($numDoc, 3, 3).'-'.substr($numDoc, 6);
+            $shop = Shop::where('serie', $serie)->first();
+
+            if (! $shop) {
+                $skipped++;
+
+                continue;
+            }
+
+            $items = [];
+            foreach ($group['impuestos'] as $impuesto) {
+                $codigoRetencion = trim((string) $impuesto->codigoRetencion);
+                $base = (float) $impuesto->baseImponible;
+                $percentage = (float) $impuesto->porcentajeRetener;
+                $value = (float) $impuesto->valorRetenido;
+                $retention = Retention::where('code', $codigoRetencion)->first();
+
+                if (! $retention) {
+                    continue;
+                }
+
+                $items[] = [
+                    'retention_id' => $retention->id,
+                    'base' => $base,
+                    'percentage' => $percentage,
+                    'value' => $value,
+                ];
+            }
+
+            if (empty($items)) {
+                $skipped++;
+
+                continue;
+            }
+
+            $shop->update([
+                'serie_retention' => $serieRetention,
+                'date_retention' => $dateRetention,
+                'autorization_retention' => $autorizacionRetention,
+                'state_retention' => 'AUTORIZADO',
+                'retention_at' => Carbon::parse((string) $autorizacion->fechaAutorizacion)->format('Y-m-d H:i:s'),
+            ]);
+
+            $shop->retentionItems()->delete();
+            $shop->retentionItems()->createMany($items);
+
+            $imported++;
+        }
+
+        return ['imported' => $imported, 'skipped' => $skipped];
+    }
+
+    /**
+     * Process v2.0.0: docsSustento/docSustento — each docSustento groups its retentions.
+     *
+     * @return array{imported: int, skipped: int}
+     */
+    private function processV2(
+        SimpleXMLElement $xml,
+        object $autorizacion,
+        string $serieRetention,
+        string $dateRetention,
+        string $autorizacionRetention,
+    ): array {
         $imported = 0;
         $skipped = 0;
 
@@ -105,18 +206,13 @@ class ShopRetentionImportService
             $numAutDocSustento = trim((string) $docSustento->numAutDocSustento);
             $identificacionSujetoRetenido = trim((string) $docSustento->identificacionSujetoRetenido);
 
-            $num = $docSustento->numDocSustento; // "002901000019695"
+            $num = (string) $docSustento->numDocSustento;
             $formated = substr($num, 0, 3).'-'.substr($num, 3, 3).'-'.substr($num, 6);
 
-            // Para determinar la compra real hay que tener las siguientes consideraciones:
-            // Primero que la compra pertenezca al contribuyente pero eso esta en el Scope
-            // Si tiene el numero de autorizacion en la retencion busca presisa
             $shop = Shop::where('autorization', $numAutDocSustento)
                 ->orWhere([
-                    // o la serie sea de la factura sea igual a numDocSustento formateado
                     'serie' => $formated,
-                    // y la identificacion del proveedor (contact) sea igual a $identificacionSujetoRetenido
-                    'contact_id' => Contact::where('identification', $identificacionSujetoRetenido)->value('id')
+                    'contact_id' => Contact::where('identification', $identificacionSujetoRetenido)->value('id'),
                 ])->first();
 
             if (! $shop) {
@@ -125,7 +221,6 @@ class ShopRetentionImportService
                 continue;
             }
 
-            // Build retention items from XML
             $items = [];
             foreach ($docSustento->retenciones->retencion as $retencion) {
                 $codigoRetencion = trim((string) $retencion->codigoRetencion);

@@ -25,8 +25,8 @@ import { Download, FileText, Pencil, Receipt, Trash2 } from "lucide-vue-next";
 interface ShopFilters {
     search: string;
     period: string;
-    state: string;
     retention: string;
+    voucher_type: string;
 }
 
 const props = defineProps<{
@@ -114,21 +114,13 @@ const columnsWithRetention: ColumnDef<Shop>[] = [
 const activeColumns = computed(() => (props.isActiveRetention ? columnsWithRetention : columns));
 
 const actions: ActionDef<Shop>[] = [
-    { event: "edit", label: "Editar", icon: Pencil },
-    {
-        event: "account",
-        label: "Cuenta contable",
-        icon: Receipt,
-        class: (item) =>
-            item.account_id ? "text-blue-600! hover:bg-blue-100!" : "bg-muted text-muted-foreground hover:bg-muted/80",
-    },
     ...(props.isActiveRetention
         ? [
               {
                   event: "retention",
                   label: "Retención",
                   icon: FileText,
-                  show: (item) => (item as any).code !== "02",
+                  show: (item) => (item as any).code !== "04",
                   class: (item) =>
                       item.serie_retention
                           ? "text-green-600! hover:bg-green-100!"
@@ -136,6 +128,14 @@ const actions: ActionDef<Shop>[] = [
               } as ActionDef<Shop>,
           ]
         : []),
+    {
+        event: "account",
+        label: "Cuenta contable",
+        icon: Receipt,
+        class: (item) =>
+            item.account_id ? "text-blue-600! hover:bg-blue-100!" : "bg-muted text-muted-foreground hover:bg-muted/80",
+    },
+    { event: "edit", label: "Editar", icon: Pencil },
     {
         event: "delete",
         label: "Eliminar",
@@ -185,7 +185,7 @@ function handleSelect(item: Shop) {
 function handlePageChange(page: number) {
     router.get(
         route("tenant.shops.index"),
-        { ...filters, page },
+        { ...props.filters, page },
         {
             preserveScroll: true,
         },
@@ -193,13 +193,14 @@ function handlePageChange(page: number) {
 }
 
 function confirmDelete() {
-    if (!deleteTarget.value) return;
+    const target = deleteTarget.value;
+    if (!target) return;
+    deleteTarget.value = null;
     deleteLoading.value = true;
-    router.delete(route("tenant.shops.destroy", { shop: deleteTarget.value.id }), {
+    router.delete(route("tenant.shops.destroy", { shop: target.id }), {
         preserveScroll: true,
         onFinish: () => {
             deleteLoading.value = false;
-            deleteTarget.value = null;
         },
     });
 }
@@ -331,11 +332,7 @@ watch(
             title="¿Eliminar compra?"
             :description="`Se eliminará la compra ${deleteTarget?.serie}. Esta acción no se puede deshacer.`"
             :loading="deleteLoading"
-            @update:open="
-                (v) => {
-                    if (!v) deleteTarget = null;
-                }
-            "
+            @update:open="(v) => { if (!v) deleteTarget.value = null; }"
             @confirm="confirmDelete"
             @cancel="deleteTarget = null"
         />

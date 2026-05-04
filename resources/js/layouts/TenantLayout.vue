@@ -17,7 +17,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 const page = usePage<PageProps>();
 const user = computed(() => page.props.auth.user);
 const currentCompany = computed(() => page.props.currentCompany);
-const companies = computed(() => page.props.companiesScope);
 </script>
 
 <template>
@@ -32,10 +31,7 @@ const companies = computed(() => page.props.companiesScope);
                         <SidebarTrigger class="-ml-1" />
                         <Separator orientation="vertical" class="mr-2 h-4" />
 
-                        <CompanySelector
-                            :current-company="currentCompany"
-                            :companies="companies"
-                        />
+                        <CompanySelector :current-company="currentCompany" />
                     </div>
 
                     <UserNav :user="user" />
