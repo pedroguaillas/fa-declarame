@@ -19,7 +19,7 @@ class OrderRetentionImportService
     ) {}
 
     /**
-     * @return array{imported: int, skipped: int, errors: int}
+     * @return array{imported: int, skipped: int, errors: int, failedKeys: array<string>}
      */
     public function import(string $content, string $companyRuc): array
     {
@@ -31,6 +31,7 @@ class OrderRetentionImportService
         $imported = 0;
         $skipped = 0;
         $errors = 0;
+        $failedKeys = [];
 
         foreach (array_slice($lines, 1) as $line) {
             $line = trim($line);
@@ -49,12 +50,14 @@ class OrderRetentionImportService
 
             if (strlen($claveAcceso) !== 49) {
                 $skipped++;
+                $failedKeys[] = $claveAcceso;
 
                 continue;
             }
 
             if (substr($claveAcceso, 8, 2) !== '07') {
                 $skipped++;
+                $failedKeys[] = $claveAcceso;
 
                 continue;
             }
@@ -63,6 +66,7 @@ class OrderRetentionImportService
 
             if ($autorizacion === null) {
                 $errors++;
+                $failedKeys[] = $claveAcceso;
 
                 continue;
             }
@@ -70,9 +74,13 @@ class OrderRetentionImportService
             $result = $this->processRetention($autorizacion, $companyRuc);
             $imported += $result['imported'];
             $skipped += $result['skipped'];
+
+            if ($result['imported'] === 0) {
+                $failedKeys[] = $claveAcceso;
+            }
         }
 
-        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
+        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors, 'failedKeys' => $failedKeys];
     }
 
     /**

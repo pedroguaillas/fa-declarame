@@ -13,6 +13,7 @@ class Shop extends BaseModel
         'voucher_type_id',
         'tax_support_id',
         'contact_id',
+        'supplier_type',
         'emision',
         'autorization',
         'autorized_at',
@@ -110,7 +111,7 @@ class Shop extends BaseModel
     public function voucherTypeModify()
     {
         return $this->belongsTo(
-            \App\Models\Tenant\VoucherType::class,
+            VoucherType::class,
             'voucher_type_modify_id'
         );
     }

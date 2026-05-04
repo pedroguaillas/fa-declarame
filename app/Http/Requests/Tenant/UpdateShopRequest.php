@@ -23,6 +23,7 @@ class UpdateShopRequest extends FormRequest
         return [
             'acount_id' => ['nullable', 'integer', 'exists:acounts,id'],
             'contact_id' => ['required', 'integer', 'exists:contacts,id'],
+            'supplier_type' => ['nullable', 'string', 'in:01,02,03'],
             'voucher_type_id' => ['required', 'integer'],
             'emision' => ['required', 'date'],
             'autorization' => ['required', 'string', 'max:49'],

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { router, useForm } from "@inertiajs/vue3";
-import { ref } from "vue";
+import { router, useForm, usePage } from "@inertiajs/vue3";
+import { ref, watch } from "vue";
 
 import ConfirmDialog from "@/components/Shared/ConfirmDialog.vue";
 import DataTableDesktop from "@/components/Shared/DataTableDesktop.vue";
@@ -150,6 +150,25 @@ function confirmDelete() {
         },
     });
 }
+
+// ─── Failed keys download ────────────────────────────────────────────────────
+
+const page = usePage<{ flash: { failedKeys?: string[] } }>();
+
+watch(
+    () => page.props.flash.failedKeys,
+    (keys) => {
+        if (!keys || keys.length === 0) return;
+        const blob = new Blob([keys.join("\n")], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "claves_no_importadas.txt";
+        a.click();
+        URL.revokeObjectURL(url);
+    },
+    { immediate: true },
+);
 
 // ─── Import ─────────────────────────────────────────────────────────────────
 

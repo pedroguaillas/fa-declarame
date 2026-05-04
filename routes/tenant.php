@@ -54,7 +54,6 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
 
         Route::get('export-ats', [AtsController::class, 'export'])->name('tenant.export-ats');
         Route::get('orders/export', [OrderController::class, 'export'])->name('tenant.orders.export');
-        Route::get('orders/{order}', [OrderController::class, 'show'])->name('tenant.orders.show');
         Route::post('orders/import', [OrderController::class, 'import'])->name('tenant.orders.import');
         Route::post('orders/import-retentions', [OrderController::class, 'importRetentions'])->name('tenant.orders.import-retentions');
 
@@ -69,6 +68,7 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
                 'destroy' => 'tenant.orders.destroy',
             ]);
 
+        Route::get('orders/{order}', [OrderController::class, 'show'])->name('tenant.orders.show');
         Route::post('orders/{order}/retention', [OrderController::class, 'storeRetention'])
             ->name('tenant.orders.retention.store');
 

@@ -191,6 +191,8 @@ class ShopController extends Controller
         $skipped = 0;
         $errors = 0;
 
+        $failedKeys = [];
+
         if ($uploaded->getClientOriginalExtension() === 'zip') {
             $zip = new \ZipArchive;
 
@@ -216,16 +218,27 @@ class ShopController extends Controller
                 $imported += $result['imported'];
                 $skipped += $result['skipped'];
                 $errors += $result['errors'];
+                $failedKeys = array_merge($failedKeys, $result['failedKeys']);
             }
 
             $zip->close();
         } else {
             $content = file_get_contents($uploaded->getRealPath());
-            ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors] = $service->import($content, $company->ruc);
+            $result = $service->import($content, $company->ruc);
+            $imported = $result['imported'];
+            $skipped = $result['skipped'];
+            $errors = $result['errors'];
+            $failedKeys = $result['failedKeys'];
         }
 
-        return redirect()->route('tenant.shops.index')
-            ->with('success', "Retenciones importadas: {$imported} procesadas, {$skipped} omitidas, {$errors} errores.");
+        $redirect = redirect()->route('tenant.shops.index')
+            ->with($skipped > 0 || $errors > 0 ? 'error' : 'success', "Retenciones importadas: {$imported} procesadas, {$skipped} omitidas, {$errors} errores.");
+
+        if (! empty($failedKeys)) {
+            $redirect = $redirect->with('failed_keys', $failedKeys);
+        }
+
+        return $redirect;
     }
 
     public function export(Request $request): BinaryFileResponse

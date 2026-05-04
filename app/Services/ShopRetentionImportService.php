@@ -15,7 +15,7 @@ class ShopRetentionImportService
     ) {}
 
     /**
-     * @return array{imported: int, skipped: int, errors: int}
+     * @return array{imported: int, skipped: int, errors: int, failedKeys: array<string>}
      */
     public function import(string $content, string $companyRuc): array
     {
@@ -27,6 +27,7 @@ class ShopRetentionImportService
         $imported = 0;
         $skipped = 0;
         $errors = 0;
+        $failedKeys = [];
 
         foreach (array_slice($lines, 1) as $line) {
             $line = trim($line);
@@ -45,18 +46,21 @@ class ShopRetentionImportService
 
             if (strlen($claveAcceso) !== 49) {
                 $skipped++;
+                $failedKeys[] = $claveAcceso;
 
                 continue;
             }
 
             if (substr($claveAcceso, 8, 2) !== '07') {
                 $skipped++;
+                $failedKeys[] = $claveAcceso;
 
                 continue;
             }
 
             if (substr($claveAcceso, 10, 13) !== $companyRuc) {
                 $skipped++;
+                $failedKeys[] = $claveAcceso;
 
                 continue;
             }
@@ -65,6 +69,7 @@ class ShopRetentionImportService
 
             if ($autorizacion === null) {
                 $errors++;
+                $failedKeys[] = $claveAcceso;
 
                 continue;
             }
@@ -72,9 +77,13 @@ class ShopRetentionImportService
             $result = $this->processRetention($autorizacion, $companyRuc);
             $imported += $result['imported'];
             $skipped += $result['skipped'];
+
+            if ($result['imported'] === 0) {
+                $failedKeys[] = $claveAcceso;
+            }
         }
 
-        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
+        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors, 'failedKeys' => $failedKeys];
     }
 
     /**

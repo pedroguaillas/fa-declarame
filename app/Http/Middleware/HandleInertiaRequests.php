@@ -39,6 +39,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
+                'failedKeys' => $request->session()->get('failed_keys', []),
             ],
             'tenant' => currentTenant() ? [
                 'id' => currentTenant()->id,

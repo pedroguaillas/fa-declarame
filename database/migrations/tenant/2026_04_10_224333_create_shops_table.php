@@ -54,6 +54,7 @@ return new class extends Migration
             $table->string('aut_modify', 49)->nullable();
             //
             $table->timestamp('retention_at')->nullable();
+            $table->json('data_additional')->nullable();
             $table->timestamps();
         });
     }

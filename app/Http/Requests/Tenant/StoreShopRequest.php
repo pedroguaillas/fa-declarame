@@ -22,175 +22,181 @@ class StoreShopRequest extends FormRequest
             'account_id' => [
                 'nullable',
                 'integer',
-                'exists:accounts,id'
+                'exists:accounts,id',
             ],
 
             'contact_id' => [
                 'required',
                 'integer',
-                'exists:contacts,id'
+                'exists:contacts,id',
+            ],
+
+            'supplier_type' => [
+                'nullable',
+                'string',
+                'in:01,02,03',
             ],
 
             'voucher_type_id' => [
                 'required',
                 'integer',
-                'exists:voucher_types,id'
+                'exists:voucher_types,id',
             ],
 
             'tax_support_id' => [
                 'nullable',
                 'integer',
-                'exists:tax_supports,id'
+                'exists:tax_supports,id',
             ],
 
             'emision' => [
                 'required',
-                'date'
+                'date',
             ],
 
             'autorization' => [
                 'required',
                 'string',
-                'max:49'
+                'max:49',
             ],
 
             'autorized_at' => [
                 'nullable',
-                'date'
+                'date',
             ],
 
             'serie' => [
                 'required',
                 'string',
-                'max:17'
+                'max:17',
             ],
 
             'sub_total' => [
                 'required',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'no_iva' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'exempt' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'base0' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'base5' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'base8' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'base12' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'base15' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'iva5' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'iva8' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'iva12' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'iva15' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'aditional_discount' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'discount' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'ice' => [
                 'nullable',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'total' => [
                 'required',
                 'numeric',
-                'min:0'
+                'min:0',
             ],
 
             'state' => [
                 'required',
-                'string'
+                'string',
             ],
 
             'serie_retention' => [
                 'nullable',
                 'string',
-                'max:17'
+                'max:17',
             ],
 
             'date_retention' => [
                 'nullable',
-                'date'
+                'date',
             ],
 
             'state_retention' => [
                 'nullable',
-                'string'
+                'string',
             ],
 
             'autorization_retention' => [
                 'nullable',
                 'string',
-                'max:49'
+                'max:49',
             ],
 
             'retention_at' => [
                 'nullable',
-                'date'
+                'date',
             ],
 
             // DOCUMENTO MODIFICADO
@@ -198,31 +204,31 @@ class StoreShopRequest extends FormRequest
             'voucher_type_modify_id' => [
                 'nullable',
                 'integer',
-                'exists:voucher_types,id'
+                'exists:voucher_types,id',
             ],
 
             'est_modify' => [
                 'nullable',
                 'string',
-                'max:3'
+                'max:3',
             ],
 
             'poi_modify' => [
                 'nullable',
                 'string',
-                'max:3'
+                'max:3',
             ],
 
             'sec_modify' => [
                 'nullable',
                 'string',
-                'max:9'
+                'max:9',
             ],
 
             'aut_modify' => [
                 'nullable',
                 'string',
-                'max:49'
+                'max:49',
             ],
         ];
     }

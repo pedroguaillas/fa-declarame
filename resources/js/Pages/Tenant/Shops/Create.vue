@@ -17,6 +17,8 @@ const form = useForm({
 
     contact_id: null as number | null,
 
+    supplier_type: "" as string,
+
     voucher_type_id: "" as number | string,
 
     type_identification: "" as string | undefined,

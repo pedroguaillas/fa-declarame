@@ -28,6 +28,7 @@ function toInputDatetime(d: string): string {
 const form = useForm({
     acount_id: props.shop.acount_id,
     contact_id: props.shop.contact_id,
+    supplier_type: props.shop.supplier_type ?? "",
     voucher_type_id: props.shop.voucher_type_id,
     emision: props.shop.emision ? toInputDate(props.shop.emision) : "",
     autorization: props.shop.autorization,

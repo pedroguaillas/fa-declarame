@@ -16,9 +16,7 @@ const props = defineProps<{
     contributorTypes: ContributorType[];
 }>();
 
-const contributorTypeOptions = computed(() =>
-    props.contributorTypes.map((c) => ({ id: c.id, label: c.description })),
-);
+const contributorTypeOptions = computed(() => props.contributorTypes.map((c) => ({ id: c.id, label: c.description })));
 
 const typeDeclarationOptions = [
     { id: "mensual", label: "Mensual" },
@@ -60,8 +58,7 @@ watch(
             );
 
             if (!res.ok) {
-                resolveError.value =
-                    "No se encontró información para este RUC.";
+                resolveError.value = "No se encontró información para este RUC.";
                 return;
             }
 
@@ -71,20 +68,13 @@ watch(
             if (data.matrix_address) form.matrix_address = data.matrix_address;
             if (data.phone) form.phone = data.phone;
             if (data.email) form.email = data.email;
-            if (data.contributor_type_id)
-                form.contributor_type_id = data.contributor_type_id;
-            if (data.type_declaration)
-                form.type_declaration = data.type_declaration;
-            if (data.special_contribution)
-                form.special_contribution = data.special_contribution;
-            if (data.accounting !== undefined)
-                form.accounting = data.accounting;
-            if (data.retention_agent)
-                form.retention_agent = data.retention_agent;
-            if (data.phantom_taxpayer !== undefined)
-                form.phantom_taxpayer = data.phantom_taxpayer;
-            if (data.no_transactions !== undefined)
-                form.no_transactions = data.no_transactions;
+            if (data.contributor_type_id) form.contributor_type_id = data.contributor_type_id;
+            if (data.type_declaration) form.type_declaration = data.type_declaration;
+            if (data.special_contribution) form.special_contribution = data.special_contribution;
+            if (data.accounting !== undefined) form.accounting = data.accounting;
+            if (data.retention_agent) form.retention_agent = data.retention_agent;
+            if (data.phantom_taxpayer !== undefined) form.phantom_taxpayer = data.phantom_taxpayer;
+            if (data.no_transactions !== undefined) form.no_transactions = data.no_transactions;
         } catch (e) {
             console.log(e);
 
@@ -102,19 +92,14 @@ function submit() {
 
 <template>
     <TenantLayout>
-        <HeaderForm
-            title="Nuevo Contribuyente"
-            :link-href="route('tenant.companies.index')"
-        />
+        <HeaderForm title="Nuevo Contribuyente" :link-href="route('tenant.companies.index')" />
 
         <!-- Nota campos requeridos -->
         <RequiredFields />
 
         <div class="border-border bg-card overflow-hidden rounded-lg border">
             <form class="p-4" @submit.prevent="submit">
-                <div
-                    class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                >
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     <!-- RUC -->
                     <FormField
                         id="ruc"
@@ -185,6 +170,7 @@ function submit() {
                         :options="typeDeclarationOptions"
                         :error="form.errors.type_declaration"
                         placeholder="Seleccionar período"
+                        required
                     />
 
                     <!-- Contribuyente especial -->
@@ -221,17 +207,9 @@ function submit() {
 
                 <!-- Características -->
                 <div class="border-border mt-6 border-t pt-6">
-                    <h2 class="text-foreground text-sm font-medium">
-                        Características
-                    </h2>
-                    <div
-                        class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-                    >
-                        <FormSwitch
-                            label="Contabilidad"
-                            description="Lleva contabilidad"
-                            v-model="form.accounting"
-                        />
+                    <h2 class="text-foreground text-sm font-medium">Características</h2>
+                    <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <FormSwitch label="Contabilidad" description="Lleva contabilidad" v-model="form.accounting" />
                         <FormSwitch
                             label="Contribuyente fantasma"
                             description="Contribuyente fantasma"
@@ -248,15 +226,10 @@ function submit() {
                 <!-- Acciones -->
                 <div class="mt-6 flex items-center justify-end gap-3">
                     <Button variant="outline" as-child>
-                        <Link :href="route('tenant.companies.index')"
-                            >Cancelar</Link
-                        >
+                        <Link :href="route('tenant.companies.index')">Cancelar</Link>
                     </Button>
                     <Button type="submit" :disabled="form.processing">
-                        <Loader2
-                            v-if="form.processing"
-                            class="mr-1.5 size-4 animate-spin"
-                        />
+                        <Loader2 v-if="form.processing" class="mr-1.5 size-4 animate-spin" />
                         {{ form.processing ? "Guardando..." : "Guardar" }}
                     </Button>
                 </div>

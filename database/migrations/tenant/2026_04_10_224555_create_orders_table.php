@@ -42,6 +42,7 @@ return new class extends Migration
             $table->string('state_retention')->nullable();
             $table->string('autorization_retention', 49)->nullable();
             $table->timestamp('retention_at')->nullable();
+            $table->json('data_additional')->nullable();
             $table->timestamps();
         });
     }

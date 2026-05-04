@@ -28,6 +28,7 @@ return new class extends Migration
             $table->foreignId('contributor_type_id')->nullable();
             $table->string('phone', 20)->nullable();
             $table->string('email', 50)->nullable();
+            $table->json('data_additional')->nullable();
             $table->timestamps();
         });
     }

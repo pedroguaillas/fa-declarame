@@ -150,10 +150,8 @@ class OrderController extends Controller
             );
     }
 
-    public function import(
-        Request $request,
-        OrderImportService $service
-    ): RedirectResponse {
+    public function import(Request $request, OrderImportService $service): RedirectResponse
+    {
 
         $request->validate([
             'file' => ['required', 'file', 'max:5120'],
@@ -167,38 +165,20 @@ class OrderController extends Controller
         $skipped = 0;
         $errors = 0;
 
-        if (
-            $uploaded->getClientOriginalExtension()
-            === 'zip'
-        ) {
+        if ($uploaded->getClientOriginalExtension() === 'zip') {
 
             $zip = new \ZipArchive;
 
-            if (
-                $zip->open($uploaded->getRealPath())
-                !== true
-            ) {
+            if ($zip->open($uploaded->getRealPath()) !== true) {
 
-                return redirect()
-                    ->route('tenant.orders.index')
-                    ->with(
-                        'error',
-                        'No se pudo abrir el archivo ZIP.'
-                    );
+                return redirect()->route('tenant.orders.index')->with('error', 'No se pudo abrir el archivo ZIP.');
             }
 
             for ($i = 0; $i < $zip->numFiles; $i++) {
 
                 $name = $zip->getNameIndex($i);
 
-                if (
-                    strtolower(
-                        pathinfo(
-                            $name,
-                            PATHINFO_EXTENSION
-                        )
-                    ) !== 'txt'
-                ) {
+                if (strtolower(pathinfo($name, PATHINFO_EXTENSION)) !== 'txt') {
                     continue;
                 }
 
@@ -208,48 +188,26 @@ class OrderController extends Controller
                     continue;
                 }
 
-                $result = $service->import(
-                    $content,
-                    $company->id,
-                    $company->ruc
-                );
+                $result = $service->import($content, $company->id, $company->ruc);
 
                 $imported += $result['imported'];
-
                 $skipped += $result['skipped'];
-
                 $errors += $result['errors'];
             }
 
             $zip->close();
         } else {
 
-            $content = file_get_contents(
-                $request->file('file')->getRealPath()
-            );
+            $content = file_get_contents($request->file('file')->getRealPath());
 
-            [
-                'imported' => $imported,
-                'skipped' => $skipped
-            ] = $service->import(
-                $content,
-                $company->id,
-                $company->ruc
-            );
+            ['imported' => $imported, 'skipped' => $skipped] = $service->import($content, $company->id, $company->ruc);
         }
 
-        return redirect()
-            ->route('tenant.orders.index')
-            ->with(
-                'success',
-                "Importación completada: {$imported} ventas importadas, {$skipped} omitidas."
-            );
+        return redirect()->route('tenant.orders.index')->with($skipped > 0 ? 'error' : 'success', "Importación completada: {$imported} ventas importadas, {$skipped} omitidas.");
     }
 
-    public function importRetentions(
-        Request $request,
-        OrderRetentionImportService $service
-    ): RedirectResponse {
+    public function importRetentions(Request $request, OrderRetentionImportService $service): RedirectResponse
+    {
 
         $request->validate([
             'file' => ['required', 'file', 'max:5120'],
@@ -261,21 +219,16 @@ class OrderController extends Controller
             $request->file('file')->getRealPath()
         );
 
-        [
-            'imported' => $imported,
-            'skipped' => $skipped,
-            'errors' => $errors
-        ] = $service->import(
-            $content,
-            $company->ruc
-        );
+        ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors, 'failedKeys' => $failedKeys] = $service->import($content, $company->ruc);
 
-        return redirect()
-            ->route('tenant.orders.index')
-            ->with(
-                'success',
-                "Retenciones importadas: {$imported} procesadas, {$skipped} omitidas, {$errors} errores."
-            );
+        $redirect = redirect()->route('tenant.orders.index')
+            ->with($skipped > 0 || $errors > 0 ? 'error' : 'success', "Retenciones importadas: {$imported} procesadas, {$skipped} omitidas, {$errors} errores.");
+
+        if (! empty($failedKeys)) {
+            $redirect = $redirect->with('failed_keys', $failedKeys);
+        }
+
+        return $redirect;
     }
 
     public function export(Request $request): BinaryFileResponse
@@ -319,74 +272,30 @@ class OrderController extends Controller
             ->when($filters['voucher_type'] ?? null, fn ($q, $v) => $q->where('vt.code', $v));
     }
 
-    public function storeRetention(
-        Request $request,
-        Order $order
-    ): RedirectResponse {
+    public function storeRetention(Request $request, Order $order): RedirectResponse
+    {
 
         $validated = $request->validate([
-            'serie_retention' => [
-                'required',
-                'string',
-                'max:17',
-            ],
-
-            'date_retention' => [
-                'required',
-                'date',
-            ],
-
-            'autorization_retention' => [
-                'required',
-                'string',
-                'max:49',
-            ],
-
-            'items' => [
-                'required',
-                'array',
-                'min:1',
-            ],
-
-            'items.*.retention_id' => [
-                'required',
-                'integer',
-                'exists:retentions,id',
-            ],
-
-            'items.*.base' => [
-                'required',
-                'numeric',
-                'min:0',
-            ],
-
-            'items.*.percentage' => [
-                'required',
-                'numeric',
-                'min:0',
-            ],
-
-            'items.*.value' => [
-                'required',
-                'numeric',
-                'min:0',
-            ],
+            'serie_retention' => ['required', 'string', 'max:17'],
+            'date_retention' => ['required', 'date'],
+            'autorization_retention' => ['required', 'string', 'max:49'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.retention_id' => ['required', 'integer', 'exists:retentions,id'],
+            'items.*.base' => ['required', 'numeric', 'min:0'],
+            'items.*.percentage' => ['required', 'numeric', 'min:0'],
+            'items.*.value' => ['required', 'numeric', 'min:0'],
         ]);
 
         $order->update([
             'serie_retention' => $validated['serie_retention'],
-
             'date_retention' => $validated['date_retention'],
-
             'autorization_retention' => $validated['autorization_retention'],
-
             'state_retention' => 'AUTORIZADO',
         ]);
 
         $order->retentionItems()->delete();
 
-        $order->retentionItems()
-            ->createMany($validated['items']);
+        $order->retentionItems()->createMany($validated['items']);
 
         return redirect()
             ->route('tenant.orders.index')

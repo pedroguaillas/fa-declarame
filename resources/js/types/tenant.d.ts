@@ -74,6 +74,7 @@ export interface Shop {
     id: number;
     account_id: number | null;
     contact_id: number;
+    supplier_type: string | null;
     contact: { id: number; identification: string; name: string } | null;
     voucher_type_id: number;
     serie: string;
