@@ -63,7 +63,7 @@ class SriXmlParserService
         }
 
         libxml_use_internal_errors(true);
-        $xml = simplexml_load_string($xmlString);
+        $xml = simplexml_load_string($xmlString, 'SimpleXMLElement', LIBXML_NONET);
         libxml_clear_errors();
 
         if ($xml === false) {

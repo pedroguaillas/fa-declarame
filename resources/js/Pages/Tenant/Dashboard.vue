@@ -91,12 +91,12 @@ function downloadAts() {
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head title="Panel de control — Resumen tributario" />
 
     <TenantLayout>
         <!-- Header -->
         <div class="mb-6 flex items-center justify-between">
-            <h1 class="text-foreground text-2xl font-semibold">Dashboard</h1>
+            <h1 class="text-foreground text-2xl font-semibold">Panel de control</h1>
 
             <div class="flex items-center gap-3">
                 <!-- ATS download button -->
@@ -109,33 +109,33 @@ function downloadAts() {
                     Descargar ATS
                 </button>
 
-            <!-- Period toggle -->
-            <div class="border-border flex rounded-lg border p-0.5">
-                <button
-                    type="button"
-                    class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors"
-                    :class="
-                        activePeriod === 'month'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:text-foreground'
-                    "
-                    @click="activePeriod = 'month'"
-                >
-                    {{ formatPeriodLabel(monthLabel) }}
-                </button>
-                <button
-                    type="button"
-                    class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors"
-                    :class="
-                        activePeriod === 'year'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:text-foreground'
-                    "
-                    @click="activePeriod = 'year'"
-                >
-                    {{ yearLabel }}
-                </button>
-            </div>
+                <!-- Period toggle -->
+                <div class="border-border flex rounded-lg border p-0.5">
+                    <button
+                        type="button"
+                        class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors"
+                        :class="
+                            activePeriod === 'month'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
+                        "
+                        @click="activePeriod = 'month'"
+                    >
+                        {{ formatPeriodLabel(monthLabel) }}
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors"
+                        :class="
+                            activePeriod === 'year'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
+                        "
+                        @click="activePeriod = 'year'"
+                    >
+                        {{ yearLabel }}
+                    </button>
+                </div>
             </div>
         </div>
 

@@ -66,7 +66,7 @@ const totals = computed(() => ({
 </script>
 
 <template>
-    <Head title="Ventas por Tipo de Comprobante" />
+    <Head title="Reporte de ventas por tipo de comprobante" />
 
     <TenantLayout>
         <div class="mb-6 flex items-center justify-between">

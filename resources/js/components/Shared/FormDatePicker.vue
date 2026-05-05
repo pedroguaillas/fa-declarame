@@ -27,6 +27,7 @@ interface Props {
     required?: boolean;
     placeholder?: string;
     defaultNow?: boolean;
+    maxValue?: DateValue;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -166,6 +167,7 @@ const handleTimeChange = (e: Event) => {
                 <Calendar
                     :locale="APP_LOCALE"
                     :model-value="internalDate"
+                    :max-value="maxValue"
                     @update:model-value="handleSelect"
                     layout="month-and-year"
                 />

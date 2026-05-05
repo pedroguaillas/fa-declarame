@@ -103,6 +103,11 @@ export interface Shop {
     state_retention: string | null;
     autorization_retention: string | null;
     retention_at: string | null;
+    voucher_type_modify_id: number | null;
+    est_modify: string | null;
+    poi_modify: string | null;
+    sec_modify: string | null;
+    aut_modify: string | null;
     account: Account | null;
     retention_items: RetentionItem[];
     items?: ShopItem[];

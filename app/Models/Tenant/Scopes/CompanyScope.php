@@ -13,6 +13,8 @@ class CompanyScope implements Scope
         $company = company();
 
         if (! $company) {
+            $builder->whereRaw('1 = 0');
+
             return;
         }
 

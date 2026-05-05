@@ -8,7 +8,7 @@ import RequiredFields from "@/components/Shared/RequiredFields.vue";
 import { Button } from "@/components/ui/button";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { ContributorType } from "@/types/tenant";
-import { Link, useForm } from "@inertiajs/vue3";
+import { Head, Link, useForm } from "@inertiajs/vue3";
 import { Loader2 } from "lucide-vue-next";
 import { computed, ref, watch } from "vue";
 
@@ -91,6 +91,7 @@ function submit() {
 </script>
 
 <template>
+    <Head title="Nuevo contribuyente" />
     <TenantLayout>
         <HeaderForm title="Nuevo Contribuyente" :link-href="route('tenant.companies.index')" />
 

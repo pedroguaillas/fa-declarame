@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm } from "@inertiajs/vue3";
+import { Head, useForm } from "@inertiajs/vue3";
 import type { User } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ function getInitials(name: string) {
 </script>
 
 <template>
+    <Head title="Mi perfil" />
   <AppLayout>
     <div class="w-full max-w-4xl mx-auto space-y-6 px-4 sm:px-6 lg:px-0">
 

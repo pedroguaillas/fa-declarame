@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm } from "@inertiajs/vue3";
+import { Head, useForm } from "@inertiajs/vue3";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,7 @@ function getInitials(name: string) {
 </script>
 
 <template>
+    <Head title="Mi perfil" />
     <TenantLayout>
         <div class="space-y-6 max-w-2xl">
             <div>

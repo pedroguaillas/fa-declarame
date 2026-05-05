@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm, router } from "@inertiajs/vue3";
+import { Head, useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import type { Tenant, Paginator } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
@@ -113,6 +113,7 @@ function getTenantUrl(tenant: Tenant) {
 </script>
 
 <template>
+    <Head title="Gestión de tenants" />
     <AppLayout>
         <div class="space-y-6">
             <!-- Header -->

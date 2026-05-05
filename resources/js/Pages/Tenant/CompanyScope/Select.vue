@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm } from "@inertiajs/vue3";
+import { Head, useForm } from "@inertiajs/vue3";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Button } from "@/components/ui/button";
 import { Building2 } from "lucide-vue-next";
@@ -18,6 +18,7 @@ function select(company: CompanyScope) {
 </script>
 
 <template>
+    <Head title="Seleccionar empresa" />
     <TenantLayout>
         <div class="flex h-full flex-col items-center justify-center gap-6">
             <div class="text-center">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm } from "@inertiajs/vue3";
+import { Head, useForm } from "@inertiajs/vue3";
 
 import HeaderForm from "@/components/Shared/HeaderForm.vue";
 import TenantLayout from "@/layouts/TenantLayout.vue";
@@ -13,9 +13,7 @@ const props = defineProps<{
 
 function toInputDate(d: string): string {
     const parts = d.split("-");
-    return parts.length === 3 && parts[2].length === 4
-        ? `${parts[2]}-${parts[1]}-${parts[0]}`
-        : d;
+    return parts.length === 3 && parts[2].length === 4 ? `${parts[2]}-${parts[1]}-${parts[0]}` : d;
 }
 
 function toInputDatetime(d: string): string {
@@ -25,11 +23,10 @@ function toInputDatetime(d: string): string {
 const form = useForm({
     contact_id: props.order.contact_id,
     voucher_type_id: props.order.voucher_type_id,
+    type_identification: "" as string | undefined,
     emision: props.order.emision ? toInputDate(props.order.emision) : "",
-     autorization: props.order.autorization ?? "", 
-    autorized_at: props.order.autorized_at
-        ? toInputDatetime(props.order.autorized_at)
-        : "",
+    autorization: props.order.autorization ?? "",
+    autorized_at: props.order.autorized_at ? toInputDatetime(props.order.autorized_at) : "",
     serie: props.order.serie,
     sub_total: props.order.sub_total,
     no_iva: props.order.no_iva,
@@ -60,22 +57,16 @@ function submit() {
 </script>
 
 <template>
+    <Head title="Editar venta" />
     <TenantLayout>
         <div class="flex h-full flex-col gap-4">
-            <HeaderForm
-                title="Editar Venta"
-                :link-href="route('tenant.orders.index')"
-            />
+            <HeaderForm title="Editar Venta" :link-href="route('tenant.orders.index')" />
 
-            <div
-                class="border-border bg-card overflow-hidden rounded-lg border"
-            >
+            <div class="border-border bg-card overflow-hidden rounded-lg border">
                 <OrderForm
                     :form="form"
                     :voucher-types="props.voucherTypes"
-                    :initial-contact-identification="
-                        props.order.contact?.identification ?? ''
-                    "
+                    :initial-contact-identification="props.order.contact?.identification ?? ''"
                     :initial-contact-name="props.order.contact?.name ?? ''"
                     submit-label="Actualizar venta"
                     @submit="submit"

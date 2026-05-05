@@ -6,8 +6,6 @@ use App\Exports\ShopsExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreShopRequest;
 use App\Http\Requests\Tenant\UpdateShopRequest;
-use App\Models\Tenant\Account;
-use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\VoucherType;
@@ -15,7 +13,6 @@ use App\Services\ShopImportService;
 use App\Services\ShopRetentionImportService;
 use Constants;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,8 +58,6 @@ class ShopController extends Controller
     {
         return Inertia::render('Tenant/Shops/Create', [
             'voucherTypes' => VoucherType::whereIn('code', ['01', '02', '03', '04', '05'])->get(),
-            'accounts' => $this->expenseAccounts(),
-            'identificationTypes' => $this->identificationTypes(),
         ]);
     }
 
@@ -96,7 +91,6 @@ class ShopController extends Controller
         return Inertia::render('Tenant/Shops/Edit', [
             'shop' => $shop->load('contact'),
             'voucherTypes' => VoucherType::whereIn('code', ['01', '02', '03', '04', '05'])->get(),
-            'accounts' => $this->expenseAccounts(),
         ]);
     }
 
@@ -148,19 +142,6 @@ class ShopController extends Controller
                 : $q->whereNull('serie_retention')
             )
             ->when($filters['voucher_type'] ?? null, fn ($q, $v) => $q->where('vt.code', $v));
-    }
-
-    private function expenseAccounts(): Collection
-    {
-        return Account::where('code', 'like', '5%')
-            ->where('is_detail', true)
-            ->orderBy('code')
-            ->get(['id', 'code', 'name']);
-    }
-
-    private function identificationTypes(): Collection
-    {
-        return IdentificationType::where('description', '!=', 'CONSUMIDOR FINAL')->get();
     }
 
     public function import(Request $request, ShopImportService $service): RedirectResponse

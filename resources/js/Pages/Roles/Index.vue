@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router } from "@inertiajs/vue3";
+import { Head, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import type { Role } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
@@ -49,6 +49,7 @@ const systemSlugs = ["super_admin", "admin", "employee"];
 </script>
 
 <template>
+    <Head title="Roles del sistema" />
     <AppLayout>
         <div class="space-y-6">
             <!-- Header -->

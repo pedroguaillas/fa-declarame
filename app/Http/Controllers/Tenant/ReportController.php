@@ -163,7 +163,8 @@ class ReportController extends Controller
             ->where('company_id', $companyId)
             ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
             ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
-            ->get(['orders.id', 'orders.voucher_type_id', 'vt.code as vt_code', 'vt.description as vt_description', 'sub_total', 'iva5', 'iva12', 'iva15', 'total']);
+            ->select(['orders.id', 'orders.voucher_type_id', 'vt.code as vt_code', 'vt.description as vt_description', 'sub_total', 'iva5', 'iva12', 'iva15', 'total'])
+            ->get();
 
         return $orders
             ->groupBy('voucher_type_id')
@@ -182,8 +183,8 @@ class ReportController extends Controller
                     'subtotal' => round($sign * $subtotal, 2),
                     'iva' => round($sign * $iva, 2),
                     'total' => round($sign * $total, 2),
-                    'retentions' => round($sign * $retentions, 2),
-                    'a_cobrar' => round($sign * ($total - $retentions), 2),
+                    'retentions' => round($retentions, 2),
+                    'a_cobrar' => round($sign * $total - $retentions, 2),
                 ];
             })
             ->sortBy('code')
@@ -213,7 +214,7 @@ class ReportController extends Controller
                 $subtotal = $group->sum(fn ($o) => $sign($o) * (float) $o->sub_total);
                 $iva = $group->sum(fn ($o) => $sign($o) * ((float) $o->iva5 + (float) $o->iva12 + (float) $o->iva15));
                 $total = $group->sum(fn ($o) => $sign($o) * (float) $o->total);
-                $retentions = $group->sum(fn ($o) => $sign($o) * (float) $o->total_retention);
+                $retentions = $group->sum(fn ($o) => (float) $o->total_retention);
 
                 return [
                     'identification' => $first->contact?->identification ?? '—',
@@ -273,7 +274,7 @@ class ReportController extends Controller
                 $subtotal = $group->sum(fn ($s) => $sign($s) * (float) $s->sub_total);
                 $iva = $group->sum(fn ($s) => $sign($s) * ((float) $s->iva5 + (float) $s->iva8 + (float) $s->iva12 + (float) $s->iva15));
                 $total = $group->sum(fn ($s) => $sign($s) * (float) $s->total);
-                $retentions = $group->sum(fn ($s) => $sign($s) * (float) $s->total_retention);
+                $retentions = $group->sum(fn ($s) => (float) $s->total_retention);
 
                 return [
                     'account_code' => $first->account?->code,
@@ -301,7 +302,8 @@ class ReportController extends Controller
             ->where('company_id', $companyId)
             ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
             ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
-            ->get(['shops.id', 'shops.voucher_type_id', 'vt.code as vt_code', 'vt.description as vt_description', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total']);
+            ->select(['shops.id', 'shops.voucher_type_id', 'vt.code as vt_code', 'vt.description as vt_description', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total'])
+            ->get();
 
         return $shops
             ->groupBy('voucher_type_id')
@@ -320,8 +322,8 @@ class ReportController extends Controller
                     'subtotal' => round($sign * $subtotal, 2),
                     'iva' => round($sign * $iva, 2),
                     'total' => round($sign * $total, 2),
-                    'retentions' => round($sign * $retentions, 2),
-                    'a_pagar' => round($sign * ($total - $retentions), 2),
+                    'retentions' => round($retentions, 2),
+                    'a_pagar' => round($sign * $total - $retentions, 2),
                 ];
             })
             ->sortBy('code')
@@ -351,7 +353,7 @@ class ReportController extends Controller
                 $subtotal = $group->sum(fn ($s) => $sign($s) * (float) $s->sub_total);
                 $iva = $group->sum(fn ($s) => $sign($s) * ((float) $s->iva5 + (float) $s->iva8 + (float) $s->iva12 + (float) $s->iva15));
                 $total = $group->sum(fn ($s) => $sign($s) * (float) $s->total);
-                $retentions = $group->sum(fn ($s) => $sign($s) * (float) $s->total_retention);
+                $retentions = $group->sum(fn ($s) => (float) $s->total_retention);
 
                 return [
                     'identification' => $first->contact?->identification ?? '—',

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm, router } from "@inertiajs/vue3";
+import { Head, useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import type { Permission } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
@@ -104,6 +104,7 @@ function handleDelete() {
 </script>
 
 <template>
+    <Head title="Permisos del sistema" />
     <AppLayout>
         <div class="space-y-6">
             <!-- Header -->

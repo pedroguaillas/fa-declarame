@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm, router } from "@inertiajs/vue3";
+import { Head, useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import type { Plan } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
@@ -126,6 +126,7 @@ function formatPrice(price: number) {
 </script>
 
 <template>
+    <Head title="Planes de suscripción" />
     <AppLayout>
         <div class="space-y-6">
             <!-- Header -->

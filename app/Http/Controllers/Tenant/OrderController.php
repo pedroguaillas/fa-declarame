@@ -6,7 +6,6 @@ use App\Exports\OrdersExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreOrderRequest;
 use App\Http\Requests\Tenant\UpdateOrderRequest;
-use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\VoucherType;
 use App\Services\OrderImportService;
@@ -72,15 +71,10 @@ class OrderController extends Controller
 
     public function create(): Response
     {
-        $voucherTypes = VoucherType::whereIn(
-            'code',
-            ['01', '04', '05']
-        )->get();
+        $voucherTypes = VoucherType::whereIn('code', ['01', '04', '05'])->get();
 
         return Inertia::render('Tenant/Orders/Create', [
             'voucherTypes' => $voucherTypes,
-
-            'identificationTypes' => IdentificationType::get(),
         ]);
     }
 
@@ -93,12 +87,8 @@ class OrderController extends Controller
             ]
         ));
 
-        return redirect()
-            ->route('tenant.orders.index')
-            ->with(
-                'success',
-                'Venta registrada correctamente.'
-            );
+        return redirect()->route('tenant.orders.index')
+            ->with('success', 'Venta registrada correctamente.');
     }
 
     public function show(Order $order): JsonResponse
@@ -108,34 +98,21 @@ class OrderController extends Controller
 
     public function edit(Order $order): Response
     {
-        $voucherTypes = VoucherType::whereIn(
-            'code',
-            ['01', '02', '04']
-        )->get();
+        $voucherTypes = VoucherType::whereIn('code', ['01', '02', '04'])->get();
 
         return Inertia::render('Tenant/Orders/Edit', [
             'order' => $order->load('contact'),
-
             'voucherTypes' => $voucherTypes,
-
-            'identificationTypes' => IdentificationType::orderBy('description')
-                ->get(),
         ]);
     }
 
-    public function update(
-        UpdateOrderRequest $request,
-        Order $order
-    ): RedirectResponse {
-
+    public function update(UpdateOrderRequest $request, Order $order): RedirectResponse
+    {
         $order->update($request->validated());
 
         return redirect()
             ->route('tenant.orders.index')
-            ->with(
-                'success',
-                'Venta actualizada correctamente.'
-            );
+            ->with('success', 'Venta actualizada correctamente.');
     }
 
     public function destroy(Order $order): RedirectResponse
@@ -144,15 +121,11 @@ class OrderController extends Controller
 
         return redirect()
             ->route('tenant.orders.index')
-            ->with(
-                'success',
-                'Venta eliminada correctamente.'
-            );
+            ->with('success', 'Venta eliminada correctamente.');
     }
 
     public function import(Request $request, OrderImportService $service): RedirectResponse
     {
-
         $request->validate([
             'file' => ['required', 'file', 'max:5120'],
         ]);
@@ -208,7 +181,6 @@ class OrderController extends Controller
 
     public function importRetentions(Request $request, OrderRetentionImportService $service): RedirectResponse
     {
-
         $request->validate([
             'file' => ['required', 'file', 'max:5120'],
         ]);
@@ -274,7 +246,6 @@ class OrderController extends Controller
 
     public function storeRetention(Request $request, Order $order): RedirectResponse
     {
-
         $validated = $request->validate([
             'serie_retention' => ['required', 'string', 'max:17'],
             'date_retention' => ['required', 'date'],

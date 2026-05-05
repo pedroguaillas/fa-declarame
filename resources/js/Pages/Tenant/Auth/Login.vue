@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm } from "@inertiajs/vue3";
+import { Head, useForm } from "@inertiajs/vue3";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -30,6 +30,7 @@ function submit() {
 </script>
 
 <template>
+    <Head title="Iniciar sesión — Tenant" />
     <div class="min-h-screen flex items-center justify-center bg-background">
         <Card class="w-full max-w-md">
             <CardHeader class="space-y-1">

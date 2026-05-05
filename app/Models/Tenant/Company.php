@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class Company extends Model
 {
+    protected $hidden = [
+        'pass_sri',
+    ];
+
     protected $fillable = [
         'ruc',
         'name',
@@ -28,6 +32,7 @@ class Company extends Model
             'accounting' => 'boolean',
             'phantom_taxpayer' => 'boolean',
             'no_transactions' => 'boolean',
+            'pass_sri' => 'encrypted',
         ];
     }
 }

@@ -15,6 +15,7 @@ interface Props {
     placeholder?: string;
 }
 
+defineOptions({ inheritAttrs: false });
 defineProps<Props>();
 
 const emit = defineEmits<{
@@ -41,12 +42,12 @@ const showPassword = ref(false);
 
         <div class="group relative">
             <Input
+                v-bind="$attrs"
                 :id="id"
                 :placeholder="placeholder"
                 :type="showPassword ? 'text' : 'password'"
                 :value="modelValue"
                 @update:model-value="handleInput"
-                v-bind="$attrs"
                 :class="[
                     'pr-10 transition-colors',
                     error

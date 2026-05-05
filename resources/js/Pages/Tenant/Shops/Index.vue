@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router, useForm, usePage } from "@inertiajs/vue3";
+import { Head, router, useForm, usePage } from "@inertiajs/vue3";
 import { computed, ref, watch } from "vue";
 
 import DataTableDesktop from "@/components/Shared/DataTableDesktop.vue";
@@ -270,6 +270,7 @@ watch(
 </script>
 
 <template>
+    <Head title="Compras — Listado de facturas" />
     <TenantLayout>
         <div class="flex flex-col gap-4 w-full">
             <!-- Header -->
@@ -291,7 +292,7 @@ watch(
                         v-if="isActiveRetention"
                         variant="outline"
                         size="sm"
-                        class="font-bold"
+                        class="hidden font-bold md:inline-flex"
                         :disabled="importRetentionsForm.processing"
                         @click="importRetentionsFileInput?.click()"
                     >

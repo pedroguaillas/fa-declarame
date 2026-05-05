@@ -32,7 +32,7 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Ingresar" />
+    <Head title="Iniciar sesión" />
 
     <div class="flex min-h-screen bg-background text-foreground">
         <div

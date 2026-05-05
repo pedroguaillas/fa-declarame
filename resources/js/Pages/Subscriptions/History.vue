@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router } from "@inertiajs/vue3";
+import { Head, router } from "@inertiajs/vue3";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import type { Subscription, Plan, User } from "@/types";
@@ -68,6 +68,7 @@ const activeSubscription = props.subscriptions.find(
 </script>
 
 <template>
+    <Head title="Historial de suscripciones" />
     <AppLayout>
         <div class="space-y-6 max-w-full md:max-w-2xl xl:max-w-4xl mx-auto">
             <!-- Header -->

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm, router } from "@inertiajs/vue3";
+import { Head, useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import type { Paginator } from "@/types";
 import TenantLayout from "@/layouts/TenantLayout.vue";
@@ -117,6 +117,7 @@ function goToPage(url: string | null) {
 </script>
 
 <template>
+    <Head title="Empleados" />
     <TenantLayout>
         <div class="space-y-6">
             <!-- Header -->

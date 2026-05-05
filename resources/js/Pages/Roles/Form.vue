@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm } from "@inertiajs/vue3";
+import { Head, useForm } from "@inertiajs/vue3";
 import { computed, ref } from "vue";
 import type { Role, Permission, ModelEntity, ModelPermission } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
@@ -105,6 +105,7 @@ function submit() {
 </script>
 
 <template>
+    <Head title="Configurar rol" />
     <AppLayout>
         <div class="space-y-6 max-w-full md:max-w-2xl xl:max-w-4xl mx-auto">
             <!-- Header -->

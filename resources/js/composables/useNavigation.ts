@@ -10,6 +10,7 @@ import {
     Building2,
     ShoppingCart,
     ReceiptIndianRupee,
+    Contact,
 } from "lucide-vue-next";
 import type { User } from "@/types";
 import type { LucideIcon } from "lucide-vue-next";
@@ -74,7 +75,7 @@ export function useNavigation(user: User) {
 
     const adminNav: NavItem[] = [
         {
-            title: "Dashboard",
+            title: "Panel de control",
             url: route("tenant.dashboard"),
             icon: LayoutDashboard,
         },
@@ -92,6 +93,11 @@ export function useNavigation(user: User) {
             title: "Ventas",
             url: route("tenant.orders.index"),
             icon: ReceiptIndianRupee,
+        },
+        {
+            title: "Contactos",
+            url: route("tenant.contacts.index"),
+            icon: Contact,
         },
         {
             title: "Plan de cuentas",

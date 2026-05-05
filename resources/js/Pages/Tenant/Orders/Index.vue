@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router, useForm, usePage } from "@inertiajs/vue3";
+import { Head, router, useForm, usePage } from "@inertiajs/vue3";
 import { ref, watch } from "vue";
 
 import ConfirmDialog from "@/components/Shared/ConfirmDialog.vue";
@@ -210,6 +210,7 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
 </script>
 
 <template>
+    <Head title="Ventas — Listado de facturas" />
     <TenantLayout>
         <div class="flex flex-col gap-4 w-full">
             <!-- Header -->
@@ -243,14 +244,12 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
                     <Button
                         variant="outline"
                         size="sm"
-                        class="font-bold"
+                        class="hidden font-bold md:inline-flex"
                         :disabled="importRetentionsForm.processing"
                         @click="importRetentionsFileInput?.click()"
                     >
                         <Upload class="size-4" />
-                        <span class="hidden md:inline-block">
-                            {{ importRetentionsForm.processing ? "Importando…" : "Importar retenciones" }}
-                        </span>
+                        {{ importRetentionsForm.processing ? "Importando…" : "Importar retenciones" }}
                     </Button>
                 </template>
             </HeaderList>

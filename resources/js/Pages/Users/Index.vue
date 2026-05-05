@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm, router } from "@inertiajs/vue3";
+import { Head, useForm, router } from "@inertiajs/vue3";
 import { ref, computed } from "vue";
 import type { User, Role, Paginator, Tenant } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
@@ -146,6 +146,7 @@ function getRoleBadgeVariant(slug: string) {
 </script>
 
 <template>
+    <Head title="Gestión de usuarios" />
     <AppLayout>
         <div class="space-y-6">
             <!-- Header -->

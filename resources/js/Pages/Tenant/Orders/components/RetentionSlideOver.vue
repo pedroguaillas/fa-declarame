@@ -163,6 +163,21 @@ function getDropdownStyle(idx: number): Record<string, string> {
     };
 }
 
+function formatSerieRetention() {
+    const raw = retentionForm.serie_retention.replace(/[^0-9-]/g, "");
+    const parts = raw.split("-");
+    if (parts.length >= 3) {
+        const est = parts[0].padStart(3, "0");
+        const pto = parts[1].padStart(3, "0");
+        const seq = parts.slice(2).join("").padStart(9, "0");
+        retentionForm.serie_retention = `${est}-${pto}-${seq}`;
+    } else if (parts.length === 2) {
+        const est = parts[0].padStart(3, "0");
+        const pto = parts[1].padStart(3, "0");
+        retentionForm.serie_retention = `${est}-${pto}-`;
+    }
+}
+
 function closeItemSearchDelayed(idx: number) {
     setTimeout(() => {
         if (itemSearches.value[idx]) {
@@ -361,6 +376,7 @@ function closeItemSearchDelayed(idx: number) {
                                         maxlength="17"
                                         placeholder="001-001-000000001"
                                         class="border-border bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring/30 h-9 rounded-md border px-3 font-mono text-sm focus:ring-2 focus:outline-none"
+                                        @blur="formatSerieRetention"
                                     />
                                     <p v-if="retentionForm.errors.serie_retention" class="text-destructive text-xs">
                                         {{ retentionForm.errors.serie_retention }}

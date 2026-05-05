@@ -21,6 +21,7 @@ class Contact extends Model
         'contributor_type_id',
         'phone',
         'email',
+        'data_additional',
     ];
 
     protected function casts(): array
@@ -30,6 +31,7 @@ class Contact extends Model
             'accounting' => 'boolean',
             'phantom_taxpayer' => 'boolean',
             'no_transactions' => 'boolean',
+            'data_additional' => 'array',
         ];
     }
 

@@ -62,7 +62,7 @@ function indentLevel(code: string): number {
 </script>
 
 <template>
-    <Head title="Plan de Cuentas" />
+    <Head title="Plan de cuentas contables" />
 
     <TenantLayout>
         <div class="mb-6 flex items-center justify-between">

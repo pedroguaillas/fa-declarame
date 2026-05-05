@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm, router } from "@inertiajs/vue3";
+import { Head, useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import type { ModelEntity } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
@@ -113,6 +113,7 @@ function handleDelete() {
 </script>
 
 <template>
+    <Head title="Entidades del modelo" />
     <AppLayout>
         <div class="space-y-6">
             <!-- Header -->

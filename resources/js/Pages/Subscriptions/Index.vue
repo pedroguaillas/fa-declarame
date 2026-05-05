@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm, router } from "@inertiajs/vue3";
+import { Head, useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
@@ -171,6 +171,7 @@ function goToPage(url: string | null) {
 </script>
 
 <template>
+    <Head title="Suscripciones" />
     <AppLayout>
         <div class="space-y-6">
             <!-- Header -->

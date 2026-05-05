@@ -64,7 +64,7 @@ const totals = computed(() => ({
 </script>
 
 <template>
-    <Head title="Ventas por Cliente" />
+    <Head title="Reporte de ventas por cliente" />
 
     <TenantLayout>
         <div class="mb-6 flex items-center justify-between">

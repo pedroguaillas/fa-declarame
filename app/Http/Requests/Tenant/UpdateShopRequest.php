@@ -7,9 +7,6 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateShopRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
         return true;
@@ -21,10 +18,10 @@ class UpdateShopRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'acount_id' => ['nullable', 'integer', 'exists:acounts,id'],
+            'account_id' => ['nullable', 'integer', 'exists:accounts,id'],
             'contact_id' => ['required', 'integer', 'exists:contacts,id'],
             'supplier_type' => ['nullable', 'string', 'in:01,02,03'],
-            'voucher_type_id' => ['required', 'integer'],
+            'voucher_type_id' => ['required', 'integer', 'exists:voucher_types,id'],
             'emision' => ['required', 'date'],
             'autorization' => ['required', 'string', 'max:49'],
             'autorized_at' => ['nullable', 'date'],
@@ -50,6 +47,13 @@ class UpdateShopRequest extends FormRequest
             'state_retention' => ['nullable', 'string'],
             'autorization_retention' => ['nullable', 'string', 'max:49'],
             'retention_at' => ['nullable', 'date'],
+
+            // DOCUMENTO MODIFICADO
+            'voucher_type_modify_id' => ['nullable', 'integer', 'exists:voucher_types,id'],
+            'est_modify' => ['nullable', 'string', 'max:3'],
+            'poi_modify' => ['nullable', 'string', 'max:3'],
+            'sec_modify' => ['nullable', 'string', 'max:9'],
+            'aut_modify' => ['nullable', 'string', 'max:49'],
         ];
     }
 }

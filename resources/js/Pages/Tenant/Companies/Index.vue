@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppLayout from "@/layouts/AppLayout.vue";
-import { router } from "@inertiajs/vue3";
+import { Head, router } from "@inertiajs/vue3";
 import type { Paginator } from "@/types";
 import type { ActionPayload, ColumnDef } from "@/types/shared";
 import { Company } from "@/types/tenant";
@@ -62,6 +62,7 @@ function handlePageChange(page: number) {
 </script>
 
 <template>
+    <Head title="Contribuyentes — Mis empresas" />
     <TenantLayout>
         <div
             class="flex flex-col gap-4 w-full"

@@ -64,7 +64,7 @@ const totals = computed(() => ({
 </script>
 
 <template>
-    <Head title="Compras por Cuentas" />
+    <Head title="Reporte de compras por cuenta contable" />
 
     <TenantLayout>
         <div class="mb-6 flex items-center justify-between">

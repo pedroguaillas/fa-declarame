@@ -72,7 +72,42 @@ const steps = [
 </script>
 
 <template>
-    <Head title="Declárame — Declaraciones tributarias sin complicaciones" />
+    <Head title="Declárame — Declaraciones tributarias sin complicaciones">
+        <meta
+            name="description"
+            content="Importa, organiza y valida tus documentos del SRI en segundos. Compras, ventas y retenciones en un solo lugar, listas para declarar. Hecho para contadores ecuatorianos."
+        />
+        <meta
+            name="keywords"
+            content="declaraciones tributarias Ecuador, SRI, importar compras SRI, retenciones, contabilidad Ecuador, facturas electrónicas, IVA Ecuador, RUC"
+        />
+        <meta name="robots" content="index, follow" />
+        <meta name="author" content="Declárame" />
+
+        <!-- Open Graph -->
+        <meta
+            property="og:title"
+            content="Declárame — Declaraciones tributarias sin complicaciones"
+        />
+        <meta
+            property="og:description"
+            content="Importa, organiza y valida tus documentos del SRI en segundos. Compras, ventas y retenciones en un solo lugar, listas para declarar."
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:locale" content="es_EC" />
+        <meta property="og:site_name" content="Declárame" />
+
+        <!-- Twitter Card -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta
+            name="twitter:title"
+            content="Declárame — Declaraciones tributarias sin complicaciones"
+        />
+        <meta
+            name="twitter:description"
+            content="Importa, organiza y valida tus documentos del SRI en segundos. Compras, ventas y retenciones en un solo lugar, listas para declarar."
+        />
+    </Head>
 
     <div
         class="min-h-screen bg-white text-gray-900 transition-colors duration-300 dark:bg-gray-950 dark:text-gray-100"
@@ -111,7 +146,7 @@ const steps = [
                 </div>
 
                 <!-- Nav actions -->
-                <div class="flex items-center gap-3">
+                <nav aria-label="Navegación principal" class="flex items-center gap-3">
                     <!-- Dark mode toggle -->
 
                     <template v-if="canLogin">
@@ -138,12 +173,15 @@ const steps = [
                             </Link> -->
                         </template>
                     </template>
-                </div>
+                </nav>
             </div>
         </header>
 
         <!-- Hero -->
-        <section class="relative overflow-hidden px-6 py-24 sm:py-32">
+        <section
+            aria-labelledby="hero-heading"
+            class="relative overflow-hidden px-6 py-24 sm:py-32"
+        >
             <!-- Background gradient -->
             <div class="pointer-events-none absolute inset-0 -z-10">
                 <div
@@ -165,6 +203,7 @@ const steps = [
                 </div>
 
                 <h1
+                    id="hero-heading"
                     class="mb-6 text-5xl leading-tight font-extrabold tracking-tight text-gray-900 sm:text-6xl dark:text-white"
                 >
                     Declaraciones tributarias
@@ -279,11 +318,13 @@ const steps = [
         <!-- Features -->
         <section
             id="caracteristicas"
+            aria-labelledby="features-heading"
             class="bg-gray-50 px-6 py-24 dark:bg-gray-900/50"
         >
             <div class="mx-auto max-w-7xl">
                 <div class="mb-16 text-center">
                     <h2
+                        id="features-heading"
                         class="mb-4 text-4xl font-bold text-gray-900 dark:text-white"
                     >
                         Todo lo que necesitas para declarar

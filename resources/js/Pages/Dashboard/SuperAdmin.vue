@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router } from "@inertiajs/vue3";
+import { Head, router } from "@inertiajs/vue3";
 import { reactive } from "vue";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
@@ -137,6 +137,7 @@ function salesRangeLabel() {
 </script>
 
 <template>
+    <Head title="Panel de administración" />
     <AppLayout>
         <div class="space-y-6">
             <!-- Header -->

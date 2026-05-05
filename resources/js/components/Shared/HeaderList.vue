@@ -115,12 +115,10 @@ const handleImportClick = () => {
                         type="button"
                         @click="handleImportClick"
                         size="sm"
-                        class="cursor-pointer font-bold sm:flex-none"
+                        class="hidden cursor-pointer font-bold md:inline-flex sm:flex-none"
                     >
                         <component :is="importIcon" class="size-4" />
-                        <span class="hidden md:inline-block">
-                            {{ importLabel }}
-                        </span>
+                        {{ importLabel }}
                     </Button>
                 </template>
 

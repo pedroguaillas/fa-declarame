@@ -89,7 +89,7 @@ class OrderRetentionImportService
     private function processRetention(object $autorizacion, string $companyRuc): array
     {
         $comprobanteXml = (string) $autorizacion->comprobante;
-        $xml = new SimpleXMLElement($comprobanteXml);
+        $xml = new SimpleXMLElement($comprobanteXml, LIBXML_NONET);
 
         $identificacionSujeto = (string) $xml->infoCompRetencion->identificacionSujetoRetenido;
         $cedula = substr($companyRuc, 0, 10);
