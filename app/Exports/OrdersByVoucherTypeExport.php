@@ -19,12 +19,12 @@ class OrdersByVoucherTypeExport implements FromArray, WithHeadings, WithStyles, 
         return array_map(fn (array $row) => [
             $row['code'],
             $row['description'],
-            $row['count'],
-            $row['subtotal'],
-            $row['iva'],
-            $row['total'],
-            $row['retentions'],
-            $row['a_cobrar'],
+            $row['count'] ?? 0,
+            $row['subtotal'] ?? 0,
+            $row['iva'] ?? 0,
+            $row['total'] ?? 0,
+            $row['retentions'] ?? 0,
+            $row['a_cobrar'] ?? 0,
         ], $this->rows);
     }
 

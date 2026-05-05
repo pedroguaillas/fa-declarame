@@ -159,11 +159,11 @@ class ReportController extends Controller
     {
         $orders = Order::query()
             ->join('voucher_types AS vt', 'vt.id', 'orders.voucher_type_id')
+            ->select(['orders.id', 'orders.voucher_type_id', 'vt.code as vt_code', 'vt.description as vt_description', 'sub_total', 'iva5', 'iva12', 'iva15', 'total'])
             ->withSum('retentionItems as total_retention', 'value')
             ->where('company_id', $companyId)
             ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
             ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
-            ->select(['orders.id', 'orders.voucher_type_id', 'vt.code as vt_code', 'vt.description as vt_description', 'sub_total', 'iva5', 'iva12', 'iva15', 'total'])
             ->get();
 
         return $orders
@@ -199,12 +199,13 @@ class ReportController extends Controller
     {
         $orders = Order::query()
             ->join('voucher_types AS vt', 'vt.id', 'orders.voucher_type_id')
+            ->select(['orders.id', 'orders.contact_id', 'vt.code as vt_code', 'sub_total', 'iva5', 'iva12', 'iva15', 'total'])
             ->with('contact:id,identification,name')
             ->withSum('retentionItems as total_retention', 'value')
             ->where('company_id', $companyId)
             ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
             ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
-            ->get(['orders.id', 'orders.contact_id', 'vt.code as vt_code', 'sub_total', 'iva5', 'iva12', 'iva15', 'total']);
+            ->get();
 
         return $orders
             ->groupBy('contact_id')
@@ -259,12 +260,13 @@ class ReportController extends Controller
     {
         $shops = Shop::query()
             ->join('voucher_types AS vt', 'vt.id', 'shops.voucher_type_id')
+            ->select(['shops.id', 'shops.account_id', 'vt.code as vt_code', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total'])
             ->with('account:id,code,name')
             ->withSum('retentionItems as total_retention', 'value')
             ->where('company_id', $companyId)
             ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
             ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
-            ->get(['shops.id', 'shops.account_id', 'vt.code as vt_code', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total']);
+            ->get();
 
         return $shops
             ->groupBy('account_id')
@@ -298,11 +300,11 @@ class ReportController extends Controller
     {
         $shops = Shop::query()
             ->join('voucher_types AS vt', 'vt.id', 'shops.voucher_type_id')
+            ->select(['shops.id', 'shops.voucher_type_id', 'vt.code as vt_code', 'vt.description as vt_description', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total'])
             ->withSum('retentionItems as total_retention', 'value')
             ->where('company_id', $companyId)
             ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
             ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
-            ->select(['shops.id', 'shops.voucher_type_id', 'vt.code as vt_code', 'vt.description as vt_description', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total'])
             ->get();
 
         return $shops
@@ -338,12 +340,13 @@ class ReportController extends Controller
     {
         $shops = Shop::query()
             ->join('voucher_types AS vt', 'vt.id', 'shops.voucher_type_id')
+            ->select(['shops.id', 'shops.contact_id', 'vt.code as vt_code', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total'])
             ->with('contact:id,identification,name')
             ->withSum('retentionItems as total_retention', 'value')
             ->where('company_id', $companyId)
             ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
             ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
-            ->get(['shops.id', 'shops.contact_id', 'vt.code as vt_code', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total']);
+            ->get();
 
         return $shops
             ->groupBy('contact_id')

@@ -19,11 +19,11 @@ class ShopsByProviderExport implements FromArray, WithHeadings, WithStyles, With
         return array_map(fn (array $row) => [
             $row['identification'],
             $row['name'],
-            $row['subtotal'],
-            $row['iva'],
-            $row['total'],
-            $row['retentions'],
-            $row['a_pagar'],
+            $row['subtotal'] ?? 0,
+            $row['iva'] ?? 0,
+            $row['total'] ?? 0,
+            $row['retentions'] ?? 0,
+            $row['a_pagar'] ?? 0,
         ], $this->rows);
     }
 

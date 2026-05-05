@@ -55,6 +55,8 @@ function download() {
 
 const fmt = (v: number) => v.toLocaleString("es-EC", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const hasRetentions = computed(() => props.rows.some((r) => r.retentions > 0));
+
 const totals = computed(() => ({
     count: props.rows.reduce((s, r) => s + r.count, 0),
     subtotal: props.rows.reduce((s, r) => s + r.subtotal, 0),
@@ -139,10 +141,10 @@ const totals = computed(() => ({
                         <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">
                             Total
                         </th>
-                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">
+                        <th v-if="hasRetentions" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">
                             Retenciones
                         </th>
-                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">
+                        <th v-if="hasRetentions" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">
                             A Cobrar
                         </th>
                     </tr>
@@ -160,12 +162,13 @@ const totals = computed(() => ({
                         <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.iva) }}</td>
                         <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.total) }}</td>
                         <td
+                            v-if="hasRetentions"
                             class="px-4 py-3 text-right font-mono text-sm tabular-nums"
                             :class="row.retentions > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'"
                         >
                             {{ fmt(row.retentions) }}
                         </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
+                        <td v-if="hasRetentions" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
                             {{ fmt(row.a_cobrar) }}
                         </td>
                     </tr>
@@ -180,12 +183,13 @@ const totals = computed(() => ({
                         <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.iva) }}</td>
                         <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.total) }}</td>
                         <td
+                            v-if="hasRetentions"
                             class="px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums"
                             :class="totals.retentions > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'"
                         >
                             {{ fmt(totals.retentions) }}
                         </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-bold tabular-nums">
+                        <td v-if="hasRetentions" class="text-foreground px-4 py-3 text-right font-mono text-sm font-bold tabular-nums">
                             {{ fmt(totals.a_cobrar) }}
                         </td>
                     </tr>

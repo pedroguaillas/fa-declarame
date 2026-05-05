@@ -70,6 +70,12 @@ class OrdersExport implements FromCollection, WithHeadings, WithMapping, WithSty
         );
     }
 
+    /** @var array<int, string> */
+    private const NUMERIC_COLUMNS = [
+        'sub_total', 'no_iva', 'base0', 'base5', 'base12', 'base15',
+        'iva5', 'iva12', 'iva15', 'discount', 'ice', 'total',
+    ];
+
     /** @return array<int, mixed> */
     public function map($order): array
     {
@@ -84,7 +90,9 @@ class OrdersExport implements FromCollection, WithHeadings, WithMapping, WithSty
                 'serie' => ($order->initial ? "{$order->initial}-" : '').($order->serie ?? ''),
                 'contact_identification' => $order->contact?->identification ?? '',
                 'contact_name' => $order->contact?->name ?? '',
-                default => $order->{$col} ?? '',
+                default => in_array($col, self::NUMERIC_COLUMNS)
+                    ? ($order->{$col} ?? 0)
+                    : ($order->{$col} ?? ''),
             };
         }
 

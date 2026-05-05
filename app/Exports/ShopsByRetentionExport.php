@@ -19,9 +19,9 @@ class ShopsByRetentionExport implements FromArray, WithHeadings, WithStyles, Wit
         return array_map(fn (array $row) => [
             $row['code'],
             $row['description'],
-            $row['percentage'].'%',
-            $row['base'],
-            $row['value'],
+            ($row['percentage'] ?? 0).'%',
+            $row['base'] ?? 0,
+            $row['value'] ?? 0,
         ], $this->rows);
     }
 

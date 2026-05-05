@@ -71,6 +71,12 @@ class ShopsExport implements FromCollection, WithHeadings, WithMapping
         );
     }
 
+    /** @var array<int, string> */
+    private const NUMERIC_COLUMNS = [
+        'sub_total', 'no_iva', 'base0', 'base5', 'base8', 'base12', 'base15',
+        'iva5', 'iva8', 'iva12', 'iva15', 'discount', 'ice', 'total',
+    ];
+
     /** @return array<int, mixed> */
     public function map($shop): array
     {
@@ -87,7 +93,9 @@ class ShopsExport implements FromCollection, WithHeadings, WithMapping
                 'account' => $shop->account
                     ? "{$shop->account->code} – {$shop->account->name}"
                     : '',
-                default => $shop->{$col} ?? '',
+                default => in_array($col, self::NUMERIC_COLUMNS)
+                    ? ($shop->{$col} ?? 0)
+                    : ($shop->{$col} ?? ''),
             };
         }
 
