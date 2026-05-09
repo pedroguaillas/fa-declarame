@@ -1,0 +1,15 @@
+{
+  "name": "sri-scraper",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Web scraper for SRI Ecuador electronic documents",
+  "scripts": {
+    "test": "node test-navigation.mjs"
+  },
+  "dependencies": {
+    "puppeteer": "^24.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}

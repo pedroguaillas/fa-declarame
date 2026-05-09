@@ -18,7 +18,7 @@ class StoreCompanyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'ruc' => ['required', 'string', 'max:13', 'unique:companies,ruc'],
+            'ruc' => ['required', 'string', 'digits:13', 'unique:companies,ruc'],
             'name' => ['required', 'string', 'max:300'],
             'matrix_address' => ['required', 'string', 'max:300'],
             'contributor_type_id' => ['required', 'integer', 'exists:contributor_types,id'],
@@ -29,8 +29,8 @@ class StoreCompanyRequest extends FormRequest
             'no_transactions' => ['boolean'],
             'phone' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:50'],
-            'type_declaration' => ['nullable', 'string', 'in:mensual,semestral'],
-            'pass_sri' => ['nullable', 'string', 'max:50'],
+            'type_declaration' => ['required', 'string', 'in:mensual,semestral'],
+            'pass_sri' => ['required', 'string', 'max:50'],
         ];
     }
 }

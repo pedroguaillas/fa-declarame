@@ -22,7 +22,6 @@ function toInputDatetime(d: string): string {
 
 const form = useForm({
     contact_id: props.shop.contact_id,
-    supplier_type: props.shop.supplier_type ?? "",
     voucher_type_id: props.shop.voucher_type_id,
     type_identification: "" as string | undefined,
     emision: props.shop.emision ? toInputDate(props.shop.emision) : "",
@@ -31,6 +30,7 @@ const form = useForm({
     serie: props.shop.serie,
     sub_total: props.shop.sub_total,
     no_iva: props.shop.no_iva,
+    exempt: props.shop.exempt,
     base0: props.shop.base0,
     base5: props.shop.base5,
     base8: props.shop.base8,

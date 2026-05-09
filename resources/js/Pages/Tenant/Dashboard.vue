@@ -2,7 +2,6 @@
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Head } from "@inertiajs/vue3";
 import { computed, ref } from "vue";
-import { FileDown } from "lucide-vue-next";
 
 interface PeriodStats {
     count: number;
@@ -72,22 +71,7 @@ function barHeight(value: number): number {
     return Math.round((value / chartMax.value) * 100);
 }
 
-// ── ATS Modal ─────────────────────────────────────────────────────────────────
 
-const atsModalOpen = ref(false);
-const atsMonth = ref(props.monthLabel); // "YYYY-MM"
-
-function openAtsModal() {
-    atsMonth.value = props.monthLabel;
-    atsModalOpen.value = true;
-}
-
-function downloadAts() {
-    const [year, month] = atsMonth.value.split("-");
-    const params = new URLSearchParams({ year, month: String(parseInt(month)) });
-    window.location.href = route("tenant.export-ats") + "?" + params.toString();
-    atsModalOpen.value = false;
-}
 </script>
 
 <template>
@@ -99,16 +83,6 @@ function downloadAts() {
             <h1 class="text-foreground text-2xl font-semibold">Panel de control</h1>
 
             <div class="flex items-center gap-3">
-                <!-- ATS download button -->
-                <button
-                    type="button"
-                    class="border-border text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors"
-                    @click="openAtsModal"
-                >
-                    <FileDown class="size-4" />
-                    Descargar ATS
-                </button>
-
                 <!-- Period toggle -->
                 <div class="border-border flex rounded-lg border p-0.5">
                     <button
@@ -351,44 +325,5 @@ function downloadAts() {
             </div>
         </div>
 
-        <!-- ATS Modal -->
-        <Teleport to="body">
-            <div v-if="atsModalOpen" class="fixed inset-0 z-50 flex items-center justify-center">
-                <!-- Backdrop -->
-                <div class="bg-foreground/20 absolute inset-0 backdrop-blur-sm" @click="atsModalOpen = false" />
-
-                <!-- Dialog -->
-                <div class="bg-card border-border relative z-10 w-full max-w-sm rounded-xl border p-6 shadow-lg">
-                    <h2 class="text-foreground mb-4 text-base font-semibold">Descargar ATS</h2>
-
-                    <div class="mb-6 flex flex-col gap-1">
-                        <label class="text-muted-foreground text-xs font-medium">Mes</label>
-                        <input
-                            v-model="atsMonth"
-                            type="month"
-                            class="border-border bg-background text-foreground focus:ring-ring/30 h-9 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
-                        />
-                    </div>
-
-                    <div class="flex justify-end gap-2">
-                        <button
-                            type="button"
-                            class="border-border text-muted-foreground hover:text-foreground h-8 rounded-md border px-4 text-sm"
-                            @click="atsModalOpen = false"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            class="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 h-8 rounded-md px-4 text-sm font-medium"
-                            @click="downloadAts"
-                        >
-                            <FileDown class="size-4" />
-                            Descargar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </Teleport>
     </TenantLayout>
 </template>

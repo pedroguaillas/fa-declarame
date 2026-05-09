@@ -74,9 +74,10 @@ export interface Shop {
     id: number;
     account_id: number | null;
     contact_id: number;
-    supplier_type: string | null;
     contact: { id: number; identification: string; name: string } | null;
+    retention_amount: number;
     voucher_type_id: number;
+    voucher_type_code: string;
     serie: string;
     emision: string;
     autorization: string;
@@ -84,6 +85,7 @@ export interface Shop {
     initial: string;
     sub_total: string;
     no_iva: string;
+    exempt: string;
     base0: string;
     base5: string;
     base8: string;

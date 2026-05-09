@@ -17,9 +17,7 @@ const props = defineProps<{
     contributorTypes: ContributorType[];
 }>();
 
-const contributorTypeOptions = computed(() =>
-    props.contributorTypes.map((c) => ({ id: c.id, label: c.description })),
-);
+const contributorTypeOptions = computed(() => props.contributorTypes.map((c) => ({ id: c.id, label: c.description })));
 
 const typeDeclarationOptions = [
     { id: "mensual", label: "Mensual" },
@@ -54,19 +52,14 @@ function submit() {
 <template>
     <Head title="Editar contribuyente" />
     <TenantLayout>
-        <HeaderForm
-            title="Editar Contribuyente"
-            :link-href="route('tenant.companies.index')"
-        />
+        <HeaderForm title="Editar Contribuyente" :link-href="route('tenant.companies.index')" />
 
         <!-- Nota campos requeridos -->
         <RequiredFields />
 
         <div class="border-border bg-card overflow-hidden rounded-lg border">
             <form class="p-4" @submit.prevent="submit">
-                <div
-                    class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                >
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     <!-- RUC -->
                     <FormField
                         id="ruc"
@@ -167,22 +160,15 @@ function submit() {
                         v-model="form.pass_sri"
                         :error="form.errors.pass_sri"
                         maxlength="50"
+                        required
                     />
                 </div>
 
                 <!-- Características -->
                 <div class="border-border mt-6 border-t pt-6">
-                    <h2 class="text-foreground text-sm font-medium">
-                        Características
-                    </h2>
-                    <div
-                        class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-                    >
-                        <FormSwitch
-                            label="Contabilidad"
-                            description="Lleva contabilidad"
-                            v-model="form.accounting"
-                        />
+                    <h2 class="text-foreground text-sm font-medium">Características</h2>
+                    <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <FormSwitch label="Contabilidad" description="Lleva contabilidad" v-model="form.accounting" />
                         <FormSwitch
                             label="Contribuyente fantasma"
                             description="Contribuyente fantasma"
@@ -199,15 +185,10 @@ function submit() {
                 <!-- Acciones -->
                 <div class="mt-6 flex items-center justify-end gap-3">
                     <Button variant="outline" as-child>
-                        <Link :href="route('tenant.companies.index')"
-                            >Cancelar</Link
-                        >
+                        <Link :href="route('tenant.companies.index')">Cancelar</Link>
                     </Button>
                     <Button type="submit" :disabled="form.processing">
-                        <Loader2
-                            v-if="form.processing"
-                            class="mr-1.5 size-4 animate-spin"
-                        />
+                        <Loader2 v-if="form.processing" class="mr-1.5 size-4 animate-spin" />
                         {{ form.processing ? "Guardando..." : "Actualizar" }}
                     </Button>
                 </div>

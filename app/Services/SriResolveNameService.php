@@ -9,7 +9,7 @@ class SriResolveNameService
 {
     public function searchByIdentificationSRI(string $identification)
     {
-        $url = config('services.sri.url');
+        $url = config('sri.url');
 
         $isRUC = strlen($identification) === 13;
 

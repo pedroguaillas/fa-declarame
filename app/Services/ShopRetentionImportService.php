@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Tenant\Contact;
 use App\Models\Tenant\Retention;
 use App\Models\Tenant\Shop;
 use Carbon\Carbon;
@@ -134,6 +133,7 @@ class ShopRetentionImportService
             $numDoc = trim((string) $impuesto->numDocSustento);
             if (! isset($docGroups[$numDoc])) {
                 $docGroups[$numDoc] = [
+                    'fechaEmisionDocSustento' => trim((string) $impuesto->fechaEmisionDocSustento),
                     'impuestos' => [],
                 ];
             }
@@ -145,7 +145,13 @@ class ShopRetentionImportService
 
         foreach ($docGroups as $numDoc => $group) {
             $serie = substr($numDoc, 0, 3).'-'.substr($numDoc, 3, 3).'-'.substr($numDoc, 6);
-            $shop = Shop::where('serie', $serie)->first();
+            $emisionDoc = Carbon::createFromFormat('d/m/Y', $group['fechaEmisionDocSustento'])->format('Y-m-d');
+
+            // V1 no trae autorización del documento sustento → buscar por serie + fecha
+            // para evitar colisiones con comprobantes físicos de otra época.
+            $shop = Shop::where('serie', $serie)
+                ->whereDate('emision', $emisionDoc)
+                ->first();
 
             if (! $shop) {
                 $skipped++;
@@ -213,16 +219,21 @@ class ShopRetentionImportService
 
         foreach ($xml->docsSustento->docSustento as $docSustento) {
             $numAutDocSustento = trim((string) $docSustento->numAutDocSustento);
-            $identificacionSujetoRetenido = trim((string) $docSustento->identificacionSujetoRetenido);
 
             $num = (string) $docSustento->numDocSustento;
-            $formated = substr($num, 0, 3).'-'.substr($num, 3, 3).'-'.substr($num, 6);
+            $serie = substr($num, 0, 3).'-'.substr($num, 3, 3).'-'.substr($num, 6);
 
-            $shop = Shop::where('autorization', $numAutDocSustento)
-                ->orWhere([
-                    'serie' => $formated,
-                    'contact_id' => Contact::where('identification', $identificacionSujetoRetenido)->value('id'),
-                ])->first();
+            $emisionDoc = Carbon::createFromFormat('d/m/Y', (string) $docSustento->fechaEmisionDocSustento)->format('Y-m-d');
+
+            // Clave de acceso electrónica (49 dígitos): globalmente única → buscar solo por autorización.
+            // Autorización física (< 49 dígitos): puede repetirse entre períodos → buscar por serie + fecha.
+            if (strlen($numAutDocSustento) === 49) {
+                $shop = Shop::where('autorization', $numAutDocSustento)->first();
+            } else {
+                $shop = Shop::where('serie', $serie)
+                    ->whereDate('emision', $emisionDoc)
+                    ->first();
+            }
 
             if (! $shop) {
                 $skipped++;

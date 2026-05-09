@@ -11,6 +11,8 @@ import {
     ShoppingCart,
     ReceiptIndianRupee,
     Contact,
+    CloudDownload,
+    FileSpreadsheet,
 } from "lucide-vue-next";
 import type { User } from "@/types";
 import type { LucideIcon } from "lucide-vue-next";
@@ -85,6 +87,11 @@ export function useNavigation(user: User) {
             icon: Building2,
         },
         {
+            title: "Descarga automática",
+            url: route("tenant.sri-scrape.index"),
+            icon: CloudDownload,
+        },
+        {
             title: "Compras",
             url: route("tenant.shops.index"),
             icon: ShoppingCart,
@@ -141,6 +148,11 @@ export function useNavigation(user: User) {
                     url: route("tenant.reports.orders-by-client"),
                 },
             ],
+        },
+        {
+            title: "SRI",
+            url: route("tenant.sri.index"),
+            icon: FileSpreadsheet,
         },
     ];
 

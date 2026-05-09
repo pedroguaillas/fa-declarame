@@ -26,3 +26,5 @@ Sistema Tributario para el procesamiento de información de Compras, Ventas y Re
 # Instalar una dependencia ignorando la incompatibilidad
 
 `./vendor/bin/sail composer require maatwebsite/excel --ignore-platform-reqs`
+
+Migrar tenant (opcional) `./vendor/bin/sail artisan tenants:migrate`

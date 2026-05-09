@@ -20,6 +20,7 @@ class Shop extends BaseModel
         'serie',
         'sub_total',
         'no_iva',
+        'exempt',
         'base0',
         'base5',
         'base8',
@@ -40,7 +41,7 @@ class Shop extends BaseModel
         'autorization_retention',
         'retention_at',
 
-        // ESTOS
+        // N/C - N/D
         'voucher_type_modify_id',
         'est_modify',
         'poi_modify',

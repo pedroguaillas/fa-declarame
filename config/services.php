@@ -35,8 +35,4 @@ return [
         ],
     ],
 
-    'sri' => [
-        'url' => env('SRI_CATASTRO_URL'),
-    ],
-
 ];

@@ -1,0 +1,338 @@
+<script setup lang="ts">
+import { Head, useForm, usePage } from "@inertiajs/vue3";
+import { ref, onMounted, onUnmounted, computed, watch } from "vue";
+
+import TenantLayout from "@/layouts/TenantLayout.vue";
+import HeaderList from "@/components/Shared/HeaderList.vue";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+    CloudDownload,
+    Loader2,
+    CheckCircle2,
+    XCircle,
+    Clock,
+    AlertTriangle,
+} from "lucide-vue-next";
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface ScrapeJob {
+    id: number;
+    type: string;
+    year: number;
+    month: number;
+    mode: string;
+    status: string;
+    progress: { step: string; message: string } | null;
+    result: { imported: number; skipped: number; errors: number } | null;
+    error_message: string | null;
+    created_at: string;
+    completed_at: string | null;
+}
+
+// ─── Props ──────────────────────────────────────────────────────────────────
+
+const props = defineProps<{
+    jobs: ScrapeJob[];
+    hasPassword: boolean;
+    hasCaptchaKey: boolean;
+}>();
+
+// ─── State ──────────────────────────────────────────────────────────────────
+
+const currentYear = new Date().getFullYear();
+const currentMonth = new Date().getMonth(); // 0-indexed, so previous month
+const previousMonth = currentMonth === 0 ? 12 : currentMonth;
+const previousYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+const form = useForm({
+    type: "compras",
+    year: previousYear,
+    month: previousMonth,
+});
+
+const jobsList = ref<ScrapeJob[]>(props.jobs);
+let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+const page = usePage();
+const flash = computed(() => page.props.flash as { success?: string; error?: string });
+
+// ─── Years & Months ─────────────────────────────────────────────────────────
+
+const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+
+const months = [
+    { value: 1, label: "Enero" },
+    { value: 2, label: "Febrero" },
+    { value: 3, label: "Marzo" },
+    { value: 4, label: "Abril" },
+    { value: 5, label: "Mayo" },
+    { value: 6, label: "Junio" },
+    { value: 7, label: "Julio" },
+    { value: 8, label: "Agosto" },
+    { value: 9, label: "Septiembre" },
+    { value: 10, label: "Octubre" },
+    { value: 11, label: "Noviembre" },
+    { value: 12, label: "Diciembre" },
+];
+
+// ─── Status helpers ─────────────────────────────────────────────────────────
+
+const statusConfig: Record<
+    string,
+    { label: string; class: string; icon: any }
+> = {
+    pending: {
+        label: "Pendiente",
+        class: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-0",
+        icon: Clock,
+    },
+    running: {
+        label: "En progreso",
+        class: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0",
+        icon: Loader2,
+    },
+    completed: {
+        label: "Completado",
+        class: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0",
+        icon: CheckCircle2,
+    },
+    failed: {
+        label: "Error",
+        class: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0",
+        icon: XCircle,
+    },
+};
+
+const monthName = (m: number) => months.find((mo) => mo.value === m)?.label ?? m;
+
+const hasActiveJobs = computed(() =>
+    jobsList.value.some((j) => j.status === "pending" || j.status === "running")
+);
+
+// ─── Polling ────────────────────────────────────────────────────────────────
+
+async function pollStatus() {
+    try {
+        const response = await fetch(route("tenant.sri-scrape.status"));
+        const data = await response.json();
+        jobsList.value = data.jobs;
+    } catch {
+        // Ignore polling errors
+    }
+}
+
+function startPolling() {
+    if (pollInterval) return;
+    pollInterval = setInterval(pollStatus, 3000);
+}
+
+function stopPolling() {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+}
+
+onMounted(() => {
+    if (hasActiveJobs.value) {
+        startPolling();
+    }
+});
+
+onUnmounted(() => {
+    stopPolling();
+});
+
+watch(hasActiveJobs, (active) => {
+    if (active) {
+        startPolling();
+    } else {
+        stopPolling();
+    }
+});
+
+// ─── Submit ─────────────────────────────────────────────────────────────────
+
+function submit() {
+    form.post(route("tenant.sri-scrape.store"), {
+        preserveScroll: true,
+        onSuccess: () => {
+            pollStatus();
+            startPolling();
+        },
+    });
+}
+
+defineOptions({ layout: TenantLayout });
+</script>
+
+<template>
+    <HeaderList title="Comprobantes SRI" description="Descarga masiva" />
+
+    <div class="mt-6 space-y-6 px-1">
+        <!-- Alerts -->
+        <Alert v-if="!hasPassword" variant="destructive">
+            <AlertTriangle class="size-4" />
+            <AlertTitle>Clave SRI no configurada</AlertTitle>
+            <AlertDescription>
+                Configure la clave del SRI en la configuración de la empresa antes de usar esta función.
+            </AlertDescription>
+        </Alert>
+
+        <Alert v-if="flash?.success" class="border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
+            <CheckCircle2 class="size-4" />
+            <AlertDescription>{{ flash.success }}</AlertDescription>
+        </Alert>
+
+        <Alert v-if="flash?.error" variant="destructive">
+            <XCircle class="size-4" />
+            <AlertDescription>{{ flash.error }}</AlertDescription>
+        </Alert>
+
+        <!-- Form -->
+        <Card>
+            <CardHeader>
+                <CardTitle class="text-lg">Nueva descarga</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <form @submit.prevent="submit" class="flex flex-col gap-4 sm:flex-row sm:items-end">
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-sm font-medium">Tipo</label>
+                        <Select v-model="form.type">
+                            <SelectTrigger class="w-[180px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="compras">Compras (Recibidos)</SelectItem>
+                                <SelectItem value="ventas">Ventas (Emitidos)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-sm font-medium">Año</label>
+                        <Select v-model="form.year">
+                            <SelectTrigger class="w-[120px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="y in years"
+                                    :key="y"
+                                    :value="y"
+                                >
+                                    {{ y }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-sm font-medium">Mes</label>
+                        <Select v-model="form.month">
+                            <SelectTrigger class="w-[160px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="m in months"
+                                    :key="m.value"
+                                    :value="m.value"
+                                >
+                                    {{ m.label }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <Button
+                        type="submit"
+                        :disabled="form.processing || !hasPassword"
+                        class="font-bold"
+                    >
+                        <Loader2 v-if="form.processing" class="size-4 animate-spin" />
+                        <CloudDownload v-else class="size-4" />
+                        Descargar del SRI
+                    </Button>
+                </form>
+            </CardContent>
+        </Card>
+
+        <!-- Jobs List -->
+        <Card>
+            <CardHeader>
+                <CardTitle class="text-lg">Descargas recientes</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div v-if="jobsList.length === 0" class="text-muted-foreground py-8 text-center text-sm">
+                    No hay descargas recientes.
+                </div>
+
+                <div v-else class="space-y-3">
+                    <div
+                        v-for="job in jobsList"
+                        :key="job.id"
+                        class="flex flex-col gap-2 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                        <div class="flex flex-col gap-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-semibold uppercase">
+                                    {{ job.type }}
+                                </span>
+                                <span class="text-muted-foreground text-sm">
+                                    {{ monthName(job.month) }} {{ job.year }}
+                                </span>
+                                <Badge :class="statusConfig[job.status]?.class">
+                                    {{ statusConfig[job.status]?.label ?? job.status }}
+                                </Badge>
+                            </div>
+
+                            <!-- Progress message -->
+                            <p
+                                v-if="job.status === 'running' && job.progress"
+                                class="text-muted-foreground flex items-center gap-1.5 text-xs"
+                            >
+                                <Loader2 class="size-3 animate-spin" />
+                                {{ job.progress.message }}
+                            </p>
+
+                            <!-- Result -->
+                            <p
+                                v-if="job.status === 'completed' && job.result"
+                                class="text-xs text-green-600 dark:text-green-400"
+                            >
+                                {{ job.result.imported }} importados,
+                                {{ job.result.skipped }} omitidos,
+                                {{ job.result.errors }} errores
+                            </p>
+
+                            <!-- Error -->
+                            <p
+                                v-if="job.status === 'failed' && job.error_message"
+                                class="text-xs text-red-600 dark:text-red-400"
+                            >
+                                {{ job.error_message }}
+                            </p>
+                        </div>
+
+                        <div class="text-muted-foreground text-xs">
+                            {{ new Date(job.created_at).toLocaleString("es-EC") }}
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    </div>
+</template>

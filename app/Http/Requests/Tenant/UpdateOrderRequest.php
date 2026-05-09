@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
+use App\Models\Tenant\Order;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -22,11 +23,27 @@ class UpdateOrderRequest extends FormRequest
     {
         return [
             'contact_id' => ['required', 'integer', 'exists:contacts,id'],
-            'voucher_type' => ['required', 'integer'],
+            'voucher_type_id' => ['required', 'integer'],
             'emision' => ['required', 'date'],
-            'autorization' => ['required', 'string', 'max:49'],
+            'autorization' => ['required', 'string', 'max:49', function (string $attribute, mixed $value, \Closure $fail) {
+                $query = Order::where('id', '!=', $this->route('order')->id);
+
+                if (strlen($value) === 49) {
+                    $query->where('autorization', $value);
+                } else {
+                    $query->where('autorization', $value)
+                        ->where('serie', $this->input('serie'))
+                        ->where('emision', $this->input('emision'));
+                }
+
+                if ($query->exists()) {
+                    $fail('Este comprobante ya se encuentra registrado.');
+                }
+            }],
             'autorized_at' => ['nullable', 'date'],
             'serie' => ['required', 'string', 'max:17'],
+            'state' => ['required', 'string'],
+
             'sub_total' => ['required', 'numeric', 'min:0'],
             'no_iva' => ['nullable', 'numeric', 'min:0'],
             'base0' => ['nullable', 'numeric', 'min:0'],
@@ -42,12 +59,6 @@ class UpdateOrderRequest extends FormRequest
             'discount' => ['nullable', 'numeric', 'min:0'],
             'ice' => ['nullable', 'numeric', 'min:0'],
             'total' => ['required', 'numeric', 'min:0'],
-            'state' => ['required', 'string'],
-            'serie_retention' => ['nullable', 'string', 'max:17'],
-            'date_retention' => ['nullable', 'date'],
-            'state_retention' => ['nullable', 'string'],
-            'autorization_retention' => ['nullable', 'string', 'max:49'],
-            'retention_at' => ['nullable', 'date'],
         ];
     }
 }

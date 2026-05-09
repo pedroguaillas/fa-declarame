@@ -16,6 +16,7 @@ use App\Http\Controllers\Tenant\ProfileController as TenantProfileController;
 use App\Http\Controllers\Tenant\ReportController;
 use App\Http\Controllers\Tenant\RetentionController;
 use App\Http\Controllers\Tenant\ShopController;
+use App\Http\Controllers\Tenant\SriScrapeController;
 use App\Http\Middleware\Tenant\RequireCompanyScope;
 use Illuminate\Support\Facades\Route;
 
@@ -53,6 +54,7 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
             ->name('tenant.reports.orders-by-client.export');
 
         Route::get('export-ats', [AtsController::class, 'export'])->name('tenant.export-ats');
+        Route::post('import-ats', [AtsController::class, 'import'])->name('tenant.import-ats');
         Route::get('orders/export', [OrderController::class, 'export'])->name('tenant.orders.export');
         Route::post('orders/import', [OrderController::class, 'import'])->name('tenant.orders.import');
         Route::post('orders/import-retentions', [OrderController::class, 'importRetentions'])->name('tenant.orders.import-retentions');
@@ -95,6 +97,12 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
             ->name('tenant.shops.retention.store');
         Route::patch('shops/{shop}/account', [ShopController::class, 'updateAccount'])
             ->name('tenant.shops.account.update');
+
+        Route::get('sri-scrape', [SriScrapeController::class, 'index'])->name('tenant.sri-scrape.index');
+        Route::post('sri-scrape', [SriScrapeController::class, 'store'])->name('tenant.sri-scrape.store');
+        Route::get('sri-scrape/status', [SriScrapeController::class, 'status'])->name('tenant.sri-scrape.status');
+
+        Route::get('sri', [AtsController::class, 'index'])->name('tenant.sri.index');
     });
 
     Route::get('/company-scope/select', [CompanyScopeController::class, 'select'])

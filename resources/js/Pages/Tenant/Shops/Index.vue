@@ -17,7 +17,7 @@ import ShopExportModal from "./components/ShopExportModal.vue";
 
 import type { ActionDef, ActionPayload, ColumnDef } from "@/types/shared";
 import { Paginator } from "@/types";
-import { RetentionItem, Shop } from "@/types/tenant";
+import { Shop } from "@/types/tenant";
 import { Download, FileText, Pencil, Receipt, Trash2 } from "lucide-vue-next";
 
 // ─── Props ─────────────────────────────────────────────────────────────────
@@ -63,11 +63,11 @@ const voucherTypes: Record<string, { label: string; class: string }> = {
 const columns: ColumnDef<Shop>[] = [
     { key: "emision", label: "Emisión" },
     {
-        key: "code",
+        key: "voucher_type_code",
         label: "Tipo",
         badge: {
-            value: (item) => voucherTypes[item.code]?.label ?? item.code,
-            class: (item) => voucherTypes[item.code]?.class ?? "",
+            value: (item) => voucherTypes[item.voucher_type_code]?.label ?? item.voucher_type_code,
+            class: (item) => voucherTypes[item.voucher_type_code]?.class ?? "",
         },
     },
     {
@@ -95,32 +95,26 @@ const columnsWithRetention: ColumnDef<Shop>[] = [
         key: "retention_items",
         label: "Retención",
         align: "right",
-        format: (_, item) =>
-            `$${(item.retention_items ?? [])
-                .reduce((s: number, i: RetentionItem) => s + Number(i.value), 0)
-                .toFixed(2)}`,
+        format: (_, item) => `$${Number(item.retention_amount).toFixed(2)}`,
     },
     {
         key: "total",
         label: "A pagar",
         align: "right",
-        format: (_, item) => {
-            const ret = (item.retention_items ?? []).reduce((s: number, i: RetentionItem) => s + Number(i.value), 0);
-            return `$${(Number(item.total) - ret).toFixed(2)}`;
-        },
+        format: (_, item) => `$${(Number(item.total) - Number(item.retention_amount)).toFixed(2)}`,
     },
 ];
 
 const activeColumns = computed(() => (props.isActiveRetention ? columnsWithRetention : columns));
 
-const actions: ActionDef<Shop>[] = [
+const actions = computed<ActionDef<Shop>[]>(() => [
     ...(props.isActiveRetention
         ? [
               {
                   event: "retention",
                   label: "Retención",
                   icon: FileText,
-                  show: (item) => (item as any).code !== "04",
+                  show: (item) => (item as any).voucher_type_code !== "04",
                   class: (item) =>
                       item.serie_retention
                           ? "text-green-600! hover:bg-green-100!"
@@ -143,7 +137,7 @@ const actions: ActionDef<Shop>[] = [
         class: "text-destructive focus:text-destructive",
         icon: Trash2,
     },
-];
+]);
 
 // ─── Filters ────────────────────────────────────────────────────────────────
 
@@ -352,7 +346,11 @@ watch(
             title="¿Eliminar compra?"
             :description="`Se eliminará la compra ${deleteTarget?.serie}. Esta acción no se puede deshacer.`"
             :loading="deleteLoading"
-            @update:open="(v) => { if (!v) deleteTarget.value = null; }"
+            @update:open="
+                (v) => {
+                    if (!v) deleteTarget.value = null;
+                }
+            "
             @confirm="confirmDelete"
             @cancel="deleteTarget = null"
         />

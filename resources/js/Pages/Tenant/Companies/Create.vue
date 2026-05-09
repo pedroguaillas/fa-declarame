@@ -203,6 +203,7 @@ function submit() {
                         v-model="form.pass_sri"
                         :error="form.errors.pass_sri"
                         maxlength="50"
+                        required
                     />
                 </div>
 

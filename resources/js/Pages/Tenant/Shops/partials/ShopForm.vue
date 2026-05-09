@@ -18,7 +18,6 @@ import type { InertiaForm } from "@inertiajs/vue3";
 
 interface ShopFormFields {
     contact_id: number | null;
-    supplier_type: string;
     voucher_type_id: number | string;
     type_identification: string | undefined;
     emision: string;
@@ -27,6 +26,7 @@ interface ShopFormFields {
     serie: string;
     sub_total: number | string;
     no_iva: number | string;
+    exempt: number | string;
     base0: number | string;
     base5: number | string;
     base8: number | string;
@@ -306,7 +306,13 @@ watch(
                     @blur="formatSerie"
                 />
 
-                <FormDatePicker id="emision" label="Fecha emisión" v-model="form.emision" :max-value="today(getLocalTimeZone())" required />
+                <FormDatePicker
+                    id="emision"
+                    label="Fecha emisión"
+                    v-model="form.emision"
+                    :max-value="today(getLocalTimeZone())"
+                    required
+                />
 
                 <div class="lg:col-span-2">
                     <FormField
@@ -377,6 +383,8 @@ watch(
                     type="number"
                     step="0.01"
                 />
+
+                <FormField id="exempt" label="Base Exenta" v-model="form.exempt" type="number" step="0.01" />
 
                 <FormField id="base0" label="Base 0%" v-model="form.base0" type="number" step="0.01" />
 

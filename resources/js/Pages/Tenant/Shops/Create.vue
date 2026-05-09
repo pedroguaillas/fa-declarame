@@ -12,7 +12,6 @@ const props = defineProps<{
 
 const form = useForm({
     contact_id: null as number | null,
-    supplier_type: "",
     voucher_type_id: "" as number | string,
     type_identification: "" as string | undefined,
     emision: "",
@@ -21,6 +20,7 @@ const form = useForm({
     serie: "",
     sub_total: 0,
     no_iva: 0,
+    exempt: 0,
     base0: 0,
     base5: 0,
     base8: 0,
@@ -61,7 +61,12 @@ function submit() {
             <HeaderForm title="Nueva Compra" :link-href="route('tenant.shops.index')" />
 
             <div class="border-border bg-card overflow-hidden rounded-lg border">
-                <ShopForm :form="form" :voucher-types="props.voucherTypes" submit-label="Registrar compra" @submit="submit" />
+                <ShopForm
+                    :form="form"
+                    :voucher-types="props.voucherTypes"
+                    submit-label="Registrar compra"
+                    @submit="submit"
+                />
             </div>
         </div>
     </TenantLayout>

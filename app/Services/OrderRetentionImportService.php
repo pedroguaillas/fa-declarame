@@ -154,12 +154,13 @@ class OrderRetentionImportService
 
         foreach ($docGroups as $numDoc => $group) {
             $serie = substr($numDoc, 0, 3).'-'.substr($numDoc, 3, 3).'-'.substr($numDoc, 6);
+            $emisionDoc = Carbon::createFromFormat('d/m/Y', $group['fechaEmisionDocSustento'])->format('Y-m-d');
 
-            // TODO: Condicionar
-            // Crear el Scope para companyId
-            // Que sea de esa fecha o mes
-            // Si tiene el autorizacion esmas efectivo
-            $order = Order::where('serie', $serie)->first();
+            // V1 no trae autorización del documento sustento → buscar por serie + fecha
+            // para evitar colisiones con comprobantes físicos de otra época.
+            $order = Order::where('serie', $serie)
+                ->whereDate('emision', $emisionDoc)
+                ->first();
 
             if (! $order) {
                 $voucherType = VoucherType::where([
@@ -241,8 +242,17 @@ class OrderRetentionImportService
             $num = (string) $docSustento->numDocSustento;
             $serie = substr($num, 0, 3).'-'.substr($num, 3, 3).'-'.substr($num, 6);
 
-            $order = Order::where('autorization', $numAutDocSustento)
-                ->orWhere('serie', $serie)->first();
+            $emisionDoc = Carbon::createFromFormat('d/m/Y', (string) $docSustento->fechaEmisionDocSustento)->format('Y-m-d');
+
+            // Clave de acceso electrónica (49 dígitos): globalmente única → buscar solo por autorización.
+            // Autorización física (< 49 dígitos): puede repetirse entre períodos → buscar por serie + fecha.
+            if (strlen($numAutDocSustento) === 49) {
+                $order = Order::where('autorization', $numAutDocSustento)->first();
+            } else {
+                $order = Order::where('serie', $serie)
+                    ->whereDate('emision', $emisionDoc)
+                    ->first();
+            }
 
             if (! $order) {
                 $voucherType = VoucherType::where([
@@ -374,11 +384,6 @@ class OrderRetentionImportService
         $emision = Carbon::createFromFormat('d/m/Y', (string) $docSustento->fechaEmisionDocSustento)->format('Y-m-d');
         $autorization = trim((string) $docSustento->numAutDocSustento);
 
-        [$base0, $noIva, $base5, $base8, $base12, $base15, $iva5, $iva8, $iva12, $iva15] = $this->extractIva($docSustento);
-
-        $subTotal = $base0 + $noIva + $base5 + $base8 + $base12 + $base15;
-        $total = $subTotal + $iva5 + $iva8 + $iva12 + $iva15;
-
         return Order::create([
             'company_id' => $company->id,
             'contact_id' => $contact->id,
@@ -386,74 +391,7 @@ class OrderRetentionImportService
             'emision' => $emision,
             'autorization' => $autorization,
             'serie' => $serie,
-            'sub_total' => $subTotal,
-            'base0' => $base0,
-            'no_iva' => $noIva,
-            'base5' => $base5,
-            'base8' => $base8,
-            'base12' => $base12,
-            'base15' => $base15,
-            'iva5' => $iva5,
-            'iva8' => $iva8,
-            'iva12' => $iva12,
-            'iva15' => $iva15,
-            'total' => $total,
             'state' => 'AUTORIZADO',
         ]);
-    }
-
-    /**
-     * Parse detalleImpuestos from a v2.0.0 docSustento node.
-     *
-     * @return array{float, float, float, float, float, float, float, float, float, float}
-     *                                                                                     [base0, no_iva, base5, base8, base12, base15, iva5, iva8, iva12, iva15]
-     */
-    private function extractIva(SimpleXMLElement $docSustento): array
-    {
-        $base0 = 0.0;
-        $noIva = 0.0;
-        $base5 = 0.0;
-        $base8 = 0.0;
-        $base12 = 0.0;
-        $base15 = 0.0;
-        $iva5 = 0.0;
-        $iva8 = 0.0;
-        $iva12 = 0.0;
-        $iva15 = 0.0;
-
-        if (! isset($docSustento->detalleImpuestos->detalleImpuesto)) {
-            return [$base0, $noIva, $base5, $base8, $base12, $base15, $iva5, $iva8, $iva12, $iva15];
-        }
-
-        foreach ($docSustento->detalleImpuestos->detalleImpuesto as $impuesto) {
-            // codigo 2 = IVA; skip ICE (3) and others
-            if ((int) $impuesto->codigo !== 2) {
-                continue;
-            }
-
-            $code = (int) $impuesto->codigoPorcentaje;
-            $base = (float) $impuesto->baseImponible;
-            $valor = (float) $impuesto->impuesto;
-
-            if ($code === Constants::IVA0 || $code === Constants::IVA_EXENT0) {
-                $base0 += $base;
-            } elseif ($code === Constants::NO_IVA) {
-                $noIva += $base;
-            } elseif ($code === Constants::IVA5) {
-                $base5 += $base;
-                $iva5 += $valor;
-            } elseif ($code === Constants::IVA_DIFERIDO) {
-                $base12 += $base;
-                $iva12 += $valor;
-            } elseif ($code === Constants::IVA12) {
-                $base12 += $base;
-                $iva12 += $valor;
-            } elseif ($code === Constants::IVA15) {
-                $base15 += $base;
-                $iva15 += $valor;
-            }
-        }
-
-        return [$base0, $noIva, $base5, $base8, $base12, $base15, $iva5, $iva8, $iva12, $iva15];
     }
 }

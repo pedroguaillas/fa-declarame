@@ -35,9 +35,11 @@ class ShopController extends Controller
         }
 
         $shops = $this->filteredShopsQuery($filters)
-            ->selectRaw('shops.id, account_id, contact_id, serie, emision, vt.code, total, shops.state, serie_retention')
+            ->selectRaw('shops.id, shops.account_id, contact_id, serie, emision, vt.code AS voucher_type_code, total, shops.state, serie_retention, SUM(value) AS retention_amount')
             ->with(['contact:id,name'])
+            ->leftJoin('shop_retention_items', 'shop_id', 'shops.id')
             ->orderByDesc('emision')
+            ->groupBy('shops.id', 'shops.account_id', 'contact_id', 'serie', 'emision', 'vt.code', 'total', 'shops.state', 'serie_retention')
             ->paginate(25)
             ->withQueryString();
 
