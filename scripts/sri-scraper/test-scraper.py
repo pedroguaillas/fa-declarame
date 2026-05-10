@@ -65,9 +65,9 @@ TWOCAPTCHA_RES = "https://2captcha.com/res.php"
 
 # Realistic Chrome user agent
 CHROME_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/125.0.0.0 Safari/537.36"
+    "Chrome/147.0.0.0 Safari/537.36"
 )
 
 
@@ -913,9 +913,9 @@ def main():
         "accept_downloads": True,
         "extra_http_headers": {
             "Accept-Language": "es-EC,es;q=0.9,en;q=0.8",
-            "sec-ch-ua": '"Chromium";v="125", "Google Chrome";v="125", "Not-A.Brand";v="24"',
+            "sec-ch-ua": '"Chromium";v="147", "Google Chrome";v="147", "Not/A)Brand";v="99"',
             "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
+            "sec-ch-ua-platform": '"macOS"',
         },
     }
 
