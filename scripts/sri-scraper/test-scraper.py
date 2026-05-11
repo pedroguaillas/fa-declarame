@@ -20,27 +20,30 @@ Usage:
     python test-scraper.py --visible --ruc=... --password=... --api-key=...
 """
 
+import argparse
 import json
 import math
+import random
 import re
 import sys
 import time
-import argparse
-import random
-import requests
 from datetime import datetime
 from pathlib import Path
-from playwright.sync_api import sync_playwright, Page
+
+import requests
+from playwright.sync_api import Page, sync_playwright
 
 # ─── Stealth Import (v2 → v1 → none) ────────────────────────────────────────
 
 STEALTH_VERSION = 0
 try:
     from playwright_stealth import Stealth
+
     STEALTH_VERSION = 2
 except ImportError:
     try:
         from playwright_stealth import stealth_sync
+
         STEALTH_VERSION = 1
     except ImportError:
         STEALTH_VERSION = 0
@@ -74,6 +77,7 @@ CHROME_USER_AGENT = (
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def log(step: str, message: str) -> None:
     ts = datetime.now().strftime("%H:%M:%S")
     print(f"[{ts}] [{step}] {message}", flush=True)
@@ -91,6 +95,7 @@ def progress(step: str, message: str) -> None:
 
 # ─── Layer 2: Human Behavior Simulation ──────────────────────────────────────
 
+
 def random_delay(min_s: float = 0.3, max_s: float = 1.5) -> None:
     """Sleep a random duration to mimic human timing."""
     time.sleep(random.uniform(min_s, max_s))
@@ -105,7 +110,9 @@ def bezier_point(t: float, p0: tuple, p1: tuple, p2: tuple, p3: tuple) -> tuple:
     )
 
 
-def human_mouse_move(page: Page, target_x: int | None = None, target_y: int | None = None) -> None:
+def human_mouse_move(
+    page: Page, target_x: int | None = None, target_y: int | None = None
+) -> None:
     """Move mouse along a Bézier curve to a target (or random position)."""
     vw = page.viewport_size["width"] if page.viewport_size else 1366
     vh = page.viewport_size["height"] if page.viewport_size else 768
@@ -135,7 +142,9 @@ def human_mouse_move(page: Page, target_x: int | None = None, target_y: int | No
         time.sleep(random.uniform(0.005, 0.025))
 
 
-def human_scroll(page: Page, direction: str = "down", amount: int | None = None) -> None:
+def human_scroll(
+    page: Page, direction: str = "down", amount: int | None = None
+) -> None:
     """Scroll naturally in chunks like a human reader."""
     if amount is None:
         amount = random.randint(150, 500)
@@ -186,17 +195,24 @@ def simulate_human_presence(page: Page, duration_s: float = 8.0) -> None:
 
 # ─── Layer 3: 2Captcha Fallback ──────────────────────────────────────────────
 
+
 def solve_captcha_2captcha(api_key: str, sitekey: str, page_url: str) -> str | None:
     """Solve reCAPTCHA via 2Captcha service (paid fallback)."""
-    progress("captcha-2captcha", f"Enviando reCAPTCHA a 2Captcha (sitekey={sitekey[:10]}...)...")
+    progress(
+        "captcha-2captcha",
+        f"Enviando reCAPTCHA a 2Captcha (sitekey={sitekey[:10]}...)...",
+    )
 
-    resp = requests.post(TWOCAPTCHA_IN, data={
-        "key": api_key,
-        "method": "userrecaptcha",
-        "googlekey": sitekey,
-        "pageurl": page_url,
-        "json": "1",
-    })
+    resp = requests.post(
+        TWOCAPTCHA_IN,
+        data={
+            "key": api_key,
+            "method": "userrecaptcha",
+            "googlekey": sitekey,
+            "pageurl": page_url,
+            "json": "1",
+        },
+    )
     data = resp.json()
 
     if data.get("status") != 1:
@@ -204,17 +220,22 @@ def solve_captcha_2captcha(api_key: str, sitekey: str, page_url: str) -> str | N
         return None
 
     captcha_id = data["request"]
-    progress("captcha-2captcha", f"Captcha enviado, ID={captcha_id}. Esperando solución...")
+    progress(
+        "captcha-2captcha", f"Captcha enviado, ID={captcha_id}. Esperando solución..."
+    )
 
     time.sleep(5)
 
     for poll in range(24):
-        resp = requests.get(TWOCAPTCHA_RES, params={
-            "key": api_key,
-            "action": "get",
-            "id": captcha_id,
-            "json": "1",
-        })
+        resp = requests.get(
+            TWOCAPTCHA_RES,
+            params={
+                "key": api_key,
+                "action": "get",
+                "id": captcha_id,
+                "json": "1",
+            },
+        )
         data = resp.json()
 
         if data.get("status") == 1:
@@ -235,6 +256,7 @@ def solve_captcha_2captcha(api_key: str, sitekey: str, page_url: str) -> str | N
 
 # ─── Layer 1+2: Auto Captcha (stealth + behavior) ────────────────────────────
 
+
 def try_auto_captcha(page: Page, tipo: str) -> str | None:
     """
     Attempt to pass reCAPTCHA automatically by triggering grecaptcha.execute()
@@ -249,7 +271,9 @@ def try_auto_captcha(page: Page, tipo: str) -> str | None:
     simulate_human_presence(page, duration_s=random.uniform(5, 10))
 
     # Move mouse near the form area
-    human_mouse_move(page, target_x=random.randint(400, 800), target_y=random.randint(300, 500))
+    human_mouse_move(
+        page, target_x=random.randint(400, 800), target_y=random.randint(300, 500)
+    )
     random_delay(0.5, 1.0)
 
     # Try to trigger reCAPTCHA naturally via grecaptcha.execute()
@@ -306,7 +330,10 @@ def try_auto_captcha(page: Page, tipo: str) -> str | None:
     progress("captcha-auto", f"grecaptcha.execute() → {execute_result}")
 
     if not execute_result.get("executed"):
-        progress("captcha-auto", "No se pudo ejecutar grecaptcha, probando click en botón buscar...")
+        progress(
+            "captcha-auto",
+            "No se pudo ejecutar grecaptcha, probando click en botón buscar...",
+        )
         # Try clicking the actual search button which may trigger captcha
         clicked = page.evaluate("""() => {
             // Look for a search/buscar button that triggers captcha
@@ -344,7 +371,10 @@ def try_auto_captcha(page: Page, tipo: str) -> str | None:
         }""")
 
         if token:
-            progress("captcha-auto", f"Token automático obtenido ({len(token)} chars) — stealth funcionó!")
+            progress(
+                "captcha-auto",
+                f"Token automático obtenido ({len(token)} chars) — stealth funcionó!",
+            )
             return token
 
         # Check if a visible challenge appeared (means stealth wasn't enough)
@@ -363,7 +393,10 @@ def try_auto_captcha(page: Page, tipo: str) -> str | None:
         }""")
 
         if challenge_visible:
-            progress("captcha-auto", "Challenge visible detectado — stealth insuficiente, necesita 2Captcha")
+            progress(
+                "captcha-auto",
+                "Challenge visible detectado — stealth insuficiente, necesita 2Captcha",
+            )
             return None
 
     progress("captcha-auto", "No se obtuvo token automático en 10s")
@@ -371,6 +404,7 @@ def try_auto_captcha(page: Page, tipo: str) -> str | None:
 
 
 # ─── Login ────────────────────────────────────────────────────────────────────
+
 
 def login(page: Page, ruc: str, password: str) -> bool:
     progress("login", "Navegando al portal SRI...")
@@ -381,7 +415,13 @@ def login(page: Page, ruc: str, password: str) -> bool:
             break
         except Exception as e:
             if attempt == 3:
-                emit("error", {"code": "NAV_TIMEOUT", "message": f"No se pudo cargar el portal SRI: {e}"})
+                emit(
+                    "error",
+                    {
+                        "code": "NAV_TIMEOUT",
+                        "message": f"No se pudo cargar el portal SRI: {e}",
+                    },
+                )
                 return False
             progress("login", f"Intento {attempt} falló, reintentando...")
             random_delay(2, 5)
@@ -393,7 +433,13 @@ def login(page: Page, ruc: str, password: str) -> bool:
     password_el = page.query_selector("#password")
 
     if not username_el or not password_el:
-        emit("error", {"code": "LOGIN_FORM_NOT_FOUND", "message": "No se encontró el formulario de login del SRI"})
+        emit(
+            "error",
+            {
+                "code": "LOGIN_FORM_NOT_FOUND",
+                "message": "No se encontró el formulario de login del SRI",
+            },
+        )
         return False
 
     progress("login", "Ingresando credenciales...")
@@ -401,7 +447,11 @@ def login(page: Page, ruc: str, password: str) -> bool:
     # Move mouse to username field naturally
     box = username_el.bounding_box()
     if box:
-        human_mouse_move(page, target_x=int(box["x"] + box["width"] / 2), target_y=int(box["y"] + box["height"] / 2))
+        human_mouse_move(
+            page,
+            target_x=int(box["x"] + box["width"] / 2),
+            target_y=int(box["y"] + box["height"] / 2),
+        )
         random_delay(0.3, 0.7)
 
     human_type(page, "#usuario", ruc)
@@ -410,7 +460,11 @@ def login(page: Page, ruc: str, password: str) -> bool:
     # Move mouse to password field
     box = password_el.bounding_box()
     if box:
-        human_mouse_move(page, target_x=int(box["x"] + box["width"] / 2), target_y=int(box["y"] + box["height"] / 2))
+        human_mouse_move(
+            page,
+            target_x=int(box["x"] + box["width"] / 2),
+            target_y=int(box["y"] + box["height"] / 2),
+        )
         random_delay(0.3, 0.6)
 
     human_type(page, "#password", password)
@@ -421,7 +475,11 @@ def login(page: Page, ruc: str, password: str) -> bool:
     if submit_btn:
         box = submit_btn.bounding_box()
         if box:
-            human_mouse_move(page, target_x=int(box["x"] + box["width"] / 2), target_y=int(box["y"] + box["height"] / 2))
+            human_mouse_move(
+                page,
+                target_x=int(box["x"] + box["width"] / 2),
+                target_y=int(box["y"] + box["height"] / 2),
+            )
             random_delay(0.2, 0.5)
         submit_btn.click()
     else:
@@ -440,7 +498,10 @@ def login(page: Page, ruc: str, password: str) -> bool:
             const el = document.querySelector('.alert-error, #input-error, .kc-feedback-text, .error-message');
             return el ? el.textContent.trim() : null;
         }""")
-        emit("error", {"code": "LOGIN_FAILED", "message": error_text or "Credenciales inválidas"})
+        emit(
+            "error",
+            {"code": "LOGIN_FAILED", "message": error_text or "Credenciales inválidas"},
+        )
         return False
 
     progress("login", "Login exitoso")
@@ -448,6 +509,7 @@ def login(page: Page, ruc: str, password: str) -> bool:
 
 
 # ─── Navigate ─────────────────────────────────────────────────────────────────
+
 
 def navigate_to_comprobantes(page: Page, tipo: str) -> None:
     if tipo == "ventas":
@@ -510,6 +572,7 @@ def _navigate_ventas(page: Page) -> None:
 
 # ─── Sitekey Extraction ──────────────────────────────────────────────────────
 
+
 def extract_sitekey(page: Page) -> str | None:
     return page.evaluate("""() => {
         const el = document.getElementsByClassName('g-recaptcha')[0];
@@ -539,10 +602,20 @@ def extract_sitekey(page: Page) -> str | None:
 
 # ─── Set Filters ──────────────────────────────────────────────────────────────
 
-def set_filters(page: Page, voucher_type: dict, year: int, month: int, day: int = 0, tipo: str = "compras") -> None:
+
+def set_filters(
+    page: Page,
+    voucher_type: dict,
+    year: int,
+    month: int,
+    day: int = 0,
+    tipo: str = "compras",
+) -> None:
     """Set search filters. For compras: dropdowns. For ventas: calendar date input."""
     # Move mouse near the filter area first
-    human_mouse_move(page, target_x=random.randint(300, 600), target_y=random.randint(200, 350))
+    human_mouse_move(
+        page, target_x=random.randint(300, 600), target_y=random.randint(200, 350)
+    )
     random_delay(0.3, 0.8)
 
     if tipo == "ventas":
@@ -576,8 +649,10 @@ def set_filters(page: Page, voucher_type: dict, year: int, month: int, day: int 
 
 # ─── Inject Token & Search ────────────────────────────────────────────────────
 
+
 def inject_token_and_search(page: Page, token: str) -> None:
-    page.evaluate("""(t) => {
+    page.evaluate(
+        """(t) => {
         const el = document.getElementById('g-recaptcha-response');
         if (el) {
             el.style.display = 'block';
@@ -589,20 +664,28 @@ def inject_token_and_search(page: Page, token: str) -> None:
             el.removeAttribute('disabled');
             el.value = t;
         });
-    }""", token)
+    }""",
+        token,
+    )
 
     page.evaluate("(t) => { rcBuscar(t); }", token)
 
 
 # ─── Check Page State ─────────────────────────────────────────────────────────
 
+
 def get_table_id(tipo: str) -> str:
-    return "frmPrincipal:tablaCompEmitidos_data" if tipo == "ventas" else "frmPrincipal:tablaCompRecibidos_data"
+    return (
+        "frmPrincipal:tablaCompEmitidos_data"
+        if tipo == "ventas"
+        else "frmPrincipal:tablaCompRecibidos_data"
+    )
 
 
 def check_page_state(page: Page, tipo: str) -> dict:
     table_id = get_table_id(tipo)
-    return page.evaluate("""(tblId) => {
+    return page.evaluate(
+        """(tblId) => {
         const msgs = document.getElementById('formMessages:messages');
         const msgsText = msgs ? msgs.innerText : '';
 
@@ -636,17 +719,24 @@ def check_page_state(page: Page, tipo: str) -> dict:
             state: 'unknown',
             detail: 'msgs=[' + msgsText.substring(0, 60) + '] ajaxBusy=' + ajaxBusy + ' blockUI=' + blockUI,
         };
-    }""", table_id)
+    }""",
+        table_id,
+    )
 
 
 # ─── Search Direct (Ventas - no captcha) ─────────────────────────────────────
 
-def search_direct(page: Page, voucher_type: dict, year: int, month: int,
-                  tipo: str, day: int = 0) -> bool:
+
+def search_direct(
+    page: Page, voucher_type: dict, year: int, month: int, tipo: str, day: int = 0
+) -> bool:
     """For ventas (emitidos): no captcha, just click Consultar button."""
     label = voucher_type["label"]
     day_str = f", día={day}" if day > 0 else ""
-    progress(label, f"Configurando filtros: año={year}, mes={month}{day_str}, tipo={label}...")
+    progress(
+        label,
+        f"Configurando filtros: año={year}, mes={month}{day_str}, tipo={label}...",
+    )
     set_filters(page, voucher_type, year, month, day, tipo)
 
     progress(label, "Haciendo click en Consultar...")
@@ -669,8 +759,16 @@ def search_direct(page: Page, voucher_type: dict, year: int, month: int,
 
 # ─── Search With Captcha (3-Layer Strategy) ──────────────────────────────────
 
-def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
-                        api_key: str | None, tipo: str, day: int = 0) -> bool:
+
+def search_with_captcha(
+    page: Page,
+    voucher_type: dict,
+    year: int,
+    month: int,
+    api_key: str | None,
+    tipo: str,
+    day: int = 0,
+) -> bool:
     """
     3-layer captcha strategy:
       1. Try auto-pass via stealth + human behavior (free, fast)
@@ -679,7 +777,10 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
     """
     label = voucher_type["label"]
     day_str = f", día={day}" if day > 0 else ""
-    progress(label, f"Configurando filtros: año={year}, mes={month}{day_str}, tipo={label}...")
+    progress(
+        label,
+        f"Configurando filtros: año={year}, mes={month}{day_str}, tipo={label}...",
+    )
     set_filters(page, voucher_type, year, month, day, tipo)
 
     sitekey = extract_sitekey(page)
@@ -699,7 +800,10 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
         };
     }""")
 
-    progress(label, f"Diagnóstico: rcBuscar={diag['hasRcBuscar']}, grecaptcha={diag.get('hasGrecaptcha')}")
+    progress(
+        label,
+        f"Diagnóstico: rcBuscar={diag['hasRcBuscar']}, grecaptcha={diag.get('hasGrecaptcha')}",
+    )
 
     if not diag["hasRcBuscar"]:
         progress(label, "ERROR: rcBuscar no encontrado en la página")
@@ -722,15 +826,22 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
         # ── Layer 3: 2Captcha fallback ──
         if not token:
             if not api_key:
-                progress(label, "[LAYER 3] Sin API key de 2Captcha, no hay fallback disponible")
+                progress(
+                    label,
+                    "[LAYER 3] Sin API key de 2Captcha, no hay fallback disponible",
+                )
                 if attempt < 3:
                     progress(label, "Recargando para reintentar stealth...")
                     navigate_to_comprobantes(page, tipo)
                     set_filters(page, voucher_type, year, month, day, tipo)
                 continue
 
-            progress(label, f"[LAYER 3] Usando 2Captcha como fallback (intento {attempt})...")
-            token = solve_captcha_2captcha(api_key, sitekey, "https://srienlinea.sri.gob.ec")
+            progress(
+                label, f"[LAYER 3] Usando 2Captcha como fallback (intento {attempt})..."
+            )
+            token = solve_captcha_2captcha(
+                api_key, sitekey, "https://srienlinea.sri.gob.ec"
+            )
 
             if not token:
                 progress(label, f"2Captcha falló en intento {attempt}")
@@ -781,19 +892,31 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
 
 # ─── Download For Voucher Type ────────────────────────────────────────────────
 
-def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: int,
-                               download_dir: Path, api_key: str | None, tipo: str, day: int = 0) -> dict:
+
+def download_for_voucher_type(
+    page: Page,
+    voucher_type: dict,
+    year: int,
+    month: int,
+    download_dir: Path,
+    api_key: str | None,
+    tipo: str,
+    day: int = 0,
+) -> dict:
     label = voucher_type["label"]
     if tipo == "ventas":
         search_ok = search_direct(page, voucher_type, year, month, tipo, day)
     else:
-        search_ok = search_with_captcha(page, voucher_type, year, month, api_key, tipo, day)
+        search_ok = search_with_captcha(
+            page, voucher_type, year, month, api_key, tipo, day
+        )
 
     if not search_ok:
         return {"type": label, "status": "captcha_failed", "content": None}
 
     table_id = get_table_id(tipo)
-    table_info = page.evaluate("""(tblId) => {
+    table_info = page.evaluate(
+        """(tblId) => {
         const tbody = document.getElementById(tblId);
         if (!tbody) return { found: false, rows: 0, message: 'Tabla no encontrada' };
         const rows = tbody.querySelectorAll('tr');
@@ -804,7 +927,9 @@ def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: 
             return { found: true, rows: 0, message: firstRowText.substring(0, 100) };
         }
         return { found: true, rows: rows.length, message: rows.length + ' registros encontrados' };
-    }""", table_id)
+    }""",
+        table_id,
+    )
 
     progress(label, f"Resultado: {table_info['message']}")
 
@@ -834,7 +959,11 @@ def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: 
     def on_response(response):
         content_type = response.headers.get("content-type", "")
         content_disp = response.headers.get("content-disposition", "")
-        if "attachment" in content_disp or "text/plain" in content_type or "octet-stream" in content_type:
+        if (
+            "attachment" in content_disp
+            or "text/plain" in content_type
+            or "octet-stream" in content_type
+        ):
             if "attachment" in content_disp or response.url != page.url:
                 try:
                     raw = response.body()
@@ -845,7 +974,10 @@ def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: 
                     match = re.search(r'filename[*]?=["\']?([^"\';\n]+)', content_disp)
                     if match:
                         captured["filename"] = match.group(1).strip()
-                    progress(label, f"Respuesta interceptada: {len(captured['content'])} bytes, filename={captured['filename']}")
+                    progress(
+                        label,
+                        f"Respuesta interceptada: {len(captured['content'])} bytes, filename={captured['filename']}",
+                    )
                 except Exception:
                     pass
 
@@ -872,7 +1004,12 @@ def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: 
                 content = raw.decode("latin-1")
             file_path.unlink(missing_ok=True)
             progress(label, f"Descargado via Playwright: {filename}")
-            return {"type": label, "status": "downloaded", "content": content, "rows": table_info["rows"]}
+            return {
+                "type": label,
+                "status": "downloaded",
+                "content": content,
+                "rows": table_info["rows"],
+            }
 
         except Exception as e:
             progress(label, f"expect_download falló ({e}), verificando interceptor...")
@@ -881,7 +1018,12 @@ def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: 
         if captured["content"]:
             filename = captured["filename"] or f"{label}.txt"
             progress(label, f"Descargado via interceptor: {filename}")
-            return {"type": label, "status": "downloaded", "content": captured["content"], "rows": table_info["rows"]}
+            return {
+                "type": label,
+                "status": "downloaded",
+                "content": captured["content"],
+                "rows": table_info["rows"],
+            }
 
         # Fallback 2: wait a bit more for interceptor (PrimeFaces may be slow)
         progress(label, "Esperando respuesta del servidor...")
@@ -893,7 +1035,12 @@ def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: 
         if captured["content"]:
             filename = captured["filename"] or f"{label}.txt"
             progress(label, f"Descargado via interceptor (delayed): {filename}")
-            return {"type": label, "status": "downloaded", "content": captured["content"], "rows": table_info["rows"]}
+            return {
+                "type": label,
+                "status": "downloaded",
+                "content": captured["content"],
+                "rows": table_info["rows"],
+            }
 
         progress(label, "No se pudo capturar la descarga")
         return {"type": label, "status": "download_failed", "content": None}
@@ -904,15 +1051,22 @@ def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: 
 
 # ─── Download For Voucher Type By Day (Ventas) ───────────────────────────────
 
-def download_for_voucher_type_by_day(page: Page, voucher_type: dict, year: int, month: int,
-                                      download_dir: Path, api_key: str | None, tipo: str,
-                                      max_days: int = 0) -> dict:
+
+def download_for_voucher_type_by_day(
+    page: Page,
+    voucher_type: dict,
+    year: int,
+    month: int,
+    download_dir: Path,
+    api_key: str | None,
+    tipo: str,
+    max_days: int = 0,
+) -> dict:
     """For ventas (emitidos): download day by day and concatenate all content."""
     import calendar
+
     label = voucher_type["label"]
     days_in_month = calendar.monthrange(year, month)[1]
-    if max_days > 0:
-        days_in_month = min(days_in_month, max_days)
 
     all_content = ""
     total_rows = 0
@@ -923,7 +1077,9 @@ def download_for_voucher_type_by_day(page: Page, voucher_type: dict, year: int, 
     for day in range(1, days_in_month + 1):
         progress(label, f"Día {day}/{days_in_month}...")
 
-        result = download_for_voucher_type(page, voucher_type, year, month, download_dir, api_key, tipo, day)
+        result = download_for_voucher_type(
+            page, voucher_type, year, month, download_dir, api_key, tipo, day
+        )
 
         if result["status"] == "downloaded" and result.get("content"):
             lines = result["content"].split("\n")
@@ -934,7 +1090,9 @@ def download_for_voucher_type_by_day(page: Page, voucher_type: dict, year: int, 
             else:
                 # Skip header line, append only data lines
                 data_lines = lines[1:] if len(lines) > 1 else lines
-                all_content += "\n" + "\n".join(line for line in data_lines if line.strip())
+                all_content += "\n" + "\n".join(
+                    line for line in data_lines if line.strip()
+                )
             total_rows += result.get("rows", 0)
             progress(label, f"Día {day}: {result.get('rows', 0)} registros")
         elif result["status"] == "no_records":
@@ -949,11 +1107,19 @@ def download_for_voucher_type_by_day(page: Page, voucher_type: dict, year: int, 
     if not all_content:
         return {"type": label, "status": "no_records", "content": None}
 
-    progress(label, f"Total ventas {label}: {total_rows} registros en {days_in_month} días")
-    return {"type": label, "status": "downloaded", "content": all_content, "rows": total_rows}
+    progress(
+        label, f"Total ventas {label}: {total_rows} registros en {days_in_month} días"
+    )
+    return {
+        "type": label,
+        "status": "downloaded",
+        "content": all_content,
+        "rows": total_rows,
+    }
 
 
 # ─── Scrape Table ─────────────────────────────────────────────────────────────
+
 
 def scrape_table_data(page: Page, tipo: str) -> list[str]:
     table_id = get_table_id(tipo)
@@ -965,7 +1131,8 @@ def scrape_table_data(page: Page, tipo: str) -> list[str]:
     while True:
         progress("scrape", f"Procesando página {page_num}...")
 
-        page_data = page.evaluate("""(tblId) => {
+        page_data = page.evaluate(
+            """(tblId) => {
             const tbody = document.getElementById(tblId);
             if (!tbody) return { claves: [], hasNext: false };
             const rows = tbody.querySelectorAll('tr');
@@ -982,10 +1149,15 @@ def scrape_table_data(page: Page, tipo: str) -> list[str]:
             }
             const nextBtn = document.querySelector('.ui-paginator-next:not(.ui-state-disabled)');
             return { claves, hasNext: nextBtn !== null };
-        }""", table_id)
+        }""",
+            table_id,
+        )
 
         all_claves.extend(page_data["claves"])
-        progress("scrape", f"Página {page_num}: {len(page_data['claves'])} claves (total: {len(all_claves)})")
+        progress(
+            "scrape",
+            f"Página {page_num}: {len(page_data['claves'])} claves (total: {len(all_claves)})",
+        )
 
         if not page_data["hasNext"]:
             break
@@ -1001,20 +1173,37 @@ def scrape_table_data(page: Page, tipo: str) -> list[str]:
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description="SRI Scraper (Python) — 3-Layer Strategy")
+    parser = argparse.ArgumentParser(
+        description="SRI Scraper (Python) — 3-Layer Strategy"
+    )
     parser.add_argument("--ruc", help="RUC del contribuyente")
     parser.add_argument("--password", help="Contraseña SRI")
-    parser.add_argument("--api-key", dest="api_key", help="API key de 2Captcha (opcional, fallback)")
-    parser.add_argument("--type", dest="tipo", default="compras", choices=["compras", "ventas"])
+    parser.add_argument(
+        "--api-key", dest="api_key", help="API key de 2Captcha (opcional, fallback)"
+    )
+    parser.add_argument(
+        "--type", dest="tipo", default="compras", choices=["compras", "ventas"]
+    )
     parser.add_argument("--year", type=int, default=2026)
     parser.add_argument("--month", type=int, default=4)
-    parser.add_argument("--mode", default="txt_download", choices=["txt_download", "table_scrape"])
+    parser.add_argument(
+        "--mode", default="txt_download", choices=["txt_download", "table_scrape"]
+    )
     parser.add_argument("--headless", action="store_true", default=True)
-    parser.add_argument("--visible", action="store_true", help="Abrir navegador visible")
-    parser.add_argument("--download-dir", dest="download_dir", default="/tmp/sri-scrape-py")
-    parser.add_argument("--user-data-dir", dest="user_data_dir", default=None,
-                        help="Directorio para persistir sesión del navegador (cookies, localStorage)")
+    parser.add_argument(
+        "--visible", action="store_true", help="Abrir navegador visible"
+    )
+    parser.add_argument(
+        "--download-dir", dest="download_dir", default="/tmp/sri-scrape-py"
+    )
+    parser.add_argument(
+        "--user-data-dir",
+        dest="user_data_dir",
+        default=None,
+        help="Directorio para persistir sesión del navegador (cookies, localStorage)",
+    )
     return parser.parse_args()
 
 
@@ -1027,10 +1216,16 @@ def load_config() -> dict:
 
     args = parse_args()
     if not args.ruc or not args.password:
-        print("Usage: echo '{\"ruc\":\"...\",\"password\":\"...\"}' | python test-scraper.py", file=sys.stderr)
+        print(
+            'Usage: echo \'{"ruc":"...","password":"..."}\' | python test-scraper.py',
+            file=sys.stderr,
+        )
         print("   or: python test-scraper.py --ruc=... --password=...", file=sys.stderr)
         print("", file=sys.stderr)
-        print("Nota: --api-key es opcional (fallback). Sin él, solo usa stealth.", file=sys.stderr)
+        print(
+            "Nota: --api-key es opcional (fallback). Sin él, solo usa stealth.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     return {
@@ -1064,13 +1259,19 @@ def main():
     download_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Log strategy info ──
-    progress("init", f"Stealth: {'v' + str(STEALTH_VERSION) if STEALTH_VERSION else 'NO INSTALADO'}")
+    progress(
+        "init",
+        f"Stealth: {'v' + str(STEALTH_VERSION) if STEALTH_VERSION else 'NO INSTALADO'}",
+    )
     progress("init", f"2Captcha fallback: {'SI' if api_key else 'NO (solo stealth)'}")
     if not api_key:
         progress("init", "Tip: usa --api-key para habilitar 2Captcha como fallback")
 
     if STEALTH_VERSION == 0:
-        progress("init", "ADVERTENCIA: playwright-stealth no instalado. Instala con: pip install playwright-stealth")
+        progress(
+            "init",
+            "ADVERTENCIA: playwright-stealth no instalado. Instala con: pip install playwright-stealth",
+        )
 
     # ── Browser launch args ──
     launch_args = [
@@ -1153,17 +1354,29 @@ def main():
                         navigate_to_comprobantes(page, tipo)
 
                     try:
-                        result = download_for_voucher_type(page, vt, year, month, download_dir, api_key, tipo)
+                        result = download_for_voucher_type(
+                            page, vt, year, month, download_dir, api_key, tipo
+                        )
                         files.append(result)
 
                         if result["status"] == "downloaded":
-                            progress("summary", f"{vt['label']}: {result['rows']} registros descargados")
+                            progress(
+                                "summary",
+                                f"{vt['label']}: {result['rows']} registros descargados",
+                            )
                         else:
                             progress("summary", f"{vt['label']}: {result['status']}")
 
                     except Exception as e:
                         progress(vt["label"], f"Error: {e}")
-                        files.append({"type": vt["label"], "status": "error", "content": None, "error": str(e)})
+                        files.append(
+                            {
+                                "type": vt["label"],
+                                "status": "error",
+                                "content": None,
+                                "error": str(e),
+                            }
+                        )
 
                     random_delay(1, 3)
 
@@ -1177,7 +1390,9 @@ def main():
                         navigate_to_comprobantes(page, tipo)
 
                     try:
-                        search_ok = search_with_captcha(page, vt, year, month, api_key, tipo)
+                        search_ok = search_with_captcha(
+                            page, vt, year, month, api_key, tipo
+                        )
                         if search_ok:
                             claves = scrape_table_data(page, tipo)
                             all_claves.extend(claves)

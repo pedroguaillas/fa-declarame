@@ -26,3 +26,9 @@ Homestead.yaml
 Thumbs.db
 /scripts/sri-scraper/node_modules
 /scripts/sri-scraper/screenshots
+/scripts/sri-scraper/venv
+/scripts/sri-scraper/sri-session
+
+# Scraper sessions & temporary data
+scripts/sri-scraper/browser-session/
+scripts/sri-scraper/__pycache__/

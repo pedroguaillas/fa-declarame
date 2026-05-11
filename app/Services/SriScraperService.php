@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant\Company;
 use App\Models\Tenant\SriScrapeJob;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 
@@ -41,6 +42,8 @@ class SriScraperService
         $downloadDir = storage_path('app/private/sri-scrape/'.$scrapeJob->id);
 
         try {
+            $serverUrl = config('sri.scraper.server_url');
+
             $config = [
                 'ruc' => $company->ruc,
                 'password' => $company->pass_sri,
@@ -48,9 +51,13 @@ class SriScraperService
                 'year' => $scrapeJob->year,
                 'month' => $scrapeJob->month,
                 'mode' => $scrapeJob->mode,
-                'downloadDir' => $downloadDir,
-                'headless' => true,
+                'headless' => config('sri.scraper.headless', true),
             ];
+
+            // Only pass downloadDir when running locally (not via external server)
+            if (! $serverUrl) {
+                $config['downloadDir'] = $downloadDir;
+            }
 
             // 2Captcha API key is optional (stealth may bypass captcha without it)
             $captchaKey = config('sri.captcha.api_key');
@@ -58,7 +65,9 @@ class SriScraperService
                 $config['apiKey'] = $captchaKey;
             }
 
-            $result = $this->runNodeScript($config, $scrapeJob);
+            $result = $serverUrl
+                ? $this->runViaServer($serverUrl, $config, $scrapeJob)
+                : $this->runNodeScript($config, $scrapeJob);
 
             return $this->processResult($result, $scrapeJob, $company);
 
@@ -89,15 +98,49 @@ class SriScraperService
         }
     }
 
+    /**
+     * Send scrape request to the running Python server (--visible mode).
+     */
+    private function runViaServer(string $serverUrl, array $config, SriScrapeJob $scrapeJob): array
+    {
+        $timeout = config('sri.scraper.timeout', 300);
+
+        $scrapeJob->update([
+            'progress' => ['step' => 'server', 'message' => 'Enviando petición al servidor del scraper...'],
+        ]);
+
+        $response = Http::timeout($timeout)
+            ->post(rtrim($serverUrl, '/').'/scrape', $config);
+
+        if ($response->failed()) {
+            $error = $response->json('error') ?? $response->body();
+
+            throw new \RuntimeException("Scraper server error ({$response->status()}): {$error}");
+        }
+
+        $body = $response->json();
+
+        if (($body['event'] ?? null) === 'error') {
+            throw new \RuntimeException($body['data']['message'] ?? 'Error desconocido del scraper');
+        }
+
+        return $body['data'] ?? [];
+    }
+
     private function runNodeScript(array $config, SriScrapeJob $scrapeJob): array
     {
         $engine = config('sri.scraper.engine', 'python');
         $timeout = config('sri.scraper.timeout', 300);
 
+        $headless = config('sri.scraper.headless', true);
+
         if ($engine === 'python') {
             $pythonPath = config('sri.scraper.python_path', 'python3');
             $scriptPath = config('sri.scraper.python_script_path');
-            $process = new Process([$pythonPath, $scriptPath]);
+            $command = $headless
+                ? [$pythonPath, $scriptPath]
+                : ['xvfb-run', '--auto-servernum', '--server-args=-screen 0 1366x768x24', $pythonPath, $scriptPath];
+            $process = new Process($command);
 
             // Add user data dir for session persistence (stealth layer)
             $userDataDir = config('sri.scraper.user_data_dir');
@@ -225,7 +268,7 @@ class SriScraperService
                 $stats = $this->importContent($content, $type, $scrapeJob->type, $company);
                 $totalImported += $stats['imported'];
                 $totalSkipped += $stats['skipped'];
-                $totalErrors += $stats['errors'];
+                $totalErrors += $stats['errors'] ?? 0;
                 $fileResults[$type] = $stats;
             } catch (\Throwable $e) {
                 $totalErrors++;

@@ -8,6 +8,7 @@ import HeaderList from "@/components/Shared/HeaderList.vue";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Select,
     SelectContent,
@@ -60,6 +61,7 @@ const form = useForm({
     type: "compras",
     year: previousYear,
     month: previousMonth,
+    voucher_types: ["1", "3", "4"] as string[],
 });
 
 const jobsList = ref<ScrapeJob[]>(props.jobs);
@@ -67,6 +69,34 @@ let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 const page = usePage();
 const flash = computed(() => page.props.flash as { success?: string; error?: string });
+
+// ─── Voucher type options ──────────────────────────────────────────────────
+
+const voucherTypeOptions = [
+    { value: "1", label: "Facturas" },
+    { value: "3", label: "Notas de Crédito" },
+    { value: "4", label: "Notas de Débito" },
+];
+
+function toggleVoucherType(value: string) {
+    const idx = form.voucher_types.indexOf(value);
+    if (idx >= 0) {
+        form.voucher_types.splice(idx, 1);
+    } else {
+        form.voucher_types.push(value);
+    }
+}
+
+// Reset voucher types when switching type
+watch(() => form.type, (newType) => {
+    if (newType === "ventas") {
+        // Ventas: solo facturas por defecto (día por día es lento)
+        form.voucher_types = ["1"];
+    } else {
+        // Compras: todos por defecto
+        form.voucher_types = ["1", "3", "4"];
+    }
+});
 
 // ─── Years & Months ─────────────────────────────────────────────────────────
 
@@ -120,6 +150,8 @@ const monthName = (m: number) => months.find((mo) => mo.value === m)?.label ?? m
 const hasActiveJobs = computed(() =>
     jobsList.value.some((j) => j.status === "pending" || j.status === "running")
 );
+
+const hasSelectedVouchers = computed(() => form.voucher_types.length > 0);
 
 // ─── Polling ────────────────────────────────────────────────────────────────
 
@@ -207,65 +239,88 @@ defineOptions({ layout: TenantLayout });
                 <CardTitle class="text-lg">Nueva descarga</CardTitle>
             </CardHeader>
             <CardContent>
-                <form @submit.prevent="submit" class="flex flex-col gap-4 sm:flex-row sm:items-end">
-                    <div class="flex flex-col gap-1.5">
-                        <label class="text-sm font-medium">Tipo</label>
-                        <Select v-model="form.type">
-                            <SelectTrigger class="w-[180px]">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="compras">Compras (Recibidos)</SelectItem>
-                                <SelectItem value="ventas">Ventas (Emitidos)</SelectItem>
-                            </SelectContent>
-                        </Select>
+                <form @submit.prevent="submit" class="space-y-4">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-sm font-medium">Tipo</label>
+                            <Select v-model="form.type">
+                                <SelectTrigger class="w-[180px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="compras">Compras (Recibidos)</SelectItem>
+                                    <SelectItem value="ventas">Ventas (Emitidos)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-sm font-medium">Año</label>
+                            <Select v-model="form.year">
+                                <SelectTrigger class="w-[120px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="y in years"
+                                        :key="y"
+                                        :value="y"
+                                    >
+                                        {{ y }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-sm font-medium">Mes</label>
+                            <Select v-model="form.month">
+                                <SelectTrigger class="w-[160px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="m in months"
+                                        :key="m.value"
+                                        :value="m.value"
+                                    >
+                                        {{ m.label }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <Button
+                            type="submit"
+                            :disabled="form.processing || !hasPassword || !hasSelectedVouchers"
+                            class="font-bold"
+                        >
+                            <Loader2 v-if="form.processing" class="size-4 animate-spin" />
+                            <CloudDownload v-else class="size-4" />
+                            Descargar del SRI
+                        </Button>
                     </div>
 
-                    <div class="flex flex-col gap-1.5">
-                        <label class="text-sm font-medium">Año</label>
-                        <Select v-model="form.year">
-                            <SelectTrigger class="w-[120px]">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="y in years"
-                                    :key="y"
-                                    :value="y"
-                                >
-                                    {{ y }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
+                    <!-- Voucher type checkboxes -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium">Comprobantes</label>
+                        <div class="flex flex-wrap gap-4">
+                            <label
+                                v-for="vt in voucherTypeOptions"
+                                :key="vt.value"
+                                class="flex cursor-pointer items-center gap-2"
+                            >
+                                <Checkbox
+                                    :checked="form.voucher_types.includes(vt.value)"
+                                    @update:checked="toggleVoucherType(vt.value)"
+                                />
+                                <span class="text-sm">{{ vt.label }}</span>
+                            </label>
+                        </div>
+                        <p v-if="form.type === 'ventas'" class="text-muted-foreground text-xs">
+                            En emitidos se consulta día por día. Seleccione solo los tipos necesarios para mayor agilidad.
+                        </p>
                     </div>
-
-                    <div class="flex flex-col gap-1.5">
-                        <label class="text-sm font-medium">Mes</label>
-                        <Select v-model="form.month">
-                            <SelectTrigger class="w-[160px]">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="m in months"
-                                    :key="m.value"
-                                    :value="m.value"
-                                >
-                                    {{ m.label }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <Button
-                        type="submit"
-                        :disabled="form.processing || !hasPassword"
-                        class="font-bold"
-                    >
-                        <Loader2 v-if="form.processing" class="size-4 animate-spin" />
-                        <CloudDownload v-else class="size-4" />
-                        Descargar del SRI
-                    </Button>
                 </form>
             </CardContent>
         </Card>

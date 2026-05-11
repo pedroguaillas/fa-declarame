@@ -28,3 +28,8 @@ Sistema Tributario para el procesamiento de información de Compras, Ventas y Re
 `./vendor/bin/sail composer require maatwebsite/excel --ignore-platform-reqs`
 
 Migrar tenant (opcional) `./vendor/bin/sail artisan tenants:migrate`
+
+Probar script
+`cd scripts/sri-scraper                                                                                                                                 
+  source venv/bin/activate                                                                                                                               
+  python server.py`

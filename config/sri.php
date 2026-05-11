@@ -9,6 +9,7 @@ return [
     ],
 
     'scraper' => [
+        'server_url' => env('SRI_SCRAPER_SERVER_URL'), // e.g. http://localhost:8765
         'timeout' => (int) env('SRI_SCRAPER_TIMEOUT', 600),
         'engine' => env('SRI_SCRAPER_ENGINE', 'python'), // 'python' or 'node'
         'node_path' => env('SRI_SCRAPER_NODE_PATH', 'node'),
@@ -16,6 +17,7 @@ return [
         'script_path' => base_path('scripts/sri-scraper/scrape.mjs'),
         'python_script_path' => base_path('scripts/sri-scraper/test-scraper.py'),
         'chrome_path' => env('SRI_SCRAPER_CHROME_PATH'),
+        'headless' => (bool) env('SRI_SCRAPER_HEADLESS', true),
         'user_data_dir' => env('SRI_SCRAPER_USER_DATA_DIR', storage_path('app/private/sri-browser-session')),
     ],
 
