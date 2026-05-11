@@ -26,10 +26,14 @@ Sistema Tributario para el procesamiento de información de Compras, Ventas y Re
 # Instalar una dependencia ignorando la incompatibilidad
 
 `./vendor/bin/sail composer require maatwebsite/excel --ignore-platform-reqs`
+`./vendor/bin/sail composer require maatwebsite/excel: "4.x-dev as 4.0.0"`
 
 Migrar tenant (opcional) `./vendor/bin/sail artisan tenants:migrate`
 
 Probar script
-`cd scripts/sri-scraper                                                                                                                                 
-  source venv/bin/activate                                                                                                                               
-  python server.py`
+
+`cd scripts/sri-scraper`
+
+`source venv/bin/activate`
+  
+`python server.py`
