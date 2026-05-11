@@ -100,8 +100,18 @@ class OrderController extends Controller
     {
         $voucherTypes = VoucherType::whereIn('code', ['01', '02', '04'])->get();
 
+        $orderData = $order->load('contact')->toArray();
+
+        $floatFields = ['sub_total', 'no_iva', 'exempt', 'base0', 'base5', 'base8', 'base12', 'base15', 'iva5', 'iva8', 'iva12', 'iva15', 'aditional_discount', 'discount', 'ice', 'total'];
+
+        foreach ($floatFields as $field) {
+            if (isset($orderData[$field])) {
+                $orderData[$field] = (float) $orderData[$field];
+            }
+        }
+
         return Inertia::render('Tenant/Orders/Edit', [
-            'order' => $order->load('contact'),
+            'order' => $orderData,
             'voucherTypes' => $voucherTypes,
         ]);
     }

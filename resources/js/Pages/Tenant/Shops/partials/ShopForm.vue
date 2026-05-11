@@ -293,6 +293,7 @@ watch(
                     label="Tipo comprobante"
                     v-model="form.voucher_type_id"
                     :options="voucherTypeOptions"
+                    :error="form.errors.voucher_type_id"
                     required
                 />
 
@@ -300,6 +301,7 @@ watch(
                     id="serie"
                     label="Serie"
                     v-model="form.serie"
+                    :error="form.errors.serie"
                     maxlength="17"
                     placeholder="001-001-000000001"
                     required
@@ -311,6 +313,7 @@ watch(
                     label="Fecha emisión"
                     v-model="form.emision"
                     :max-value="today(getLocalTimeZone())"
+                    :error="form.errors.emision"
                     required
                 />
 
@@ -319,6 +322,7 @@ watch(
                         id="autorization"
                         label="Autorización"
                         v-model="form.autorization"
+                        :error="form.errors.autorization"
                         maxlength="49"
                         required
                     />
@@ -328,6 +332,7 @@ watch(
                     id="autorized_at"
                     label="Fecha autorización"
                     v-model="form.autorized_at"
+                    :error="form.errors.autorized_at"
                     mode="datetime"
                     required
                 />
@@ -341,6 +346,7 @@ watch(
                         label="Comprobante original"
                         v-model="form.voucher_type_modify_id"
                         :options="modifyVoucherOptions"
+                        :error="form.errors.voucher_type_modify_id"
                         required
                     />
 
@@ -348,19 +354,35 @@ watch(
                         id="est_modify"
                         label="Establecimiento"
                         v-model="form.est_modify"
+                        :error="form.errors.est_modify"
                         maxlength="3"
                         required
                     />
 
-                    <FormField id="poi_modify" label="Punto emisión" v-model="form.poi_modify" maxlength="3" required />
+                    <FormField
+                        id="poi_modify"
+                        label="Punto emisión"
+                        v-model="form.poi_modify"
+                        :error="form.errors.poi_modify"
+                        maxlength="3"
+                        required
+                    />
 
-                    <FormField id="sec_modify" label="Secuencial" v-model="form.sec_modify" maxlength="9" required />
+                    <FormField
+                        id="sec_modify"
+                        label="Secuencial"
+                        v-model="form.sec_modify"
+                        :error="form.errors.sec_modify"
+                        maxlength="9"
+                        required
+                    />
 
                     <div class="lg:col-span-2">
                         <FormField
                             id="aut_modify"
                             label="Autorización documento original"
                             v-model="form.aut_modify"
+                            :error="form.errors.aut_modify"
                             maxlength="49"
                             required
                         />
@@ -380,41 +402,85 @@ watch(
                     id="no_iva"
                     label="No IVA"
                     v-model="form.no_iva"
+                    :error="form.errors.no_iva"
                     type="number"
                     step="0.01"
                 />
 
-                <FormField id="exempt" label="Base Exenta" v-model="form.exempt" type="number" step="0.01" />
+                <FormField
+                    id="exempt"
+                    label="Base Exenta"
+                    v-model="form.exempt"
+                    :error="form.errors.exempt"
+                    type="number"
+                    step="0.01"
+                />
 
-                <FormField id="base0" label="Base 0%" v-model="form.base0" type="number" step="0.01" />
+                <FormField
+                    id="base0"
+                    label="Base 0%"
+                    v-model="form.base0"
+                    :error="form.errors.base0"
+                    type="number"
+                    step="0.01"
+                />
 
                 <FormField
                     v-if="!useIva15 && !isNotaVenta"
                     id="base12"
                     label="Base 12%"
                     v-model="form.base12"
+                    :error="form.errors.base12"
                     type="number"
                     step="0.01"
                 />
 
-                <FormField v-if="!useIva15 && !isNotaVenta" id="iva12" label="IVA 12%" v-model="form.iva12" readonly />
+                <FormField
+                    v-if="!useIva15 && !isNotaVenta"
+                    id="iva12"
+                    label="IVA 12%"
+                    v-model="form.iva12"
+                    :error="form.errors.iva12"
+                    readonly
+                />
 
                 <FormField
                     v-if="useIva15 && !isNotaVenta"
                     id="base15"
                     label="Base 15%"
                     v-model="form.base15"
+                    :error="form.errors.base15"
                     type="number"
                     step="0.01"
                 />
 
-                <FormField v-if="useIva15 && !isNotaVenta" id="iva15" label="IVA 15%" v-model="form.iva15" readonly />
+                <FormField
+                    v-if="useIva15 && !isNotaVenta"
+                    id="iva15"
+                    label="IVA 15%"
+                    v-model="form.iva15"
+                    :error="form.errors.iva15"
+                    readonly
+                />
 
-                <FormField id="discount" label="Descuento" v-model="form.discount" type="number" step="0.01" />
+                <FormField
+                    id="discount"
+                    label="Descuento"
+                    v-model="form.discount"
+                    :error="form.errors.discount"
+                    type="number"
+                    step="0.01"
+                />
 
-                <FormField id="ice" label="ICE" v-model="form.ice" type="number" step="0.01" />
+                <FormField id="ice" label="ICE" v-model="form.ice" :error="form.errors.ice" type="number" step="0.01" />
 
-                <FormField id="sub_total" label="Subtotal" :model-value="form.sub_total" readonly />
+                <FormField
+                    id="sub_total"
+                    label="Subtotal"
+                    :model-value="form.sub_total"
+                    :error="form.errors.sub_total"
+                    readonly
+                />
 
                 <div class="rounded-lg bg-muted p-4">
                     <Label>Total</Label>

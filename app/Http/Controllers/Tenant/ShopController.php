@@ -90,8 +90,18 @@ class ShopController extends Controller
 
     public function edit(Shop $shop): Response
     {
+        $shopData = $shop->load('contact')->toArray();
+
+        $floatFields = ['sub_total', 'no_iva', 'exempt', 'base0', 'base5', 'base8', 'base12', 'base15', 'iva5', 'iva8', 'iva12', 'iva15', 'aditional_discount', 'discount', 'ice', 'total'];
+
+        foreach ($floatFields as $field) {
+            if (isset($shopData[$field])) {
+                $shopData[$field] = (float) $shopData[$field];
+            }
+        }
+
         return Inertia::render('Tenant/Shops/Edit', [
-            'shop' => $shop->load('contact'),
+            'shop' => $shopData,
             'voucherTypes' => VoucherType::whereIn('code', ['01', '02', '03', '04', '05'])->get(),
         ]);
     }

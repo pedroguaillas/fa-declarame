@@ -244,6 +244,7 @@ watchEffect(() => {
                     label="Tipo comprobante"
                     v-model="form.voucher_type_id"
                     :options="voucherTypeOptions"
+                    :error="form.errors.voucher_type_id"
                     required
                 />
 
@@ -251,19 +252,28 @@ watchEffect(() => {
                     id="serie"
                     label="Serie"
                     v-model="form.serie"
+                    :error="form.errors.serie"
                     maxlength="17"
                     placeholder="001-001-000000001"
                     required
                     @blur="formatSerie"
                 />
 
-                <FormDatePicker id="emision" label="Fecha emisión" v-model="form.emision" :max-value="today(getLocalTimeZone())" required />
+                <FormDatePicker
+                    id="emision"
+                    label="Fecha emisión"
+                    v-model="form.emision"
+                    :max-value="today(getLocalTimeZone())"
+                    :error="form.errors.emision"
+                    required
+                />
 
                 <div class="lg:col-span-2">
                     <FormField
                         id="autorization"
                         label="Autorización"
                         v-model="form.autorization"
+                        :error="form.errors.autorization"
                         maxlength="49"
                         required
                     />
@@ -273,6 +283,7 @@ watchEffect(() => {
                     id="autorized_at"
                     label="Fecha autorización"
                     v-model="form.autorized_at"
+                    :error="form.errors.autorized_at"
                     mode="datetime"
                     required
                 />
@@ -284,15 +295,30 @@ watchEffect(() => {
             <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">Valores</h2>
 
             <div class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-                <FormField id="no_iva" label="No IVA" v-model="form.no_iva" type="number" step="0.01" />
+                <FormField
+                    id="no_iva"
+                    label="No IVA"
+                    v-model="form.no_iva"
+                    :error="form.errors.no_iva"
+                    type="number"
+                    step="0.01"
+                />
 
-                <FormField id="base0" label="Base 0%" v-model="form.base0" type="number" step="0.01" />
+                <FormField
+                    id="base0"
+                    label="Base 0%"
+                    v-model="form.base0"
+                    :error="form.errors.base0"
+                    type="number"
+                    step="0.01"
+                />
 
                 <FormField
                     v-if="!useIva15"
                     id="base12"
                     label="Base 12%"
                     v-model="form.base12"
+                    :error="form.errors.base12"
                     type="number"
                     step="0.01"
                 />
@@ -304,15 +330,30 @@ watchEffect(() => {
                     id="base15"
                     label="Base 15%"
                     v-model="form.base15"
+                    :error="form.errors.base15"
                     type="number"
                     step="0.01"
                 />
 
-                <FormField v-if="useIva15" id="iva15" label="IVA 15%" v-model="form.iva15" readonly />
+                <FormField
+                    v-if="useIva15"
+                    id="iva15"
+                    label="IVA 15%"
+                    v-model="form.iva15"
+                    :error="form.errors.iva15"
+                    readonly
+                />
 
-                <FormField id="discount" label="Descuento" v-model="form.discount" type="number" step="0.01" />
+                <FormField
+                    id="discount"
+                    label="Descuento"
+                    v-model="form.discount"
+                    :error="form.errors.discount"
+                    type="number"
+                    step="0.01"
+                />
 
-                <FormField id="ice" label="ICE" v-model="form.ice" type="number" step="0.01" />
+                <FormField id="ice" label="ICE" v-model="form.ice" :error="form.errors.ice" type="number" step="0.01" />
 
                 <FormField id="sub_total" label="Subtotal" :model-value="form.sub_total" readonly />
 

@@ -47,6 +47,7 @@ class Order extends BaseModel
             'retention_at' => 'datetime',
             'sub_total' => 'decimal:2',
             'no_iva' => 'decimal:2',
+            'exempt' => 'decimal:2',
             'base0' => 'decimal:2',
             'base5' => 'decimal:2',
             'base8' => 'decimal:2',
