@@ -51,7 +51,7 @@ except ImportError:
 SRI_URLS = {
     "portal": "https://srienlinea.sri.gob.ec/sri-en-linea/contribuyente/perfil",
     "compras": "https://srienlinea.sri.gob.ec/tuportal-internet/accederAplicacion.jspa?redireccion=57&idGrupo=55",
-    "ventas": "https://srienlinea.sri.gob.ec/tuportal-internet/accederAplicacion.jspa?redireccion=60&idGrupo=55",
+    "ventas": "https://srienlinea.sri.gob.ec/tuportal-internet/accederAplicacion.jspa?redireccion=60&idGrupo=58",
 }
 
 VOUCHER_TYPES = [
@@ -450,10 +450,15 @@ def login(page: Page, ruc: str, password: str) -> bool:
 # ─── Navigate ─────────────────────────────────────────────────────────────────
 
 def navigate_to_comprobantes(page: Page, tipo: str) -> None:
-    url = SRI_URLS["ventas"] if tipo == "ventas" else SRI_URLS["compras"]
-    label = "Comprobantes Emitidos" if tipo == "ventas" else "Comprobantes Recibidos"
+    if tipo == "ventas":
+        _navigate_ventas(page)
+    else:
+        _navigate_compras(page)
 
-    progress("navigate", f"Navegando a {label}...")
+
+def _navigate_compras(page: Page) -> None:
+    url = SRI_URLS["compras"]
+    progress("navigate", "Navegando a Comprobantes Recibidos...")
 
     for attempt in range(1, 4):
         try:
@@ -465,9 +470,42 @@ def navigate_to_comprobantes(page: Page, tipo: str) -> None:
             progress("navigate", f"Intento {attempt} falló, reintentando...")
             random_delay(2, 5)
 
-    # Human: look around after page loads
     simulate_human_presence(page, duration_s=random.uniform(2, 4))
-    progress("navigate", f"Página de {label} cargada")
+    progress("navigate", "Página de Comprobantes Recibidos cargada")
+
+
+def _navigate_ventas(page: Page) -> None:
+    url = SRI_URLS["ventas"]
+    progress("navigate", "Navegando a Facturación Electrónica Consultas...")
+
+    for attempt in range(1, 4):
+        try:
+            page.goto(url, wait_until="networkidle", timeout=60000)
+            break
+        except Exception as e:
+            if attempt == 3:
+                raise
+            progress("navigate", f"Intento {attempt} falló, reintentando...")
+            random_delay(2, 5)
+
+    simulate_human_presence(page, duration_s=random.uniform(2, 3))
+
+    # Click en "Comprobantes electrónicos emitidos" via mojarra JSF
+    progress("navigate", "Ejecutando click en 'Comprobantes electrónicos emitidos'...")
+    page.evaluate("""() => {
+        mojarra.jsfcljs(document.getElementById('consultaDocumentoForm'),
+            {'consultaDocumentoForm:j_idt22':'consultaDocumentoForm:j_idt22'},'');
+    }""")
+
+    # Esperar que cargue el formulario
+    time.sleep(3)
+    try:
+        page.wait_for_load_state("networkidle", timeout=15000)
+    except Exception:
+        pass
+
+    simulate_human_presence(page, duration_s=random.uniform(1, 2))
+    progress("navigate", "Página de Comprobantes Emitidos cargada")
 
 
 # ─── Sitekey Extraction ──────────────────────────────────────────────────────
@@ -501,22 +539,39 @@ def extract_sitekey(page: Page) -> str | None:
 
 # ─── Set Filters ──────────────────────────────────────────────────────────────
 
-def set_filters(page: Page, voucher_type: dict, year: int, month: int) -> None:
+def set_filters(page: Page, voucher_type: dict, year: int, month: int, day: int = 0, tipo: str = "compras") -> None:
+    """Set search filters. For compras: dropdowns. For ventas: calendar date input."""
     # Move mouse near the filter area first
     human_mouse_move(page, target_x=random.randint(300, 600), target_y=random.randint(200, 350))
     random_delay(0.3, 0.8)
 
-    page.select_option("#frmPrincipal\\:ano", str(year))
-    random_delay(1.0, 2.0)
+    if tipo == "ventas":
+        # Ventas usa calendar input con formato dd/mm/yyyy
+        fecha = f"{day:02d}/{month:02d}/{year}"
+        page.evaluate(f"""() => {{
+            const input = document.getElementById('frmPrincipal:calendarFechaDesde_input');
+            input.value = '{fecha}';
+            input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+            input.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+        }}""")
+        random_delay(0.8, 1.5)
 
-    page.select_option("#frmPrincipal\\:mes", str(month))
-    random_delay(1.0, 2.0)
+        # Seleccionar tipo de comprobante
+        page.select_option("#frmPrincipal\\:cmbTipoComprobante", voucher_type["value"])
+        random_delay(0.8, 1.5)
+    else:
+        # Compras usa dropdowns de año/mes/día
+        page.select_option("#frmPrincipal\\:ano", str(year))
+        random_delay(1.0, 2.0)
 
-    page.select_option("#frmPrincipal\\:dia", "0")
-    random_delay(0.8, 1.5)
+        page.select_option("#frmPrincipal\\:mes", str(month))
+        random_delay(1.0, 2.0)
 
-    page.select_option("#frmPrincipal\\:cmbTipoComprobante", voucher_type["value"])
-    random_delay(0.8, 1.5)
+        page.select_option("#frmPrincipal\\:dia", str(day))
+        random_delay(0.8, 1.5)
+
+        page.select_option("#frmPrincipal\\:cmbTipoComprobante", voucher_type["value"])
+        random_delay(0.8, 1.5)
 
 
 # ─── Inject Token & Search ────────────────────────────────────────────────────
@@ -584,10 +639,38 @@ def check_page_state(page: Page, tipo: str) -> dict:
     }""", table_id)
 
 
+# ─── Search Direct (Ventas - no captcha) ─────────────────────────────────────
+
+def search_direct(page: Page, voucher_type: dict, year: int, month: int,
+                  tipo: str, day: int = 0) -> bool:
+    """For ventas (emitidos): no captcha, just click Consultar button."""
+    label = voucher_type["label"]
+    day_str = f", día={day}" if day > 0 else ""
+    progress(label, f"Configurando filtros: año={year}, mes={month}{day_str}, tipo={label}...")
+    set_filters(page, voucher_type, year, month, day, tipo)
+
+    progress(label, "Haciendo click en Consultar...")
+    page.evaluate("""() => {
+        document.getElementById('frmPrincipal:btnConsultar').click();
+    }""")
+
+    # Esperar respuesta
+    random_delay(3, 5)
+    try:
+        page.wait_for_load_state("networkidle", timeout=15000)
+    except Exception:
+        pass
+
+    result = check_page_state(page, tipo)
+    progress(label, f"Estado: {result['state']} ({result['detail']})")
+
+    return result["state"] in ("has_results", "no_results")
+
+
 # ─── Search With Captcha (3-Layer Strategy) ──────────────────────────────────
 
 def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
-                        api_key: str | None, tipo: str) -> bool:
+                        api_key: str | None, tipo: str, day: int = 0) -> bool:
     """
     3-layer captcha strategy:
       1. Try auto-pass via stealth + human behavior (free, fast)
@@ -595,8 +678,9 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
       3. If auto-pass fails, fall back to 2Captcha (paid, slow)
     """
     label = voucher_type["label"]
-    progress(label, f"Configurando filtros: año={year}, mes={month}, tipo={label}...")
-    set_filters(page, voucher_type, year, month)
+    day_str = f", día={day}" if day > 0 else ""
+    progress(label, f"Configurando filtros: año={year}, mes={month}{day_str}, tipo={label}...")
+    set_filters(page, voucher_type, year, month, day, tipo)
 
     sitekey = extract_sitekey(page)
     if not sitekey:
@@ -642,7 +726,7 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
                 if attempt < 3:
                     progress(label, "Recargando para reintentar stealth...")
                     navigate_to_comprobantes(page, tipo)
-                    set_filters(page, voucher_type, year, month)
+                    set_filters(page, voucher_type, year, month, day, tipo)
                 continue
 
             progress(label, f"[LAYER 3] Usando 2Captcha como fallback (intento {attempt})...")
@@ -653,7 +737,7 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
                 if attempt < 3:
                     progress(label, "Recargando página para nuevo intento...")
                     navigate_to_comprobantes(page, tipo)
-                    set_filters(page, voucher_type, year, month)
+                    set_filters(page, voucher_type, year, month, day, tipo)
                 continue
 
             progress(label, f"[LAYER 3] Token 2Captcha obtenido, inyectando...")
@@ -663,7 +747,7 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
                 progress(label, f"Error al inyectar token 2Captcha: {e}")
                 if attempt < 3:
                     navigate_to_comprobantes(page, tipo)
-                    set_filters(page, voucher_type, year, month)
+                    set_filters(page, voucher_type, year, month, day, tipo)
                 continue
 
         # ── Check results ──
@@ -689,7 +773,7 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
         if attempt < 3:
             progress(label, "Recargando página para nuevo intento...")
             navigate_to_comprobantes(page, tipo)
-            set_filters(page, voucher_type, year, month)
+            set_filters(page, voucher_type, year, month, day, tipo)
 
     progress(label, "Captcha falló después de 3 intentos")
     return False
@@ -698,9 +782,12 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
 # ─── Download For Voucher Type ────────────────────────────────────────────────
 
 def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: int,
-                               download_dir: Path, api_key: str | None, tipo: str) -> dict:
+                               download_dir: Path, api_key: str | None, tipo: str, day: int = 0) -> dict:
     label = voucher_type["label"]
-    search_ok = search_with_captcha(page, voucher_type, year, month, api_key, tipo)
+    if tipo == "ventas":
+        search_ok = search_direct(page, voucher_type, year, month, tipo, day)
+    else:
+        search_ok = search_with_captcha(page, voucher_type, year, month, api_key, tipo, day)
 
     if not search_ok:
         return {"type": label, "status": "captcha_failed", "content": None}
@@ -813,6 +900,57 @@ def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: 
 
     finally:
         page.remove_listener("response", on_response)
+
+
+# ─── Download For Voucher Type By Day (Ventas) ───────────────────────────────
+
+def download_for_voucher_type_by_day(page: Page, voucher_type: dict, year: int, month: int,
+                                      download_dir: Path, api_key: str | None, tipo: str,
+                                      max_days: int = 0) -> dict:
+    """For ventas (emitidos): download day by day and concatenate all content."""
+    import calendar
+    label = voucher_type["label"]
+    days_in_month = calendar.monthrange(year, month)[1]
+    if max_days > 0:
+        days_in_month = min(days_in_month, max_days)
+
+    all_content = ""
+    total_rows = 0
+    header_saved = False
+
+    progress(label, f"Ventas: descargando día por día ({days_in_month} días)...")
+
+    for day in range(1, days_in_month + 1):
+        progress(label, f"Día {day}/{days_in_month}...")
+
+        result = download_for_voucher_type(page, voucher_type, year, month, download_dir, api_key, tipo, day)
+
+        if result["status"] == "downloaded" and result.get("content"):
+            lines = result["content"].split("\n")
+            if not header_saved:
+                # Keep header from first file
+                all_content = result["content"]
+                header_saved = True
+            else:
+                # Skip header line, append only data lines
+                data_lines = lines[1:] if len(lines) > 1 else lines
+                all_content += "\n" + "\n".join(line for line in data_lines if line.strip())
+            total_rows += result.get("rows", 0)
+            progress(label, f"Día {day}: {result.get('rows', 0)} registros")
+        elif result["status"] == "no_records":
+            progress(label, f"Día {day}: sin registros")
+        elif result["status"] == "captcha_failed":
+            progress(label, f"Día {day}: captcha falló, continuando...")
+        else:
+            progress(label, f"Día {day}: {result['status']}")
+
+        random_delay(0.5, 1.5)
+
+    if not all_content:
+        return {"type": label, "status": "no_records", "content": None}
+
+    progress(label, f"Total ventas {label}: {total_rows} registros en {days_in_month} días")
+    return {"type": label, "status": "downloaded", "content": all_content, "rows": total_rows}
 
 
 # ─── Scrape Table ─────────────────────────────────────────────────────────────
