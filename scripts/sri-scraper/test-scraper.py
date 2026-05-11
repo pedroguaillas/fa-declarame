@@ -22,6 +22,7 @@ Usage:
 
 import json
 import math
+import re
 import sys
 import time
 import argparse
@@ -694,20 +695,6 @@ def search_with_captcha(page: Page, voucher_type: dict, year: int, month: int,
     return False
 
 
-# ─── Wait For New File ────────────────────────────────────────────────────────
-
-def wait_for_new_file(download_dir: Path, existing_files: set, timeout_s: int = 30) -> str | None:
-    start = time.time()
-    while time.time() - start < timeout_s:
-        time.sleep(0.5)
-        current = {f.name for f in download_dir.iterdir() if f.is_file()}
-        new_files = current - existing_files
-        new_files = {f for f in new_files if not f.endswith((".crdownload", ".tmp"))}
-        if new_files:
-            return new_files.pop()
-    return None
-
-
 # ─── Download For Voucher Type ────────────────────────────────────────────────
 
 def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: int,
@@ -739,39 +726,93 @@ def download_for_voucher_type(page: Page, voucher_type: dict, year: int, month: 
 
     progress(label, f"{table_info['rows']} registros, descargando reporte...")
 
-    existing_files = {f.name for f in download_dir.iterdir() if f.is_file()}
-
-    clicked = page.evaluate("""() => {
+    # Find the PrimeFaces download link (has onclick + text "descargar")
+    target_id = page.evaluate("""() => {
         const links = document.querySelectorAll('a');
         for (const link of links) {
-            const text = (link.textContent || '').toLowerCase();
-            if (text.includes('descargar') && (text.includes('reporte') || text.includes('report'))) {
-                link.click(); return true;
+            const text = (link.textContent || '').trim().toLowerCase();
+            const hasOnclick = !!link.onclick || !!link.getAttribute('onclick');
+            if (hasOnclick && text.includes('descargar')) {
+                return link.id || null;
             }
         }
-        const buttons = document.querySelectorAll('button');
-        for (const btn of buttons) {
-            const text = (btn.textContent || '').toLowerCase();
-            if (text.includes('descargar')) { btn.click(); return true; }
-        }
-        return false;
+        return null;
     }""")
 
-    if not clicked:
-        progress(label, "No se encontró botón de descarga")
+    progress(label, f"Link de descarga: id={target_id}")
+
+    # Set up response interceptor to capture file content (PrimeFaces fallback)
+    captured = {"content": None, "filename": None}
+
+    def on_response(response):
+        content_type = response.headers.get("content-type", "")
+        content_disp = response.headers.get("content-disposition", "")
+        if "attachment" in content_disp or "text/plain" in content_type or "octet-stream" in content_type:
+            if "attachment" in content_disp or response.url != page.url:
+                try:
+                    raw = response.body()
+                    try:
+                        captured["content"] = raw.decode("utf-8")
+                    except UnicodeDecodeError:
+                        captured["content"] = raw.decode("latin-1")
+                    match = re.search(r'filename[*]?=["\']?([^"\';\n]+)', content_disp)
+                    if match:
+                        captured["filename"] = match.group(1).strip()
+                    progress(label, f"Respuesta interceptada: {len(captured['content'])} bytes, filename={captured['filename']}")
+                except Exception:
+                    pass
+
+    if not target_id:
+        progress(label, "No se encontró link de descarga con onclick")
         return {"type": label, "status": "download_button_not_found", "content": None}
 
-    new_file = wait_for_new_file(download_dir, existing_files)
-    if not new_file:
-        progress(label, "Timeout esperando archivo descargado")
-        return {"type": label, "status": "download_timeout", "content": None}
+    page.on("response", on_response)
 
-    file_path = download_dir / new_file
-    content = file_path.read_text(encoding="utf-8")
-    file_path.unlink(missing_ok=True)
+    try:
+        # Try Playwright download event first (click via JavaScript for PrimeFaces)
+        try:
+            with page.expect_download(timeout=30000) as download_info:
+                page.evaluate("(id) => document.getElementById(id).click()", target_id)
 
-    progress(label, f"Descargado: {table_info['rows']} registros")
-    return {"type": label, "status": "downloaded", "content": content, "rows": table_info["rows"]}
+            download = download_info.value
+            filename = download.suggested_filename or f"{label}.txt"
+            file_path = download_dir / filename
+            download.save_as(file_path)
+            raw = file_path.read_bytes()
+            try:
+                content = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                content = raw.decode("latin-1")
+            file_path.unlink(missing_ok=True)
+            progress(label, f"Descargado via Playwright: {filename}")
+            return {"type": label, "status": "downloaded", "content": content, "rows": table_info["rows"]}
+
+        except Exception as e:
+            progress(label, f"expect_download falló ({e}), verificando interceptor...")
+
+        # Fallback: check if response interceptor captured the file
+        if captured["content"]:
+            filename = captured["filename"] or f"{label}.txt"
+            progress(label, f"Descargado via interceptor: {filename}")
+            return {"type": label, "status": "downloaded", "content": captured["content"], "rows": table_info["rows"]}
+
+        # Fallback 2: wait a bit more for interceptor (PrimeFaces may be slow)
+        progress(label, "Esperando respuesta del servidor...")
+        for _ in range(20):
+            time.sleep(0.5)
+            if captured["content"]:
+                break
+
+        if captured["content"]:
+            filename = captured["filename"] or f"{label}.txt"
+            progress(label, f"Descargado via interceptor (delayed): {filename}")
+            return {"type": label, "status": "downloaded", "content": captured["content"], "rows": table_info["rows"]}
+
+        progress(label, "No se pudo capturar la descarga")
+        return {"type": label, "status": "download_failed", "content": None}
+
+    finally:
+        page.remove_listener("response", on_response)
 
 
 # ─── Scrape Table ─────────────────────────────────────────────────────────────
