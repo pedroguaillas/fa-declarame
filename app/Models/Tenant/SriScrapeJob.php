@@ -13,6 +13,7 @@ class SriScrapeJob extends Model
         'year',
         'month',
         'mode',
+        'voucher_types',
         'status',
         'progress',
         'result',
@@ -26,6 +27,7 @@ class SriScrapeJob extends Model
         return [
             'year' => 'integer',
             'month' => 'integer',
+            'voucher_types' => 'array',
             'progress' => 'array',
             'result' => 'array',
             'started_at' => 'datetime',

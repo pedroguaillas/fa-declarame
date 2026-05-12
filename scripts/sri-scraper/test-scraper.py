@@ -64,6 +64,13 @@ VOUCHER_TYPES = [
     {"value": "6", "label": "Retencion"},
 ]
 
+# Comprobantes recibidos (compras): solo facturas, notas de crédito y débito
+COMPRAS_VOUCHER_TYPES = [
+    {"value": "1", "label": "Factura"},
+    {"value": "3", "label": "NotaCredito"},
+    {"value": "4", "label": "NotaDebito"},
+]
+
 TWOCAPTCHA_IN = "https://2captcha.com/in.php"
 TWOCAPTCHA_RES = "https://2captcha.com/res.php"
 
@@ -1256,6 +1263,9 @@ def main():
     headless = config.get("headless", True)
     user_data_dir = config.get("userDataDir")
 
+    # Tipos de comprobante seleccionados por el usuario (valores: "1", "3", "4")
+    selected_voucher_values = set(config.get("voucherTypes") or ["1", "3", "4"])
+
     download_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Log strategy info ──
@@ -1349,8 +1359,13 @@ def main():
             if mode == "txt_download":
                 files = []
 
-                for i, vt in enumerate(VOUCHER_TYPES):
-                    if i > 0:
+                base_types = COMPRAS_VOUCHER_TYPES if tipo == "compras" else VOUCHER_TYPES
+                active_voucher_types = [vt for vt in base_types if vt["value"] in selected_voucher_values]
+
+                for i, vt in enumerate(active_voucher_types):
+                    # Para compras, no es necesario recargar entre tipos — set_filters cambia el dropdown.
+                    # Para ventas, sí se recarga para resetear el formulario.
+                    if i > 0 and tipo == "ventas":
                         navigate_to_comprobantes(page, tipo)
 
                     try:
@@ -1385,8 +1400,11 @@ def main():
             elif mode == "table_scrape":
                 all_claves = []
 
-                for i, vt in enumerate(VOUCHER_TYPES):
-                    if i > 0:
+                base_types = COMPRAS_VOUCHER_TYPES if tipo == "compras" else VOUCHER_TYPES
+                active_voucher_types = [vt for vt in base_types if vt["value"] in selected_voucher_values]
+
+                for i, vt in enumerate(active_voucher_types):
+                    if i > 0 and tipo == "ventas":
                         navigate_to_comprobantes(page, tipo)
 
                     try:

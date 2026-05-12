@@ -36,6 +36,8 @@ class SriScrapeController extends Controller
             'type' => ['required', 'in:compras,ventas'],
             'year' => ['required', 'integer', 'min:2022', 'max:'.now()->year],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'voucher_types' => ['required', 'array', 'min:1'],
+            'voucher_types.*' => ['in:1,3,4'],
         ]);
 
         $company = company();
@@ -65,6 +67,7 @@ class SriScrapeController extends Controller
             'year' => $validated['year'],
             'month' => $validated['month'],
             'mode' => $mode,
+            'voucher_types' => $validated['voucher_types'],
             'status' => 'pending',
         ]);
 

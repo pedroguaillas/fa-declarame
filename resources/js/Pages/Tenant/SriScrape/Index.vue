@@ -8,7 +8,7 @@ import HeaderList from "@/components/Shared/HeaderList.vue";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
     Select,
     SelectContent,
@@ -61,7 +61,7 @@ const form = useForm({
     type: "compras",
     year: previousYear,
     month: previousMonth,
-    voucher_types: ["1", "3", "4"] as string[],
+    voucher_types: ["1"] as string[],
 });
 
 const jobsList = ref<ScrapeJob[]>(props.jobs);
@@ -87,15 +87,9 @@ function toggleVoucherType(value: string) {
     }
 }
 
-// Reset voucher types when switching type
-watch(() => form.type, (newType) => {
-    if (newType === "ventas") {
-        // Ventas: solo facturas por defecto (día por día es lento)
-        form.voucher_types = ["1"];
-    } else {
-        // Compras: todos por defecto
-        form.voucher_types = ["1", "3", "4"];
-    }
+// Al cambiar tipo, resetear a solo Factura activo
+watch(() => form.type, () => {
+    form.voucher_types = ["1"];
 });
 
 // ─── Years & Months ─────────────────────────────────────────────────────────
@@ -301,16 +295,16 @@ defineOptions({ layout: TenantLayout });
                         </Button>
                     </div>
 
-                    <!-- Voucher type checkboxes -->
+                    <!-- Voucher type switches -->
                     <div class="flex flex-col gap-2">
                         <label class="text-sm font-medium">Comprobantes</label>
-                        <div class="flex flex-wrap gap-4">
+                        <div class="flex flex-wrap gap-6">
                             <label
                                 v-for="vt in voucherTypeOptions"
                                 :key="vt.value"
                                 class="flex cursor-pointer items-center gap-2"
                             >
-                                <Checkbox
+                                <Switch
                                     :checked="form.voucher_types.includes(vt.value)"
                                     @update:checked="toggleVoucherType(vt.value)"
                                 />

@@ -51,6 +51,7 @@ class SriScraperService
                 'year' => $scrapeJob->year,
                 'month' => $scrapeJob->month,
                 'mode' => $scrapeJob->mode,
+                'voucherTypes' => $scrapeJob->voucher_types ?? ['1', '3', '4'],
                 'headless' => config('sri.scraper.headless', true),
             ];
 
