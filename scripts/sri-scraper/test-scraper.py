@@ -1098,14 +1098,38 @@ def download_for_voucher_type(
         progress(label, "No se pudo capturar la descarga")
         return {"type": label, "status": "download_failed", "content": None, "xmls": []}
 
-    # ── Classify claves: recent (≤30d → SOAP) vs old (>30d → XML from table) ──
+    # ── Classify claves: recent (≤30d → SOAP) vs old (>30d → direct extract) ──
     claves = extract_claves_from_txt(final_content)
     recent_claves, old_claves = classify_claves(claves)
 
-    xmls = []
+    # Build clave → txt line lookup for old claves (needed by PHP for ventas modal entries)
+    clave_to_line: dict[str, str] = {}
     if old_claves:
-        progress(label, f"{len(old_claves)} claves >30d: descargando XMLs de tabla...")
-        xmls = download_xmls_from_table(page, tipo, set(old_claves))
+        for line in final_content.split("\n")[1:]:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            for col in stripped.split("\t"):
+                if col.strip() in old_claves:
+                    clave_to_line[col.strip()] = stripped
+                    break
+
+    xmls: list[dict] = []
+    modal_entries: list[dict] = []
+
+    if old_claves:
+        if tipo == "compras":
+            # Compras: column 10 has a direct XML download button
+            progress(label, f"{len(old_claves)} claves >30d: descargando XMLs de tabla (col 10)...")
+            xmls = download_xmls_from_table(page, tipo, set(old_claves))
+        else:
+            # Ventas (emitidos): no XML button — click clave in col 3 to open modal
+            progress(label, f"{len(old_claves)} claves >30d: extrayendo datos de modal (col 3)...")
+            xmls_modal, modal_entries = scrape_modals_from_table(
+                page, tipo, set(old_claves), clave_to_line
+            )
+            xmls.extend(xmls_modal)
+
     if recent_claves:
         progress(label, f"{len(recent_claves)} claves ≤30d: se procesarán via SOAP")
 
@@ -1116,6 +1140,7 @@ def download_for_voucher_type(
         "status": "downloaded",
         "content": filtered_content,
         "xmls": xmls,
+        "modal_entries": modal_entries,
         "rows": table_info["rows"],
     }
 
@@ -1141,6 +1166,7 @@ def download_for_voucher_type_by_day(
 
     all_content = ""
     all_xmls: list[dict] = []
+    all_modal_entries: list[dict] = []
     total_rows = 0
     header_saved = False
 
@@ -1167,6 +1193,7 @@ def download_for_voucher_type_by_day(
                         line for line in data_lines if line.strip()
                     )
             all_xmls.extend(result.get("xmls") or [])
+            all_modal_entries.extend(result.get("modal_entries") or [])
             total_rows += result.get("rows", 0)
             progress(label, f"Día {day}: {result.get('rows', 0)} registros")
         elif result["status"] == "no_records":
@@ -1178,8 +1205,8 @@ def download_for_voucher_type_by_day(
 
         random_delay(0.5, 1.5)
 
-    if not all_content and not all_xmls:
-        return {"type": label, "status": "no_records", "content": None, "xmls": []}
+    if not all_content and not all_xmls and not all_modal_entries:
+        return {"type": label, "status": "no_records", "content": None, "xmls": [], "modal_entries": []}
 
     progress(
         label, f"Total ventas {label}: {total_rows} registros en {days_in_month} días"
@@ -1189,6 +1216,7 @@ def download_for_voucher_type_by_day(
         "status": "downloaded",
         "content": all_content or None,
         "xmls": all_xmls,
+        "modal_entries": all_modal_entries,
         "rows": total_rows,
     }
 
@@ -1266,6 +1294,259 @@ def filter_txt_by_claves(content: str, keep_claves: set[str]) -> str | None:
     if not data_lines:
         return None
     return "\n".join([header] + data_lines)
+
+
+# ─── Modal Scraping (Ventas / Emitidos) ──────────────────────────────────────
+
+
+def scrape_modals_from_table(
+    page: Page, tipo: str, old_claves: set[str], clave_to_line: dict[str, str]
+) -> tuple[list[dict], list[dict]]:
+    """
+    For ventas (emitidos): iterate the results table and for each old clave,
+    click the clave de acceso link (column 3) to open the detail modal,
+    extract the data, and close it.
+
+    Returns (xmls, modal_entries):
+      - xmls: entries where the modal contained downloadable XML
+      - modal_entries: entries where data was scraped from the modal HTML
+    """
+    if not old_claves:
+        return [], []
+
+    table_id = get_table_id(tipo)
+    xmls: list[dict] = []
+    modal_entries: list[dict] = []
+    remaining = set(old_claves)
+    page_num = 1
+
+    progress(
+        "modal-scrape",
+        f"Extrayendo datos de modal para {len(remaining)} comprobantes emitidos...",
+    )
+
+    while remaining:
+        progress("modal-scrape", f"Página {page_num}, pendientes: {len(remaining)}...")
+
+        rows_info = page.evaluate(
+            """(tblId) => {
+            const tbody = document.getElementById(tblId);
+            if (!tbody) return [];
+            const rows = tbody.querySelectorAll('tr');
+            return Array.from(rows).map((row, i) => {
+                const cells = row.querySelectorAll('td');
+                // Column 3 (index 2) is the clave de acceso — try it first
+                let clave = null;
+                const col3 = cells[2] ?? null;
+                if (col3) {
+                    const t = col3.textContent?.trim();
+                    if (t && /^\\d{49}$/.test(t)) clave = t;
+                }
+                // Fallback: any cell with 49-digit value
+                if (!clave) {
+                    for (const cell of cells) {
+                        const t = cell.textContent?.trim();
+                        if (t && /^\\d{49}$/.test(t)) { clave = t; break; }
+                    }
+                }
+                const hasLink = col3
+                    ? !!(col3.querySelector('a, button, span.ui-link, [onclick]') || col3.closest('[onclick]'))
+                    : false;
+                return { rowIndex: i, clave, hasLink };
+            });
+        }""",
+            table_id,
+        )
+
+        for row_info in rows_info:
+            clave = row_info.get("clave")
+            if not clave or clave not in remaining:
+                continue
+
+            progress("modal-scrape", f"Abriendo modal ...{clave[-10:]}...")
+            result = _click_and_scrape_modal(page, table_id, row_info["rowIndex"])
+
+            if result is None:
+                progress("modal-scrape", f"No se pudo abrir modal para ...{clave[-10:]}")
+                remaining.discard(clave)
+                continue
+
+            result["clave"] = clave
+            # Attach txt line so PHP has the financial data from the report
+            result["txt_line"] = clave_to_line.get(clave, "")
+
+            if "xml" in result:
+                xmls.append({"clave": clave, "xml": result["xml"]})
+                progress("modal-scrape", f"XML obtenido del modal ({len(result['xml'])} bytes)")
+            else:
+                modal_entries.append(result)
+                progress("modal-scrape", f"Datos extraídos del modal para ...{clave[-10:]}")
+
+            remaining.discard(clave)
+            random_delay(0.5, 1.5)
+
+        has_next = page.evaluate(
+            """() => !!document.querySelector('.ui-paginator-next:not(.ui-state-disabled)')"""
+        )
+        if not has_next:
+            break
+
+        page.click(".ui-paginator-next:not(.ui-state-disabled)")
+        random_delay(2, 4)
+        page_num += 1
+
+    progress(
+        "modal-scrape",
+        f"Procesados: {len(xmls)} XMLs + {len(modal_entries)} scrapeados de {len(old_claves)} solicitados",
+    )
+    return xmls, modal_entries
+
+
+def _click_and_scrape_modal(
+    page: Page, table_id: str, row_index: int
+) -> dict | None:
+    """
+    Click the clave de acceso link (column 3) of a table row, wait for the
+    SRI 'Detalle del Comprobante' modal to open, extract the required fields,
+    close the modal, and return the structured data.
+
+    Fields extracted (based on actual SRI modal labels):
+      clave_acceso, establecimiento, punto_emision, secuencial,
+      tipo_identificacion_comprador, razon_social_comprador,
+      identificacion_comprador, total_sin_impuestos, total_descuento,
+      importe_total, impuestos (list of {codigo, base_imponible, valor})
+
+    Returns {"xml": "..."} if raw XML was found in the modal, or the structured
+    dict above otherwise. Returns None if modal could not be opened/scraped.
+    """
+    clicked = page.evaluate(
+        """({tblId, rowIndex}) => {
+        const tbody = document.getElementById(tblId);
+        if (!tbody) return false;
+        const rows = tbody.querySelectorAll('tr');
+        const row = rows[rowIndex];
+        if (!row) return false;
+        const cells = row.querySelectorAll('td');
+        const col3 = cells[2];
+        if (!col3) return false;
+        const link = col3.querySelector('a, button, span.ui-link, [onclick]') ?? col3;
+        link.click();
+        return true;
+    }""",
+        {"tblId": table_id, "rowIndex": row_index},
+    )
+
+    if not clicked:
+        return None
+
+    # Wait for the PrimeFaces dialog to become visible
+    random_delay(1.5, 3.0)
+    try:
+        page.wait_for_load_state("networkidle", timeout=10000)
+    except Exception:
+        pass
+
+    modal_data = page.evaluate("""() => {
+        // ── Find the visible PrimeFaces dialog ──
+        function findDialog() {
+            for (const d of document.querySelectorAll('.ui-dialog')) {
+                if (d.style.display === 'none') continue;
+                if (d.getAttribute('aria-hidden') === 'true') continue;
+                if (d.offsetParent === null) continue;
+                return d;
+            }
+            return null;
+        }
+
+        const modal = findDialog();
+        if (!modal) return null;
+
+        // ── Helpers ──
+        function num(s) {
+            if (s === null || s === undefined) return 0;
+            return parseFloat(String(s).trim().replace(',', '.')) || 0;
+        }
+
+        // Find the value cell by exact label text in any 2-column table row
+        function byLabel(labelText) {
+            for (const row of modal.querySelectorAll('tr')) {
+                const cells = row.querySelectorAll('td');
+                if (cells.length < 2) continue;
+                if ((cells[0].textContent ?? '').trim() === labelText) {
+                    return (cells[1].textContent ?? '').trim();
+                }
+            }
+            return '';
+        }
+
+        // ── Main fields (exact label match) ──
+        const data = {
+            clave_acceso:                    byLabel('Clave de acceso'),
+            establecimiento:                 byLabel('Establecimiento'),
+            punto_emision:                   byLabel('Punto de emisión'),
+            secuencial:                      byLabel('Secuencial'),
+            tipo_identificacion_comprador:   byLabel('Tipo Identificación Comprador'),
+            razon_social_comprador:          byLabel('Razón Social Comprador'),
+            identificacion_comprador:        byLabel('Identificación Comprador'),
+            total_sin_impuestos:             num(byLabel('Total Sin impuestos')),
+            total_descuento:                 num(byLabel('Total Descuento')),
+            importe_total:                   num(byLabel('Importe Total')),
+            impuestos:                       [],
+        };
+
+        // ── Totales por Impuesto table ──
+        // Identified by a header row containing "Código porcentaje" AND "Base Imponible"
+        for (const tbl of modal.querySelectorAll('table')) {
+            const headerTexts = Array.from(tbl.querySelectorAll('th'))
+                .map(th => (th.textContent ?? '').trim());
+            if (
+                headerTexts.includes('Código porcentaje') &&
+                headerTexts.includes('Base Imponible')
+            ) {
+                for (const row of tbl.querySelectorAll('tr')) {
+                    const cells = row.querySelectorAll('td');
+                    // Row format: Nro | Impuesto | Código porcentaje | Base Imponible | Valor
+                    if (cells.length < 5) continue;
+                    const codigo = num(cells[2].textContent);
+                    const base   = num(cells[3].textContent);
+                    const valor  = num(cells[4].textContent);
+                    if (codigo > 0 || base > 0) {
+                        data.impuestos.push({ codigo, base_imponible: base, valor });
+                    }
+                }
+                break;
+            }
+        }
+
+        // Only return data if we got at least the buyer identification
+        if (!data.identificacion_comprador && !data.clave_acceso) return null;
+        return data;
+    }""")
+
+    _close_modal(page)
+    return modal_data
+
+
+def _close_modal(page: Page) -> None:
+    """Close the currently open SRI PrimeFaces dialog."""
+    try:
+        page.evaluate("""() => {
+            for (const d of document.querySelectorAll('.ui-dialog')) {
+                if (d.style.display === 'none') continue;
+                if (d.getAttribute('aria-hidden') === 'true') continue;
+                if (d.offsetParent === null) continue;
+                const btn = d.querySelector('.ui-dialog-titlebar-close');
+                if (btn) { btn.click(); return; }
+            }
+        }""")
+        random_delay(0.3, 0.7)
+    except Exception:
+        pass
+    try:
+        page.keyboard.press("Escape")
+        random_delay(0.3, 0.6)
+    except Exception:
+        pass
 
 
 # ─── XML Download from Table ──────────────────────────────────────────────────

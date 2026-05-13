@@ -20,6 +20,7 @@ const form = useForm({
     serie: "",
     sub_total: 0,
     no_iva: 0,
+    exempt: 0,
     base0: 0,
     base5: 0,
     base8: 0,

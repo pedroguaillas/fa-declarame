@@ -36,18 +36,35 @@ class DashboardController extends Controller
     }
 
     /**
+     * SQL expression that sums a column, negating rows whose voucher type is nota de crédito.
+     *
+     * @param  string  $column  e.g. 'total' or 'iva5+iva8+iva12+iva15'
+     */
+    private function signedSum(string $column): string
+    {
+        return "COALESCE(SUM(CASE WHEN vt.code IN ('04','23') THEN -({$column}) ELSE ({$column}) END), 0)";
+    }
+
+    /**
      * @return array{sales: array{count: int, total: float, iva: float}, purchases: array{count: int, total: float, iva: float}}
+     *
+     * Note: `total` contains the sum of sub_total (excluding IVA). Notas de crédito are subtracted.
      */
     private function periodStats(int $companyId, Carbon $from, Carbon $to): array
     {
-        $sales = Order::where('company_id', $companyId)
-            ->whereBetween('emision', [$from->toDateString(), $to->toDateString()])
-            ->selectRaw('COUNT(*) as count, COALESCE(SUM(total), 0) as total, COALESCE(SUM(iva5+iva8+iva12+iva15), 0) as iva')
+        $totalExpr = $this->signedSum('sub_total');
+        $ivaExpr = $this->signedSum('iva5+iva8+iva12+iva15');
+
+        $sales = Order::where('orders.company_id', $companyId)
+            ->whereBetween('orders.emision', [$from->toDateString(), $to->toDateString()])
+            ->join('voucher_types as vt', 'vt.id', '=', 'orders.voucher_type_id')
+            ->selectRaw("COUNT(*) as count, {$totalExpr} as total, {$ivaExpr} as iva")
             ->first();
 
-        $purchases = Shop::where('company_id', $companyId)
-            ->whereBetween('emision', [$from->toDateString(), $to->toDateString()])
-            ->selectRaw('COUNT(*) as count, COALESCE(SUM(total), 0) as total, COALESCE(SUM(iva5+iva8+iva12+iva15), 0) as iva')
+        $purchases = Shop::where('shops.company_id', $companyId)
+            ->whereBetween('shops.emision', [$from->toDateString(), $to->toDateString()])
+            ->join('voucher_types as vt', 'vt.id', '=', 'shops.voucher_type_id')
+            ->selectRaw("COUNT(*) as count, {$totalExpr} as total, {$ivaExpr} as iva")
             ->first();
 
         return [
@@ -70,18 +87,21 @@ class DashboardController extends Controller
     private function monthlyTrend(int $companyId): array
     {
         $from = Carbon::now()->subMonths(11)->startOfMonth()->toDateString();
+        $totalExpr = $this->signedSum('sub_total');
 
-        $sales = Order::where('company_id', $companyId)
-            ->where('emision', '>=', $from)
-            ->selectRaw("TO_CHAR(emision, 'YYYY-MM') as month, COALESCE(SUM(total), 0) as total")
-            ->groupByRaw("TO_CHAR(emision, 'YYYY-MM')")
+        $sales = Order::where('orders.company_id', $companyId)
+            ->where('orders.emision', '>=', $from)
+            ->join('voucher_types as vt', 'vt.id', '=', 'orders.voucher_type_id')
+            ->selectRaw("TO_CHAR(orders.emision, 'YYYY-MM') as month, {$totalExpr} as total")
+            ->groupByRaw("TO_CHAR(orders.emision, 'YYYY-MM')")
             ->orderBy('month')
             ->pluck('total', 'month');
 
-        $purchases = Shop::where('company_id', $companyId)
-            ->where('emision', '>=', $from)
-            ->selectRaw("TO_CHAR(emision, 'YYYY-MM') as month, COALESCE(SUM(total), 0) as total")
-            ->groupByRaw("TO_CHAR(emision, 'YYYY-MM')")
+        $purchases = Shop::where('shops.company_id', $companyId)
+            ->where('shops.emision', '>=', $from)
+            ->join('voucher_types as vt', 'vt.id', '=', 'shops.voucher_type_id')
+            ->selectRaw("TO_CHAR(shops.emision, 'YYYY-MM') as month, {$totalExpr} as total")
+            ->groupByRaw("TO_CHAR(shops.emision, 'YYYY-MM')")
             ->orderBy('month')
             ->pluck('total', 'month');
 
@@ -104,10 +124,13 @@ class DashboardController extends Controller
      */
     private function topProviders(int $companyId, Carbon $from, Carbon $to): array
     {
-        return Shop::where('company_id', $companyId)
-            ->whereBetween('emision', [$from->toDateString(), $to->toDateString()])
+        $totalExpr = $this->signedSum('sub_total');
+
+        return Shop::where('shops.company_id', $companyId)
+            ->whereBetween('shops.emision', [$from->toDateString(), $to->toDateString()])
+            ->join('voucher_types as vt', 'vt.id', '=', 'shops.voucher_type_id')
             ->with('contact:id,name,identification')
-            ->selectRaw('contact_id, COALESCE(SUM(total), 0) as total, COUNT(*) as count')
+            ->selectRaw("contact_id, {$totalExpr} as total, COUNT(*) as count")
             ->groupBy('contact_id')
             ->orderByDesc('total')
             ->limit(5)

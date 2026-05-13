@@ -30,6 +30,7 @@ const form = useForm({
     serie: props.order.serie,
     sub_total: props.order.sub_total,
     no_iva: props.order.no_iva,
+    exempt: props.order.exempt,
     base0: props.order.base0,
     base5: props.order.base5,
     base8: props.order.base8,

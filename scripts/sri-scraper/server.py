@@ -223,9 +223,10 @@ def handle_scrape(config: dict) -> dict:
         for f in files:
             has_content = "SI" if f.get("content") else "NO"
             xml_count = len(f.get("xmls") or [])
+            modal_count = len(f.get("modal_entries") or [])
             scraper.progress(
                 "response",
-                f"  {f.get('type')}: status={f['status']}, contenido={has_content}, bytes={len(f.get('content') or '')}, xmls={xml_count}",
+                f"  {f.get('type')}: status={f['status']}, contenido={has_content}, bytes={len(f.get('content') or '')}, xmls={xml_count}, modales={modal_count}",
             )
 
         return {"event": "result", "data": {"mode": "txt_download", "files": files}}

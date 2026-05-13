@@ -26,6 +26,7 @@ interface OrderFormFields {
     serie: string;
     sub_total: number | string;
     no_iva: number | string;
+    exempt: number | string;
     base0: number | string;
     base5: number | string;
     base8: number | string;
@@ -166,6 +167,20 @@ watch(useIva15, (is15) => {
 });
 
 watch(
+    () => props.form.base5,
+    (val) => {
+        props.form.iva5 = parseFloat((n(val) * 0.05).toFixed(2));
+    },
+);
+
+watch(
+    () => props.form.base8,
+    (val) => {
+        props.form.iva8 = parseFloat((n(val) * 0.08).toFixed(2));
+    },
+);
+
+watch(
     () => props.form.base12,
     (val) => {
         props.form.iva12 = parseFloat((n(val) * 0.12).toFixed(2));
@@ -180,12 +195,21 @@ watch(
 );
 
 const computedSubTotal = computed(
-    () => n(props.form.no_iva) + n(props.form.base0) + n(props.form.base12) + n(props.form.base15),
+    () =>
+        n(props.form.no_iva) +
+        n(props.form.exempt) +
+        n(props.form.base0) +
+        n(props.form.base5) +
+        n(props.form.base8) +
+        n(props.form.base12) +
+        n(props.form.base15),
 );
 
 const computedTotal = computed(
     () =>
         computedSubTotal.value +
+        n(props.form.iva5) +
+        n(props.form.iva8) +
         n(props.form.iva12) +
         n(props.form.iva15) +
         n(props.form.ice) -
@@ -294,12 +318,22 @@ watchEffect(() => {
         <div class="border-t p-6">
             <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">Valores</h2>
 
-            <div class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+            <!-- Bases sin IVA -->
+            <div class="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <FormField
                     id="no_iva"
                     label="No IVA"
                     v-model="form.no_iva"
                     :error="form.errors.no_iva"
+                    type="number"
+                    step="0.01"
+                />
+
+                <FormField
+                    id="exempt"
+                    label="Base Exenta"
+                    v-model="form.exempt"
+                    :error="form.errors.exempt"
                     type="number"
                     step="0.01"
                 />
@@ -312,38 +346,75 @@ watchEffect(() => {
                     type="number"
                     step="0.01"
                 />
+            </div>
 
-                <FormField
-                    v-if="!useIva15"
-                    id="base12"
-                    label="Base 12%"
-                    v-model="form.base12"
-                    :error="form.errors.base12"
-                    type="number"
-                    step="0.01"
-                />
+            <!-- Grupos IVA -->
+            <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <!-- Tarifa 5% -->
+                <div class="rounded-lg border bg-muted/40 p-3">
+                    <p class="mb-3 text-xs font-semibold text-muted-foreground">Tarifa 5%</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <FormField
+                            id="base5"
+                            label="Base"
+                            v-model="form.base5"
+                            :error="form.errors.base5"
+                            type="number"
+                            step="0.01"
+                        />
+                        <FormField id="iva5" label="IVA 5%" v-model="form.iva5" readonly />
+                    </div>
+                </div>
 
-                <FormField v-if="!useIva15" id="iva12" label="IVA 12%" v-model="form.iva12" readonly />
+                <!-- Tarifa 8% -->
+                <div class="rounded-lg border bg-muted/40 p-3">
+                    <p class="mb-3 text-xs font-semibold text-muted-foreground">Tarifa 8%</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <FormField
+                            id="base8"
+                            label="Base"
+                            v-model="form.base8"
+                            :error="form.errors.base8"
+                            type="number"
+                            step="0.01"
+                        />
+                        <FormField id="iva8" label="IVA 8%" v-model="form.iva8" readonly />
+                    </div>
+                </div>
 
-                <FormField
-                    v-if="useIva15"
-                    id="base15"
-                    label="Base 15%"
-                    v-model="form.base15"
-                    :error="form.errors.base15"
-                    type="number"
-                    step="0.01"
-                />
+                <!-- Tarifa 12% / 15% -->
+                <div class="rounded-lg border bg-muted/40 p-3">
+                    <p class="mb-3 text-xs font-semibold text-muted-foreground">
+                        {{ useIva15 ? "Tarifa 15%" : "Tarifa 12%" }}
+                    </p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <FormField
+                            v-if="!useIva15"
+                            id="base12"
+                            label="Base"
+                            v-model="form.base12"
+                            :error="form.errors.base12"
+                            type="number"
+                            step="0.01"
+                        />
+                        <FormField v-if="!useIva15" id="iva12" label="IVA 12%" v-model="form.iva12" readonly />
 
-                <FormField
-                    v-if="useIva15"
-                    id="iva15"
-                    label="IVA 15%"
-                    v-model="form.iva15"
-                    :error="form.errors.iva15"
-                    readonly
-                />
+                        <FormField
+                            v-if="useIva15"
+                            id="base15"
+                            label="Base"
+                            v-model="form.base15"
+                            :error="form.errors.base15"
+                            type="number"
+                            step="0.01"
+                        />
+                        <FormField v-if="useIva15" id="iva15" label="IVA 15%" v-model="form.iva15" readonly />
+                    </div>
+                </div>
+            </div>
 
+            <!-- Totales -->
+            <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <FormField
                     id="discount"
                     label="Descuento"
