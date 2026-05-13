@@ -767,6 +767,56 @@ def search_direct(
 # ─── Search With Captcha (3-Layer Strategy) ──────────────────────────────────
 
 
+def click_buscar_button(page: Page) -> bool:
+    """Try to click the search/buscar button directly on the page."""
+    return page.evaluate("""() => {
+        // PrimeFaces commandLink / commandButton with "buscar" or "consultar" text
+        const candidates = document.querySelectorAll(
+            'button, input[type="submit"], a.ui-commandlink, .ui-button'
+        );
+        for (const btn of candidates) {
+            const text = (btn.textContent || btn.value || '').toLowerCase().trim();
+            if (text.includes('buscar') || text.includes('consultar')) {
+                btn.click();
+                return true;
+            }
+        }
+        // Fallback: PrimeFaces buttons by id containing "btnBuscar" or "btnConsultar"
+        for (const id of ['btnBuscar', 'btnConsultar']) {
+            const el = document.querySelector(`[id*="${id}"]`);
+            if (el) { el.click(); return true; }
+        }
+        return false;
+    }""")
+
+
+def wait_for_search_results(page: Page, tipo: str, label: str) -> bool:
+    """Wait for AJAX search results to appear after clicking search."""
+    random_delay(3, 6)
+
+    # Wait for any PrimeFaces AJAX to finish
+    try:
+        page.wait_for_load_state("networkidle", timeout=15000)
+    except Exception:
+        pass
+
+    result = check_page_state(page, tipo)
+    progress(label, f"Estado: {result['state']} ({result['detail']})")
+
+    if result["state"] in ("has_results", "no_results"):
+        return True
+
+    if result["state"] == "unknown":
+        progress(label, "Estado desconocido, esperando más...")
+        random_delay(4, 7)
+        retry = check_page_state(page, tipo)
+        progress(label, f"Segundo chequeo: {retry['state']} ({retry['detail']})")
+        if retry["state"] in ("has_results", "no_results"):
+            return True
+
+    return False
+
+
 def search_with_captcha(
     page: Page,
     voucher_type: dict,
@@ -777,10 +827,12 @@ def search_with_captcha(
     day: int = 0,
 ) -> bool:
     """
-    3-layer captcha strategy:
+    Search strategy:
+      0. If no captcha on page, click Buscar button directly
       1. Try auto-pass via stealth + human behavior (free, fast)
       2. If auto-pass gives token, use it with rcBuscar
       3. If auto-pass fails, fall back to 2Captcha (paid, slow)
+      4. If all captcha attempts fail, try direct button click as last resort
     """
     label = voucher_type["label"]
     day_str = f", día={day}" if day > 0 else ""
@@ -790,31 +842,42 @@ def search_with_captcha(
     )
     set_filters(page, voucher_type, year, month, day, tipo)
 
-    sitekey = extract_sitekey(page)
-    if not sitekey:
-        progress(label, "ERROR: No se encontró el sitekey de reCAPTCHA")
-        return False
-
-    progress(label, f"Sitekey extraído: {sitekey}")
-
+    # ── Diagnose page: captcha present? ──
     diag = page.evaluate("""() => {
         const hasRcBuscar = typeof rcBuscar === 'function';
         const hasGrecaptcha = typeof grecaptcha !== 'undefined';
-        return {
-            hasRcBuscar,
-            hasGrecaptcha,
-            hasRecaptchaEl: !!document.getElementById('g-recaptcha-response'),
-        };
+        const hasRecaptchaEl = !!document.getElementById('g-recaptcha-response');
+        const hasSitekey = !!document.querySelector('[data-sitekey], .g-recaptcha');
+        return { hasRcBuscar, hasGrecaptcha, hasRecaptchaEl, hasSitekey };
     }""")
 
     progress(
         label,
-        f"Diagnóstico: rcBuscar={diag['hasRcBuscar']}, grecaptcha={diag.get('hasGrecaptcha')}",
+        f"Diagnóstico: rcBuscar={diag['hasRcBuscar']}, grecaptcha={diag['hasGrecaptcha']}, "
+        f"sitekey={diag['hasSitekey']}",
     )
 
-    if not diag["hasRcBuscar"]:
-        progress(label, "ERROR: rcBuscar no encontrado en la página")
+    # ── No captcha on page → search directly ──
+    if not diag["hasRcBuscar"] and not diag["hasSitekey"]:
+        progress(label, "Sin captcha en la página, buscando directamente...")
+        clicked = click_buscar_button(page)
+        if clicked:
+            progress(label, "Botón Buscar clickeado")
+            return wait_for_search_results(page, tipo, label)
+        else:
+            progress(label, "ERROR: No se encontró botón de búsqueda")
+            return False
+
+    sitekey = extract_sitekey(page)
+    if not sitekey:
+        progress(label, "No se encontró sitekey, intentando búsqueda directa...")
+        clicked = click_buscar_button(page)
+        if clicked:
+            return wait_for_search_results(page, tipo, label)
+        progress(label, "ERROR: Sin sitekey ni botón de búsqueda")
         return False
+
+    progress(label, f"Sitekey extraído: {sitekey}")
 
     for attempt in range(1, 4):
         progress(label, f"═══ Intento {attempt}/3 ═══")
@@ -869,31 +932,27 @@ def search_with_captcha(
                 continue
 
         # ── Check results ──
-        random_delay(3, 6)
-
-        result = check_page_state(page, tipo)
-        progress(label, f"Estado: {result['state']} ({result['detail']})")
-
-        if result["state"] in ("has_results", "no_results"):
+        if wait_for_search_results(page, tipo, label):
             progress(label, f"Búsqueda exitosa en intento {attempt}")
             return True
 
+        result = check_page_state(page, tipo)
         if result["state"] == "captcha_failed":
             progress(label, f"Captcha rechazado en intento {attempt}")
-        else:
-            progress(label, "Estado desconocido, esperando más...")
-            random_delay(4, 7)
-            retry = check_page_state(page, tipo)
-            progress(label, f"Segundo chequeo: {retry['state']} ({retry['detail']})")
-            if retry["state"] in ("has_results", "no_results"):
-                return True
 
         if attempt < 3:
             progress(label, "Recargando página para nuevo intento...")
             navigate_to_comprobantes(page, tipo)
             set_filters(page, voucher_type, year, month, day, tipo)
 
-    progress(label, "Captcha falló después de 3 intentos")
+    # ── Last resort: try direct button click ──
+    progress(label, "Captcha falló 3 veces, intentando búsqueda directa como último recurso...")
+    clicked = click_buscar_button(page)
+    if clicked:
+        if wait_for_search_results(page, tipo, label):
+            return True
+
+    progress(label, "Búsqueda falló después de todos los intentos")
     return False
 
 
@@ -919,7 +978,7 @@ def download_for_voucher_type(
         )
 
     if not search_ok:
-        return {"type": label, "status": "captcha_failed", "content": None}
+        return {"type": label, "status": "captcha_failed", "content": None, "xmls": []}
 
     table_id = get_table_id(tipo)
     table_info = page.evaluate(
@@ -941,7 +1000,7 @@ def download_for_voucher_type(
     progress(label, f"Resultado: {table_info['message']}")
 
     if table_info["rows"] == 0:
-        return {"type": label, "status": "no_records", "content": None}
+        return {"type": label, "status": "no_records", "content": None, "xmls": []}
 
     progress(label, f"{table_info['rows']} registros, descargando reporte...")
 
@@ -990,9 +1049,10 @@ def download_for_voucher_type(
 
     if not target_id:
         progress(label, "No se encontró link de descarga con onclick")
-        return {"type": label, "status": "download_button_not_found", "content": None}
+        return {"type": label, "status": "download_button_not_found", "content": None, "xmls": []}
 
     page.on("response", on_response)
+    final_content = None
 
     try:
         # Try Playwright download event first (click via JavaScript for PrimeFaces)
@@ -1006,54 +1066,58 @@ def download_for_voucher_type(
             download.save_as(file_path)
             raw = file_path.read_bytes()
             try:
-                content = raw.decode("utf-8")
+                final_content = raw.decode("utf-8")
             except UnicodeDecodeError:
-                content = raw.decode("latin-1")
+                final_content = raw.decode("latin-1")
             file_path.unlink(missing_ok=True)
             progress(label, f"Descargado via Playwright: {filename}")
-            return {
-                "type": label,
-                "status": "downloaded",
-                "content": content,
-                "rows": table_info["rows"],
-            }
 
         except Exception as e:
             progress(label, f"expect_download falló ({e}), verificando interceptor...")
 
-        # Fallback: check if response interceptor captured the file
-        if captured["content"]:
+        if final_content is None and captured["content"]:
             filename = captured["filename"] or f"{label}.txt"
             progress(label, f"Descargado via interceptor: {filename}")
-            return {
-                "type": label,
-                "status": "downloaded",
-                "content": captured["content"],
-                "rows": table_info["rows"],
-            }
+            final_content = captured["content"]
 
-        # Fallback 2: wait a bit more for interceptor (PrimeFaces may be slow)
-        progress(label, "Esperando respuesta del servidor...")
-        for _ in range(20):
-            time.sleep(0.5)
-            if captured["content"]:
-                break
-
-        if captured["content"]:
-            filename = captured["filename"] or f"{label}.txt"
-            progress(label, f"Descargado via interceptor (delayed): {filename}")
-            return {
-                "type": label,
-                "status": "downloaded",
-                "content": captured["content"],
-                "rows": table_info["rows"],
-            }
-
-        progress(label, "No se pudo capturar la descarga")
-        return {"type": label, "status": "download_failed", "content": None}
+        if final_content is None:
+            # Fallback 2: wait a bit more for interceptor (PrimeFaces may be slow)
+            progress(label, "Esperando respuesta del servidor...")
+            for _ in range(20):
+                time.sleep(0.5)
+                if captured["content"]:
+                    final_content = captured["content"]
+                    filename = captured["filename"] or f"{label}.txt"
+                    progress(label, f"Descargado via interceptor (delayed): {filename}")
+                    break
 
     finally:
         page.remove_listener("response", on_response)
+
+    if final_content is None:
+        progress(label, "No se pudo capturar la descarga")
+        return {"type": label, "status": "download_failed", "content": None, "xmls": []}
+
+    # ── Classify claves: recent (≤30d → SOAP) vs old (>30d → XML from table) ──
+    claves = extract_claves_from_txt(final_content)
+    recent_claves, old_claves = classify_claves(claves)
+
+    xmls = []
+    if old_claves:
+        progress(label, f"{len(old_claves)} claves >30d: descargando XMLs de tabla...")
+        xmls = download_xmls_from_table(page, tipo, set(old_claves))
+    if recent_claves:
+        progress(label, f"{len(recent_claves)} claves ≤30d: se procesarán via SOAP")
+
+    filtered_content = filter_txt_by_claves(final_content, set(recent_claves))
+
+    return {
+        "type": label,
+        "status": "downloaded",
+        "content": filtered_content,
+        "xmls": xmls,
+        "rows": table_info["rows"],
+    }
 
 
 # ─── Download For Voucher Type By Day (Ventas) ───────────────────────────────
@@ -1076,6 +1140,7 @@ def download_for_voucher_type_by_day(
     days_in_month = calendar.monthrange(year, month)[1]
 
     all_content = ""
+    all_xmls: list[dict] = []
     total_rows = 0
     header_saved = False
 
@@ -1088,18 +1153,20 @@ def download_for_voucher_type_by_day(
             page, voucher_type, year, month, download_dir, api_key, tipo, day
         )
 
-        if result["status"] == "downloaded" and result.get("content"):
-            lines = result["content"].split("\n")
-            if not header_saved:
-                # Keep header from first file
-                all_content = result["content"]
-                header_saved = True
-            else:
-                # Skip header line, append only data lines
-                data_lines = lines[1:] if len(lines) > 1 else lines
-                all_content += "\n" + "\n".join(
-                    line for line in data_lines if line.strip()
-                )
+        if result["status"] == "downloaded":
+            if result.get("content"):
+                lines = result["content"].split("\n")
+                if not header_saved:
+                    # Keep header from first file
+                    all_content = result["content"]
+                    header_saved = True
+                else:
+                    # Skip header line, append only data lines
+                    data_lines = lines[1:] if len(lines) > 1 else lines
+                    all_content += "\n" + "\n".join(
+                        line for line in data_lines if line.strip()
+                    )
+            all_xmls.extend(result.get("xmls") or [])
             total_rows += result.get("rows", 0)
             progress(label, f"Día {day}: {result.get('rows', 0)} registros")
         elif result["status"] == "no_records":
@@ -1111,8 +1178,8 @@ def download_for_voucher_type_by_day(
 
         random_delay(0.5, 1.5)
 
-    if not all_content:
-        return {"type": label, "status": "no_records", "content": None}
+    if not all_content and not all_xmls:
+        return {"type": label, "status": "no_records", "content": None, "xmls": []}
 
     progress(
         label, f"Total ventas {label}: {total_rows} registros en {days_in_month} días"
@@ -1120,9 +1187,236 @@ def download_for_voucher_type_by_day(
     return {
         "type": label,
         "status": "downloaded",
-        "content": all_content,
+        "content": all_content or None,
+        "xmls": all_xmls,
         "rows": total_rows,
     }
+
+
+# ─── Clave Acceso Classification ─────────────────────────────────────────────
+
+
+def extract_claves_from_txt(content: str) -> list[str]:
+    """Extract 49-digit access keys from SRI txt file content (any column)."""
+    claves = []
+    lines = content.split("\n")
+    for line in lines[1:]:  # skip header
+        line = line.strip()
+        if not line:
+            continue
+        for col in line.split("\t"):
+            col = col.strip()
+            if re.match(r"^\d{49}$", col):
+                claves.append(col)
+                break
+    return claves
+
+
+def parse_date_from_clave(clave: str) -> datetime | None:
+    """Parse date from first 8 digits of access key (ddmmYYYY format)."""
+    try:
+        dd = int(clave[0:2])
+        mm = int(clave[2:4])
+        yyyy = int(clave[4:8])
+        return datetime(yyyy, mm, dd)
+    except (ValueError, IndexError):
+        return None
+
+
+def classify_claves(
+    claves: list[str], threshold_days: int = 30
+) -> tuple[list[str], list[str]]:
+    """
+    Split claves into:
+    - recent (≤threshold_days old): use SOAP to fetch XML
+    - old (>threshold_days old): download XML directly from table
+    """
+    today = datetime.now()
+    recent = []
+    old = []
+    for clave in claves:
+        dt = parse_date_from_clave(clave)
+        if dt is None:
+            recent.append(clave)  # fallback to SOAP if date unparseable
+            continue
+        if (today - dt).days <= threshold_days:
+            recent.append(clave)
+        else:
+            old.append(clave)
+    return recent, old
+
+
+def filter_txt_by_claves(content: str, keep_claves: set[str]) -> str | None:
+    """Return txt content filtered to only rows whose clave_acceso is in keep_claves."""
+    if not keep_claves:
+        return None
+    lines = content.split("\n")
+    if not lines:
+        return None
+    header = lines[0]
+    data_lines = []
+    for line in lines[1:]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for col in stripped.split("\t"):
+            if col.strip() in keep_claves:
+                data_lines.append(line)
+                break
+    if not data_lines:
+        return None
+    return "\n".join([header] + data_lines)
+
+
+# ─── XML Download from Table ──────────────────────────────────────────────────
+
+
+def download_xmls_from_table(
+    page: Page, tipo: str, old_claves: set[str]
+) -> list[dict]:
+    """
+    Iterate the results table (already loaded after txt download) and for each
+    row whose clave_acceso is in old_claves, click the Documento button
+    (column 10, index 9) to download the XML directly.
+    """
+    if not old_claves:
+        return []
+
+    table_id = get_table_id(tipo)
+    results = []
+    remaining = set(old_claves)
+    page_num = 1
+
+    progress(
+        "xml-tabla",
+        f"Descargando XMLs de tabla para {len(remaining)} comprobantes...",
+    )
+
+    while remaining:
+        progress("xml-tabla", f"Página {page_num}, pendientes: {len(remaining)}...")
+
+        rows_info = page.evaluate(
+            """(tblId) => {
+            const tbody = document.getElementById(tblId);
+            if (!tbody) return [];
+            const rows = tbody.querySelectorAll('tr');
+            return Array.from(rows).map((row, i) => {
+                const cells = row.querySelectorAll('td');
+                let clave = null;
+                for (const cell of cells) {
+                    const text = cell.textContent?.trim();
+                    if (text && /^\\d{49}$/.test(text)) { clave = text; break; }
+                }
+                const docCell = cells[9] ?? null;
+                const hasBtn = docCell
+                    ? !!docCell.querySelector('a, button, span[class*="ui-icon"], .ui-button')
+                    : false;
+                return { rowIndex: i, clave, hasBtn };
+            });
+        }""",
+            table_id,
+        )
+
+        for row_info in rows_info:
+            clave = row_info.get("clave")
+            if not clave or clave not in remaining:
+                continue
+            if not row_info.get("hasBtn"):
+                progress("xml-tabla", f"Sin botón Documento para ...{clave[-10:]}")
+                remaining.discard(clave)
+                continue
+
+            progress("xml-tabla", f"Descargando XML ...{clave[-10:]}...")
+            xml_content = _capture_xml_from_row(page, table_id, row_info["rowIndex"])
+
+            if xml_content:
+                results.append({"clave": clave, "xml": xml_content})
+                progress("xml-tabla", f"XML capturado ({len(xml_content)} bytes)")
+            else:
+                progress("xml-tabla", f"No se pudo capturar XML para ...{clave[-10:]}")
+
+            remaining.discard(clave)
+            random_delay(0.5, 1.5)
+
+        has_next = page.evaluate(
+            """() => !!document.querySelector('.ui-paginator-next:not(.ui-state-disabled)')"""
+        )
+        if not has_next:
+            break
+
+        page.click(".ui-paginator-next:not(.ui-state-disabled)")
+        random_delay(2, 4)
+        page_num += 1
+
+    progress(
+        "xml-tabla",
+        f"XMLs descargados: {len(results)} de {len(old_claves)} solicitados",
+    )
+    return results
+
+
+def _capture_xml_from_row(page: Page, table_id: str, row_index: int) -> str | None:
+    """Click the Documento button (col 10, index 9) of a table row and capture XML."""
+    captured = {"content": None}
+
+    def on_xml_response(response):
+        content_type = response.headers.get("content-type", "").lower()
+        content_disp = response.headers.get("content-disposition", "").lower()
+        if "xml" in content_type or (
+            "attachment" in content_disp and ".xml" in content_disp
+        ):
+            try:
+                raw = response.body()
+                try:
+                    captured["content"] = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    captured["content"] = raw.decode("latin-1")
+            except Exception:
+                pass
+
+    click_js = """({tblId, rowIndex}) => {
+        const tbody = document.getElementById(tblId);
+        if (!tbody) return false;
+        const rows = tbody.querySelectorAll('tr');
+        const row = rows[rowIndex];
+        if (!row) return false;
+        const cells = row.querySelectorAll('td');
+        const docCell = cells[9];
+        if (!docCell) return false;
+        const btn = docCell.querySelector('a, button, span[class*="ui-icon"], .ui-button');
+        if (!btn) return false;
+        btn.click();
+        return true;
+    }"""
+
+    page.on("response", on_xml_response)
+    try:
+        # Try Playwright download event first
+        try:
+            with page.expect_download(timeout=15000) as dl_info:
+                page.evaluate(click_js, {"tblId": table_id, "rowIndex": row_index})
+            dl = dl_info.value
+            tmp_path = Path(dl.path()) if dl.path() else None
+            if tmp_path and tmp_path.exists():
+                raw = tmp_path.read_bytes()
+                try:
+                    return raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    return raw.decode("latin-1")
+        except Exception:
+            pass  # fall through to response interceptor
+
+        # Fallback: response interceptor (inline XML responses)
+        if not captured["content"]:
+            page.evaluate(click_js, {"tblId": table_id, "rowIndex": row_index})
+            for _ in range(10):
+                time.sleep(0.5)
+                if captured["content"]:
+                    break
+
+        return captured.get("content")
+    finally:
+        page.remove_listener("response", on_xml_response)
 
 
 # ─── Scrape Table ─────────────────────────────────────────────────────────────

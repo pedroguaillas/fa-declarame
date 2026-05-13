@@ -143,4 +143,100 @@ class OrderImportService
 
         return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
     }
+
+    /**
+     * Import a single XML authorization file (SRI format).
+     *
+     * @return array{imported: int, skipped: int}
+     */
+    public function importFromXml(string $xmlContent, int $companyId, string $companyRuc): array
+    {
+        $autorizacion = $this->parseAutorizacionXml($xmlContent);
+
+        if ($autorizacion === null) {
+            return ['imported' => 0, 'skipped' => 1];
+        }
+
+        $claveAcceso = (string) $autorizacion->numeroAutorizacion;
+        $validCodes = array_values($this->voucherTypeMap);
+
+        if (
+            strlen($claveAcceso) !== 49
+            || substr($claveAcceso, 10, 13) !== $companyRuc
+            || ! in_array(substr($claveAcceso, 8, 2), $validCodes)
+            || Order::where('autorization', $claveAcceso)->exists()
+        ) {
+            return ['imported' => 0, 'skipped' => 1];
+        }
+
+        $sriData = $this->xmlParser->parse($autorizacion);
+
+        if ($sriData === null) {
+            return ['imported' => 0, 'skipped' => 1];
+        }
+
+        $contact = Contact::firstOrCreate(
+            ['identification' => $sriData['identificacion_comprador']],
+            [
+                'identification_type_id' => $sriData['tipoIdentificacionComprador'],
+                'name' => $sriData['razon_social_comprador'],
+                'provider_type' => strlen($sriData['identificacion_comprador']) === 13 && in_array($sriData['identificacion_comprador'][2], ['6', '9']) ? '02' : '01',
+            ],
+        );
+
+        $voucherTypeId = VoucherType::where('code', substr($claveAcceso, 8, 2))->value('id');
+
+        Order::create([
+            'company_id' => $companyId,
+            'contact_id' => $contact->id,
+            'voucher_type_id' => $voucherTypeId,
+            'emision' => $sriData['fecha_emision'],
+            'autorization' => $claveAcceso,
+            'autorized_at' => $sriData['fecha_autorizacion'],
+            'serie' => $sriData['serie'],
+            'sub_total' => $sriData['sub_total'],
+            'base0' => $sriData['base0'],
+            'no_iva' => $sriData['no_iva'],
+            'base5' => $sriData['base5'],
+            'base8' => $sriData['base8'],
+            'base12' => $sriData['base12'],
+            'base15' => $sriData['base15'],
+            'iva5' => $sriData['iva5'],
+            'iva8' => $sriData['iva8'],
+            'iva12' => $sriData['iva12'],
+            'iva15' => $sriData['iva15'],
+            'discount' => $sriData['discount'],
+            'total' => $sriData['total'],
+            'state' => $sriData['estado'],
+        ]);
+
+        return ['imported' => 1, 'skipped' => 0];
+    }
+
+    /**
+     * Parse an SRI authorization XML string into a stdClass matching the SOAP response structure.
+     */
+    private function parseAutorizacionXml(string $xmlContent): ?object
+    {
+        libxml_use_internal_errors(true);
+        $xml = simplexml_load_string($xmlContent, 'SimpleXMLElement', LIBXML_NONET);
+        libxml_clear_errors();
+
+        if ($xml === false) {
+            return null;
+        }
+
+        $autorizacion = $xml->getName() === 'autorizacion' ? $xml : ($xml->autorizacion ?? null);
+
+        if ($autorizacion === null || ! isset($autorizacion->comprobante)) {
+            return null;
+        }
+
+        return (object) [
+            'estado' => (string) ($autorizacion->estado ?? 'AUTORIZADO'),
+            'numeroAutorizacion' => (string) ($autorizacion->numeroAutorizacion ?? ''),
+            'fechaAutorizacion' => (string) ($autorizacion->fechaAutorizacion ?? ''),
+            'comprobante' => (string) $autorizacion->comprobante,
+        ];
+    }
 }

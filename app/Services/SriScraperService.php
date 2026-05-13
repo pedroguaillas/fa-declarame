@@ -251,8 +251,9 @@ class SriScraperService
         foreach ($files as $file) {
             $type = $file['type'] ?? 'unknown';
             $content = $file['content'] ?? '';
+            $xmls = $file['xmls'] ?? [];
 
-            if ($file['status'] !== 'downloaded' || empty($content)) {
+            if ($file['status'] !== 'downloaded' || (empty($content) && empty($xmls))) {
                 $fileResults[$type] = $file['status'] ?? 'no_content';
 
                 continue;
@@ -266,10 +267,27 @@ class SriScraperService
             ]);
 
             try {
-                $stats = $this->importContent($content, $type, $scrapeJob->type, $company);
+                $stats = ['imported' => 0, 'skipped' => 0, 'errors' => 0];
+
+                // Direct XML import for claves >30 days (no SOAP needed)
+                if (! empty($xmls)) {
+                    $xmlStats = $this->importXmlsDirectly($xmls, $type, $scrapeJob->type, $company);
+                    $stats['imported'] += $xmlStats['imported'];
+                    $stats['skipped'] += $xmlStats['skipped'];
+                    $stats['errors'] += $xmlStats['errors'];
+                }
+
+                // SOAP import for claves ≤30 days
+                if (! empty($content)) {
+                    $soapStats = $this->importContent($content, $type, $scrapeJob->type, $company);
+                    $stats['imported'] += $soapStats['imported'];
+                    $stats['skipped'] += $soapStats['skipped'];
+                    $stats['errors'] += $soapStats['errors'] ?? 0;
+                }
+
                 $totalImported += $stats['imported'];
                 $totalSkipped += $stats['skipped'];
-                $totalErrors += $stats['errors'] ?? 0;
+                $totalErrors += $stats['errors'];
                 $fileResults[$type] = $stats;
             } catch (\Throwable $e) {
                 $totalErrors++;
@@ -295,6 +313,53 @@ class SriScraperService
         ]);
 
         return $stats;
+    }
+
+    /**
+     * Import XMLs downloaded directly from the SRI table (claves older than 30 days).
+     *
+     * @param  array<int, array{clave: string, xml: string}>  $xmls
+     * @return array{imported: int, skipped: int, errors: int}
+     */
+    private function importXmlsDirectly(array $xmls, string $voucherType, string $scrapeType, Company $company): array
+    {
+        $imported = 0;
+        $skipped = 0;
+        $errors = 0;
+
+        foreach ($xmls as $entry) {
+            $xmlContent = $entry['xml'] ?? '';
+
+            if (empty($xmlContent)) {
+                $skipped++;
+
+                continue;
+            }
+
+            try {
+                if ($voucherType === 'Retencion') {
+                    // Retention XMLs are not yet handled via direct download
+                    $skipped++;
+
+                    continue;
+                }
+
+                $stats = $scrapeType === 'compras'
+                    ? $this->shopImportService->importFromXml($xmlContent, $company->id, $company->ruc)
+                    : $this->orderImportService->importFromXml($xmlContent, $company->id, $company->ruc);
+
+                $imported += $stats['imported'];
+                $skipped += $stats['skipped'];
+            } catch (\Throwable $e) {
+                $errors++;
+                Log::warning('SRI scrape: failed to import XML directly', [
+                    'clave' => $entry['clave'] ?? '',
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
     }
 
     /**

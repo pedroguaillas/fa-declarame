@@ -123,7 +123,11 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
     if _browser_state["logged_in_ruc"] == ruc:
         try:
             current_url = page.url
+            # Navigate to portal to verify session is actually alive
+            page.goto(scraper.SRI_URLS["portal"], wait_until="networkidle", timeout=30000)
+            current_url = page.url
             if "/auth/" not in current_url and "about:blank" not in current_url:
+                scraper.progress("server", "Sesion activa verificada")
                 return True
             scraper.progress("server", "Sesion expirada, re-logueando...")
         except Exception:
@@ -179,11 +183,9 @@ def handle_scrape(config: dict) -> dict:
 
     if mode == "txt_download":
         files = []
-        # Factura, NotaCredito, NotaDebito (sin Retencion por ahora)
-        voucher_types = scraper.VOUCHER_TYPES[:3]
-        # TEST: solo Factura para ventas
-        if tipo == "ventas":
-            voucher_types = [scraper.VOUCHER_TYPES[0]]
+        selected_values = set(config.get("voucherTypes") or ["1", "3", "4"])
+        base_types = scraper.COMPRAS_VOUCHER_TYPES if tipo == "compras" else scraper.VOUCHER_TYPES
+        voucher_types = [vt for vt in base_types if vt["value"] in selected_values]
         for i, vt in enumerate(voucher_types):
             if i > 0:
                 scraper.navigate_to_comprobantes(page, tipo)
@@ -220,16 +222,20 @@ def handle_scrape(config: dict) -> dict:
         scraper.progress("response", f"Enviando {len(files)} archivos a Laravel")
         for f in files:
             has_content = "SI" if f.get("content") else "NO"
+            xml_count = len(f.get("xmls") or [])
             scraper.progress(
                 "response",
-                f"  {f.get('type')}: status={f['status']}, contenido={has_content}, bytes={len(f.get('content') or '')}",
+                f"  {f.get('type')}: status={f['status']}, contenido={has_content}, bytes={len(f.get('content') or '')}, xmls={xml_count}",
             )
 
         return {"event": "result", "data": {"mode": "txt_download", "files": files}}
 
     elif mode == "table_scrape":
         all_claves = []
-        for i, vt in enumerate(scraper.VOUCHER_TYPES):
+        selected_values = set(config.get("voucherTypes") or ["1", "3", "4"])
+        base_types = scraper.COMPRAS_VOUCHER_TYPES if tipo == "compras" else scraper.VOUCHER_TYPES
+        active_voucher_types = [vt for vt in base_types if vt["value"] in selected_values]
+        for i, vt in enumerate(active_voucher_types):
             if i > 0:
                 scraper.navigate_to_comprobantes(page, tipo)
             try:
