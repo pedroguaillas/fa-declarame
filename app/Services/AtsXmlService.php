@@ -22,7 +22,7 @@ class AtsXmlService
             'voucherTypeModify',
             'taxSupport',
         ])
-            ->where('company_id', $company->id)
+            ->where('state', 'AUTORIZADO')
             ->whereYear('emision', $year)
             ->whereMonth('emision', $month)
             ->orderBy('emision')
@@ -34,7 +34,6 @@ class AtsXmlService
             ->leftJoin('order_retention_items', 'order_retention_items.order_id', '=', 'orders.id')
             ->leftJoin('retentions', 'retentions.id', '=', 'order_retention_items.retention_id')
             ->join('voucher_types', 'voucher_types.id', '=', 'orders.voucher_type_id')
-            ->where('orders.company_id', $company->id)
             ->whereYear('orders.emision', $year)
             ->whereMonth('orders.emision', $month)
             ->selectRaw("

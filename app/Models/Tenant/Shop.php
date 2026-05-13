@@ -47,6 +47,7 @@ class Shop extends BaseModel
         'poi_modify',
         'sec_modify',
         'aut_modify',
+        'data_additional',
     ];
 
     protected function casts(): array
@@ -71,6 +72,7 @@ class Shop extends BaseModel
             'discount' => 'decimal:2',
             'ice' => 'decimal:2',
             'total' => 'decimal:2',
+            'data_additional' => 'array',
         ];
     }
 

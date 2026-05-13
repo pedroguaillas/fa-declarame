@@ -35,11 +35,11 @@ class ShopController extends Controller
         }
 
         $shops = $this->filteredShopsQuery($filters)
-            ->selectRaw('shops.id, shops.account_id, contact_id, serie, emision, vt.code AS voucher_type_code, total, shops.state, serie_retention, SUM(value) AS retention_amount')
+            ->selectRaw('shops.id, shops.account_id, contact_id, serie, emision, vt.code AS voucher_type_code, total, shops.state, serie_retention, SUM(value) AS retention_amount, shops.data_additional')
             ->with(['contact:id,name'])
             ->leftJoin('shop_retention_items', 'shop_id', 'shops.id')
             ->orderByDesc('emision')
-            ->groupBy('shops.id', 'shops.account_id', 'contact_id', 'serie', 'emision', 'vt.code', 'total', 'shops.state', 'serie_retention')
+            ->groupBy('shops.id', 'vt.code')
             ->paginate(25)
             ->withQueryString();
 
@@ -159,13 +159,32 @@ class ShopController extends Controller
     public function import(Request $request, ShopImportService $service): RedirectResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'max:5120'],
+            'file' => ['required', 'file', 'max:20480'],
         ]);
 
         $company = company();
-        $content = file_get_contents($request->file('file')->getRealPath());
+        $uploaded = $request->file('file');
+        $extension = strtolower($uploaded->getClientOriginalExtension());
 
-        ['imported' => $imported, 'skipped' => $skipped] = $service->import($content, $company->id, $company->ruc);
+        $result = match ($extension) {
+            'xml' => $service->importFromXml(
+                file_get_contents($uploaded->getRealPath()),
+                $company->id,
+                $company->ruc,
+            ),
+            'zip' => $service->importFromZip(
+                $uploaded->getRealPath(),
+                $company->id,
+                $company->ruc,
+            ),
+            default => $service->import(
+                file_get_contents($uploaded->getRealPath()),
+                $company->id,
+                $company->ruc,
+            ),
+        };
+
+        ['imported' => $imported, 'skipped' => $skipped] = $result;
 
         return redirect()->route('tenant.shops.index')
             ->with($skipped > 0 ? 'error' : 'success', "Importación completada: {$imported} compras importadas, {$skipped} omitidas.");

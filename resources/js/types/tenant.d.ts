@@ -113,6 +113,7 @@ export interface Shop {
     account: Account | null;
     retention_items: RetentionItem[];
     items?: ShopItem[];
+    data_additional?: { with_cedula?: boolean };
 }
 
 export interface VoucherType {

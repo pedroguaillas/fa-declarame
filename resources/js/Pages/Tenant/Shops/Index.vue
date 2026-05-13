@@ -74,7 +74,13 @@ const columns: ColumnDef<Shop>[] = [
         key: "serie",
         label: "Serie",
         format: (_, item) => item.serie,
-        labelDescription: (_, item) => (item.serie_retention ? `Ret. ${item.serie_retention}` : ""),
+        labelDescription: (_, item) => {
+            const parts: string[] = [];
+            if (item.state === "NO_DECLARA") parts.push("No declara");
+            if (item.data_additional?.with_cedula) parts.push("Cédula");
+            if (item.serie_retention) parts.push(`Ret. ${item.serie_retention}`);
+            return parts.join(" · ");
+        },
     },
     {
         key: "contact",
@@ -299,7 +305,7 @@ watch(
             <FilterBar :filters="filters" :show-retention="isActiveRetention" @change="applyFilters" />
 
             <!-- Hidden file inputs -->
-            <input ref="importFileInput" type="file" accept=".txt" class="hidden" @change="handleFileSelected" />
+            <input ref="importFileInput" type="file" accept=".txt,.xml,.zip" class="hidden" @change="handleFileSelected" />
             <input
                 ref="importRetentionsFileInput"
                 type="file"

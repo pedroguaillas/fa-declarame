@@ -76,6 +76,7 @@ function submit() {
                     :voucher-types="props.voucherTypes"
                     :initial-contact-identification="props.shop.contact?.identification ?? ''"
                     :initial-contact-name="props.shop.contact?.name ?? ''"
+                    :with-cedula="props.shop.data_additional?.with_cedula ?? false"
                     submit-label="Actualizar compra"
                     @submit="submit"
                 />

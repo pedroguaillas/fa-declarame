@@ -9,6 +9,7 @@ import FormDatePicker from "@/components/Shared/FormDatePicker.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-vue-next";
 
 import { today, getLocalTimeZone } from "@internationalized/date";
@@ -60,16 +61,26 @@ const props = withDefaults(
         submitLabel: string;
         initialContactIdentification?: string;
         initialContactName?: string;
+        withCedula?: boolean;
     }>(),
     {
         initialContactIdentification: "",
         initialContactName: "",
+        withCedula: false,
     },
 );
 
 const emit = defineEmits<{
     submit: [];
 }>();
+
+// NO DECLARA
+const noDeclara = computed({
+    get: () => props.form.state === "NO_DECLARA",
+    set: (val: boolean) => {
+        props.form.state = val ? "NO_DECLARA" : "AUTORIZADO";
+    },
+});
 
 // OPTIONS
 const isCedulaOrPasaporte = computed(() => ["02", "03"].includes(props.form.type_identification ?? ""));
@@ -336,6 +347,11 @@ watch(
                     mode="datetime"
                     required
                 />
+
+                <div v-if="withCedula" class="flex items-center gap-3">
+                    <Switch id="no-declara" v-model="noDeclara" />
+                    <Label for="no-declara">No declara</Label>
+                </div>
 
                 <template v-if="showModifyDocumentFields">
                     <div class="mt-4 lg:col-span-3">

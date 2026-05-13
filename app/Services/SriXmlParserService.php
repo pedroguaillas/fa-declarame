@@ -200,7 +200,7 @@ class SriXmlParserService
     private function extractIva(SimpleXMLElement $info): array
     {
         $result = [
-            'base0' => 0.0, 'no_iva' => 0.0,
+            'base0' => 0.0, 'exempt' => 0.0, 'no_iva' => 0.0,
             'base5' => 0.0, 'base8' => 0.0, 'base12' => 0.0, 'base15' => 0.0,
             'iva5' => 0.0, 'iva8' => 0.0, 'iva12' => 0.0, 'iva15' => 0.0,
         ];
@@ -225,8 +225,10 @@ class SriXmlParserService
             $base = (float) $impuesto->baseImponible;
             $valor = (float) $impuesto->valor;
 
-            if ($code === Constants::IVA0 || $code === Constants::IVA_EXENT0) {
+            if ($code === Constants::IVA0) {
                 $result['base0'] += $base;
+            } elseif ($code === Constants::IVA_EXENT0) {
+                $result['exempt'] += $base;
             } elseif ($code === Constants::IVA5) {
                 $result['base5'] += $base;
                 $result['iva5'] += $valor;
