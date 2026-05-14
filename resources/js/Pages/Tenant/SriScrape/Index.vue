@@ -61,8 +61,10 @@ const form = useForm({
     type: "compras",
     year: previousYear,
     month: previousMonth,
-    voucher_types: ["1"] as string[],
+    voucher_types: ["1", "3", "4"] as string[],
 });
+
+const selectedVoucherTypes = ref<string[]>(["1"]);
 
 const jobsList = ref<ScrapeJob[]>(props.jobs);
 let pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -72,24 +74,37 @@ const flash = computed(() => page.props.flash as { success?: string; error?: str
 
 // ─── Voucher type options ──────────────────────────────────────────────────
 
-const voucherTypeOptions = [
-    { value: "1", label: "Facturas" },
-    { value: "3", label: "Notas de Crédito" },
-    { value: "4", label: "Notas de Débito" },
-];
+const voucherTypesByMode: Record<string, { value: string; label: string }[]> = {
+    compras: [
+        { value: "1", label: "Facturas" },
+        { value: "3", label: "Notas de Crédito" },
+        { value: "4", label: "Notas de Débito" },
+    ],
+    ventas: [
+        { value: "1", label: "Facturas" },
+        { value: "3", label: "Notas de Crédito" },
+        { value: "4", label: "Notas de Débito" },
+        { value: "6", label: "Retenciones" },
+    ],
+};
+
+const voucherTypeOptions = computed(() => voucherTypesByMode[form.type] ?? voucherTypesByMode.compras);
 
 function toggleVoucherType(value: string) {
-    const idx = form.voucher_types.indexOf(value);
-    if (idx >= 0) {
-        form.voucher_types.splice(idx, 1);
+    if (selectedVoucherTypes.value.includes(value)) {
+        selectedVoucherTypes.value = selectedVoucherTypes.value.filter((v) => v !== value);
+    } else if (value === "6") {
+        // Retenciones es un proceso exclusivo: deseleccionar todo lo demás
+        selectedVoucherTypes.value = ["6"];
     } else {
-        form.voucher_types.push(value);
+        // Al seleccionar otro tipo, quitar retenciones si estaba activa
+        selectedVoucherTypes.value = [...selectedVoucherTypes.value.filter((v) => v !== "6"), value];
     }
 }
 
-// Al cambiar tipo, resetear a solo Factura activo
-watch(() => form.type, () => {
-    form.voucher_types = ["1"];
+// Al cambiar tipo, resetear según el modo
+watch(() => form.type, (type) => {
+    selectedVoucherTypes.value = type === "ventas" ? ["1"] : ["1", "3", "4"];
 });
 
 // ─── Years & Months ─────────────────────────────────────────────────────────
@@ -145,7 +160,7 @@ const hasActiveJobs = computed(() =>
     jobsList.value.some((j) => j.status === "pending" || j.status === "running")
 );
 
-const hasSelectedVouchers = computed(() => form.voucher_types.length > 0);
+const hasSelectedVouchers = computed(() => selectedVoucherTypes.value.length > 0);
 
 // ─── Polling ────────────────────────────────────────────────────────────────
 
@@ -192,6 +207,7 @@ watch(hasActiveJobs, (active) => {
 // ─── Submit ─────────────────────────────────────────────────────────────────
 
 function submit() {
+    form.voucher_types = form.type === "ventas" ? selectedVoucherTypes.value : ["1", "3", "4"];
     form.post(route("tenant.sri-scrape.store"), {
         preserveScroll: true,
         onSuccess: () => {
@@ -295,8 +311,8 @@ defineOptions({ layout: TenantLayout });
                         </Button>
                     </div>
 
-                    <!-- Voucher type switches -->
-                    <div class="flex flex-col gap-2">
+                    <!-- Voucher type switches — solo para ventas (emitidos) -->
+                    <div v-if="form.type === 'ventas'" class="flex flex-col gap-2">
                         <label class="text-sm font-medium">Comprobantes</label>
                         <div class="flex flex-wrap gap-6">
                             <label
@@ -305,14 +321,17 @@ defineOptions({ layout: TenantLayout });
                                 class="flex cursor-pointer items-center gap-2"
                             >
                                 <Switch
-                                    :checked="form.voucher_types.includes(vt.value)"
-                                    @update:checked="toggleVoucherType(vt.value)"
+                                    :model-value="selectedVoucherTypes.includes(vt.value)"
+                                    @update:model-value="toggleVoucherType(vt.value)"
                                 />
                                 <span class="text-sm">{{ vt.label }}</span>
                             </label>
                         </div>
-                        <p v-if="form.type === 'ventas'" class="text-muted-foreground text-xs">
+                        <p class="text-muted-foreground text-xs">
                             En emitidos se consulta día por día. Seleccione solo los tipos necesarios para mayor agilidad.
+                        </p>
+                        <p v-if="selectedVoucherTypes.includes('6')" class="text-xs text-amber-600 dark:text-amber-400">
+                            Las retenciones recibidas se descargarán e importarán en Compras. No se pueden combinar con otros tipos.
                         </p>
                     </div>
                 </form>

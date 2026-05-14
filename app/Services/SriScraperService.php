@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Tenant\Company;
 use App\Models\Tenant\Contact;
 use App\Models\Tenant\Order;
+use App\Models\Tenant\Retention;
+use App\Models\Tenant\Shop;
 use App\Models\Tenant\SriScrapeJob;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
@@ -257,8 +259,9 @@ class SriScraperService
             $content = $file['content'] ?? '';
             $xmls = $file['xmls'] ?? [];
             $modalEntries = $file['modal_entries'] ?? [];
+            $retentionModalEntries = $file['retention_modal_entries'] ?? [];
 
-            if ($file['status'] !== 'downloaded' || (empty($content) && empty($xmls) && empty($modalEntries))) {
+            if ($file['status'] !== 'downloaded' || (empty($content) && empty($xmls) && empty($modalEntries) && empty($retentionModalEntries))) {
                 $fileResults[$type] = $file['status'] ?? 'no_content';
 
                 continue;
@@ -288,6 +291,14 @@ class SriScraperService
                     $stats['imported'] += $modalStats['imported'];
                     $stats['skipped'] += $modalStats['skipped'];
                     $stats['errors'] += $modalStats['errors'];
+                }
+
+                // Retention modal entries (emitidos retenciones >30 days)
+                if (! empty($retentionModalEntries)) {
+                    $retStats = $this->importRetentionModalEntries($retentionModalEntries, $scrapeJob);
+                    $stats['imported'] += $retStats['imported'];
+                    $stats['skipped'] += $retStats['skipped'];
+                    $stats['errors'] += $retStats['errors'];
                 }
 
                 // SOAP import for claves ≤30 days
@@ -549,6 +560,143 @@ class SriScraperService
             : $this->shopImportService;
 
         return $importService->import($content, $company->id, $company->ruc);
+    }
+
+    /**
+     * Import retention documents scraped from the SRI modal (emitidos >30 days).
+     *
+     * Each entry contains:
+     *   clave, clave_acceso, establecimiento, punto_emision, secuencial,
+     *   tipo_id_sujeto, id_sujeto, razon_social_sujeto,
+     *   retenciones[]{impuesto, base_imponible, porcentaje_retenido, valor_retenido,
+     *                  num_doc_sustento, fecha_doc_sustento}
+     *
+     * Each retention item references a specific shop (purchase) identified by
+     * num_doc_sustento (formatted as serie) and fecha_doc_sustento.
+     *
+     * @param  array<int, array<string, mixed>>  $entries
+     * @return array{imported: int, skipped: int, errors: int}
+     */
+    private function importRetentionModalEntries(array $entries, SriScrapeJob $scrapeJob): array
+    {
+        $imported = 0;
+        $skipped = 0;
+        $errors = 0;
+
+        foreach ($entries as $entry) {
+            $claveAcceso = $entry['clave'] ?? $entry['clave_acceso'] ?? '';
+            $establecimiento = $entry['establecimiento'] ?? '';
+            $puntoEmision = $entry['punto_emision'] ?? '';
+            $secuencial = $entry['secuencial'] ?? '';
+            $retenciones = $entry['retenciones'] ?? [];
+
+            if (empty($retenciones) || strlen($claveAcceso) !== 49) {
+                $skipped++;
+
+                continue;
+            }
+
+            // Derive retention document fields from the clave de acceso
+            $serieRetention = "{$establecimiento}-{$puntoEmision}-{$secuencial}";
+            $autorizacionRetention = $claveAcceso;
+
+            // Date from first 8 digits of clave: ddmmYYYY
+            try {
+                $dd = substr($claveAcceso, 0, 2);
+                $mm = substr($claveAcceso, 2, 2);
+                $yyyy = substr($claveAcceso, 4, 4);
+                $dateRetention = Carbon::createFromFormat('d/m/Y', "{$dd}/{$mm}/{$yyyy}")->format('Y-m-d');
+            } catch (\Throwable) {
+                $dateRetention = now()->format('Y-m-d');
+            }
+
+            // Group items by num_doc_sustento so each shop is updated once
+            $grouped = [];
+            foreach ($retenciones as $item) {
+                $numDoc = trim($item['num_doc_sustento'] ?? '');
+                if (empty($numDoc)) {
+                    continue;
+                }
+                $grouped[$numDoc][] = $item;
+            }
+
+            foreach ($grouped as $numDoc => $items) {
+                // Format num_doc_sustento as shop serie: NNN-NNN-NNNNNNNNN
+                $serie = substr($numDoc, 0, 3).'-'.substr($numDoc, 3, 3).'-'.substr($numDoc, 6);
+
+                // Parse fecha_doc_sustento from first item
+                $fechaDocRaw = trim($items[0]['fecha_doc_sustento'] ?? '');
+                $emisionDoc = null;
+                if ($fechaDocRaw) {
+                    try {
+                        // Modal returns formats like "2026-04-07 00:00:00.0" or "2026-04-07"
+                        $emisionDoc = Carbon::parse($fechaDocRaw)->format('Y-m-d');
+                    } catch (\Throwable) {
+                        // ignore, search without date
+                    }
+                }
+
+                $shop = $emisionDoc
+                    ? Shop::where('serie', $serie)->whereDate('emision', $emisionDoc)->first()
+                    : Shop::where('serie', $serie)->first();
+
+                if (! $shop) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $retentionItems = [];
+                foreach ($items as $item) {
+                    $tipoImpuesto = strtoupper(trim($item['impuesto'] ?? ''));
+                    $porcentaje = (float) ($item['porcentaje_retenido'] ?? 0);
+                    $base = (float) ($item['base_imponible'] ?? 0);
+                    $valor = (float) ($item['valor_retenido'] ?? 0);
+
+                    $retention = Retention::where('type', $tipoImpuesto)
+                        ->where('percentage', $porcentaje)
+                        ->first();
+
+                    if (! $retention) {
+                        Log::warning('SRI scrape: retention code not found for modal entry', [
+                            'impuesto' => $tipoImpuesto,
+                            'porcentaje' => $porcentaje,
+                            'scrape_job_id' => $scrapeJob->id,
+                        ]);
+
+                        continue;
+                    }
+
+                    $retentionItems[] = [
+                        'retention_id' => $retention->id,
+                        'base' => $base,
+                        'percentage' => $porcentaje,
+                        'value' => $valor,
+                    ];
+                }
+
+                if (empty($retentionItems)) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $shop->update([
+                    'serie_retention' => $serieRetention,
+                    'date_retention' => $dateRetention,
+                    'autorization_retention' => $autorizacionRetention,
+                    'state_retention' => 'AUTORIZADO',
+                    'retention_at' => $dateRetention,
+                ]);
+
+                $shop->retentionItems()->delete();
+                $shop->retentionItems()->createMany($retentionItems);
+
+                $imported++;
+            }
+        }
+
+        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
     }
 
     /**

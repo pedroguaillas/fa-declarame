@@ -6,6 +6,7 @@ use App\Exports\ShopsExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreShopRequest;
 use App\Http\Requests\Tenant\UpdateShopRequest;
+use App\Models\Tenant\Retention;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\VoucherType;
@@ -274,6 +275,45 @@ class ShopController extends Controller
 
         return redirect()->route('tenant.shops.index')
             ->with('success', 'Cuenta contable asignada correctamente.');
+    }
+
+    public function completeRetentions(Request $request): RedirectResponse
+    {
+        $filters = $request->only(['search', 'period', 'voucher_type']);
+        $filters['retention'] = 'without';
+
+        $retention = Retention::where('code', '332')->first();
+
+        if (! $retention) {
+            return redirect()->route('tenant.shops.index', $request->only(['search', 'period', 'retention', 'voucher_type']))
+                ->with('error', 'No se encontró el código de retención 332.');
+        }
+
+        $shops = $this->filteredShopsQuery($filters)
+            ->select('shops.id', 'shops.emision', 'shops.sub_total')
+            ->where('vt.code', '!=', Constants::NOTA_CREDITO)
+            ->get();
+
+        foreach ($shops as $shop) {
+            $shop->update([
+                'serie_retention' => '999-999-999',
+                'date_retention' => $shop->emision,
+                'autorization_retention' => '999',
+                'state_retention' => 'AUTORIZADO',
+            ]);
+
+            $shop->retentionItems()->create([
+                'retention_id' => $retention->id,
+                'base' => $shop->sub_total,
+                'percentage' => $retention->percentage,
+                'value' => 0,
+            ]);
+        }
+
+        $redirectFilters = array_merge($request->only(['search', 'period', 'retention', 'voucher_type']));
+
+        return redirect()->route('tenant.shops.index', $redirectFilters)
+            ->with('success', "{$shops->count()} retenciones completadas.");
     }
 
     public function storeRetention(Request $request, Shop $shop): RedirectResponse

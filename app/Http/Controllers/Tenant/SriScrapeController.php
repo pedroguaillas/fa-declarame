@@ -37,7 +37,7 @@ class SriScrapeController extends Controller
             'year' => ['required', 'integer', 'min:2022', 'max:'.now()->year],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
             'voucher_types' => ['required', 'array', 'min:1'],
-            'voucher_types.*' => ['in:1,3,4'],
+            'voucher_types.*' => ['in:1,3,4,6'],
         ]);
 
         $company = company();

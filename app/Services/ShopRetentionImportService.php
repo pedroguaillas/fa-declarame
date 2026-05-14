@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Tenant\Retention;
 use App\Models\Tenant\Shop;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use SimpleXMLElement;
 
 class ShopRetentionImportService
@@ -37,15 +38,18 @@ class ShopRetentionImportService
 
             $cols = explode("\t", $line);
 
-            if (count($cols) < 3) {
-                continue;
+            // Find the 49-digit clave de acceso in any column (txt format varies by voucher type)
+            $claveAcceso = null;
+            foreach ($cols as $col) {
+                $col = trim($col);
+                if (strlen($col) === 49 && ctype_digit($col)) {
+                    $claveAcceso = $col;
+                    break;
+                }
             }
 
-            $claveAcceso = trim($cols[2]);
-
-            if (strlen($claveAcceso) !== 49) {
+            if ($claveAcceso === null) {
                 $skipped++;
-                $failedKeys[] = $claveAcceso;
 
                 continue;
             }
@@ -60,6 +64,12 @@ class ShopRetentionImportService
             if (substr($claveAcceso, 10, 13) !== $companyRuc) {
                 $skipped++;
                 $failedKeys[] = $claveAcceso;
+
+                continue;
+            }
+
+            if (Shop::where('autorization_retention', $claveAcceso)->exists()) {
+                $skipped++;
 
                 continue;
             }
@@ -81,6 +91,13 @@ class ShopRetentionImportService
                 $failedKeys[] = $claveAcceso;
             }
         }
+
+        Log::info('ShopRetentionImport result', [
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'errors' => $errors,
+            'failedKeys' => $failedKeys,
+        ]);
 
         return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors, 'failedKeys' => $failedKeys];
     }

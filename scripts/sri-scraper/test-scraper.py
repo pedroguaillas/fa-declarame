@@ -1116,6 +1116,7 @@ def download_for_voucher_type(
 
     xmls: list[dict] = []
     modal_entries: list[dict] = []
+    retention_modal_entries: list[dict] = []
 
     if old_claves:
         if tipo == "compras":
@@ -1125,10 +1126,14 @@ def download_for_voucher_type(
         else:
             # Ventas (emitidos): no XML button — click clave in col 3 to open modal
             progress(label, f"{len(old_claves)} claves >30d: extrayendo datos de modal (col 3)...")
-            xmls_modal, modal_entries = scrape_modals_from_table(
-                page, tipo, set(old_claves), clave_to_line
+            xmls_modal, modal_scraped = scrape_modals_from_table(
+                page, tipo, set(old_claves), clave_to_line, label
             )
             xmls.extend(xmls_modal)
+            if label == "Retencion":
+                retention_modal_entries = modal_scraped
+            else:
+                modal_entries = modal_scraped
 
     if recent_claves:
         progress(label, f"{len(recent_claves)} claves ≤30d: se procesarán via SOAP")
@@ -1141,6 +1146,7 @@ def download_for_voucher_type(
         "content": filtered_content,
         "xmls": xmls,
         "modal_entries": modal_entries,
+        "retention_modal_entries": retention_modal_entries,
         "rows": table_info["rows"],
     }
 
@@ -1167,6 +1173,7 @@ def download_for_voucher_type_by_day(
     all_content = ""
     all_xmls: list[dict] = []
     all_modal_entries: list[dict] = []
+    all_retention_modal_entries: list[dict] = []
     total_rows = 0
     header_saved = False
 
@@ -1194,6 +1201,7 @@ def download_for_voucher_type_by_day(
                     )
             all_xmls.extend(result.get("xmls") or [])
             all_modal_entries.extend(result.get("modal_entries") or [])
+            all_retention_modal_entries.extend(result.get("retention_modal_entries") or [])
             total_rows += result.get("rows", 0)
             progress(label, f"Día {day}: {result.get('rows', 0)} registros")
         elif result["status"] == "no_records":
@@ -1205,8 +1213,8 @@ def download_for_voucher_type_by_day(
 
         random_delay(0.5, 1.5)
 
-    if not all_content and not all_xmls and not all_modal_entries:
-        return {"type": label, "status": "no_records", "content": None, "xmls": [], "modal_entries": []}
+    if not all_content and not all_xmls and not all_modal_entries and not all_retention_modal_entries:
+        return {"type": label, "status": "no_records", "content": None, "xmls": [], "modal_entries": [], "retention_modal_entries": []}
 
     progress(
         label, f"Total ventas {label}: {total_rows} registros en {days_in_month} días"
@@ -1217,6 +1225,7 @@ def download_for_voucher_type_by_day(
         "content": all_content or None,
         "xmls": all_xmls,
         "modal_entries": all_modal_entries,
+        "retention_modal_entries": all_retention_modal_entries,
         "rows": total_rows,
     }
 
@@ -1300,7 +1309,11 @@ def filter_txt_by_claves(content: str, keep_claves: set[str]) -> str | None:
 
 
 def scrape_modals_from_table(
-    page: Page, tipo: str, old_claves: set[str], clave_to_line: dict[str, str]
+    page: Page,
+    tipo: str,
+    old_claves: set[str],
+    clave_to_line: dict[str, str],
+    voucher_label: str = "",
 ) -> tuple[list[dict], list[dict]]:
     """
     For ventas (emitidos): iterate the results table and for each old clave,
@@ -1325,6 +1338,16 @@ def scrape_modals_from_table(
         f"Extrayendo datos de modal para {len(remaining)} comprobantes emitidos...",
     )
 
+    # Close any stale dialogs left open from previous iterations or runs
+    _close_modal(page)
+    stale_count = page.evaluate("""() =>
+        document.querySelectorAll('.ui-dialog:not([style*="display: none"])').length
+    """)
+    if stale_count:
+        progress("modal-scrape", f"Advertencia: {stale_count} diálogos aún visibles tras limpieza")
+    else:
+        progress("modal-scrape", "Diálogos limpios, iniciando extracción...")
+
     while remaining:
         progress("modal-scrape", f"Página {page_num}, pendientes: {len(remaining)}...")
 
@@ -1335,24 +1358,18 @@ def scrape_modals_from_table(
             const rows = tbody.querySelectorAll('tr');
             return Array.from(rows).map((row, i) => {
                 const cells = row.querySelectorAll('td');
-                // Column 3 (index 2) is the clave de acceso — try it first
+                // Find clave de acceso (49 digits) in any column
                 let clave = null;
-                const col3 = cells[2] ?? null;
-                if (col3) {
-                    const t = col3.textContent?.trim();
-                    if (t && /^\\d{49}$/.test(t)) clave = t;
+                let claveColIdx = -1;
+                for (let ci = 0; ci < cells.length; ci++) {
+                    const t = cells[ci].textContent?.trim();
+                    if (t && /^\\d{49}$/.test(t)) { clave = t; claveColIdx = ci; break; }
                 }
-                // Fallback: any cell with 49-digit value
-                if (!clave) {
-                    for (const cell of cells) {
-                        const t = cell.textContent?.trim();
-                        if (t && /^\\d{49}$/.test(t)) { clave = t; break; }
-                    }
-                }
-                const hasLink = col3
-                    ? !!(col3.querySelector('a, button, span.ui-link, [onclick]') || col3.closest('[onclick]'))
+                const claveCell = claveColIdx >= 0 ? cells[claveColIdx] : null;
+                const hasLink = claveCell
+                    ? !!(claveCell.querySelector('a, button, span.ui-link, [onclick]') || claveCell.closest('[onclick]'))
                     : false;
-                return { rowIndex: i, clave, hasLink };
+                return { rowIndex: i, clave, claveColIdx, hasLink };
             });
         }""",
             table_id,
@@ -1364,7 +1381,7 @@ def scrape_modals_from_table(
                 continue
 
             progress("modal-scrape", f"Abriendo modal ...{clave[-10:]}...")
-            result = _click_and_scrape_modal(page, table_id, row_info["rowIndex"])
+            result = _click_and_scrape_modal(page, table_id, row_info["rowIndex"], voucher_label)
 
             if result is None:
                 progress("modal-scrape", f"No se pudo abrir modal para ...{clave[-10:]}")
@@ -1403,7 +1420,7 @@ def scrape_modals_from_table(
 
 
 def _click_and_scrape_modal(
-    page: Page, table_id: str, row_index: int
+    page: Page, table_id: str, row_index: int, voucher_label: str = ""
 ) -> dict | None:
     """
     Click the clave de acceso link (column 3) of a table row, wait for the
@@ -1422,44 +1439,143 @@ def _click_and_scrape_modal(
     clicked = page.evaluate(
         """({tblId, rowIndex}) => {
         const tbody = document.getElementById(tblId);
-        if (!tbody) return false;
+        if (!tbody) return { ok: false, reason: 'tabla no encontrada' };
         const rows = tbody.querySelectorAll('tr');
         const row = rows[rowIndex];
-        if (!row) return false;
+        if (!row) return { ok: false, reason: 'fila no encontrada rowIndex=' + rowIndex };
         const cells = row.querySelectorAll('td');
-        const col3 = cells[2];
-        if (!col3) return false;
-        const link = col3.querySelector('a, button, span.ui-link, [onclick]') ?? col3;
-        link.click();
-        return true;
+
+        // Find the cell that contains the 49-digit clave (any column)
+        let targetCell = null;
+        let targetColIdx = -1;
+        for (let i = 0; i < cells.length; i++) {
+            const t = cells[i].textContent?.trim();
+            if (t && /^\d{49}$/.test(t)) {
+                targetCell = cells[i];
+                targetColIdx = i;
+                break;
+            }
+        }
+
+        if (!targetCell) return { ok: false, reason: 'clave no encontrada en ninguna celda' };
+
+        // Try to click a link inside the clave cell first
+        const claveLink = targetCell.querySelector('a, button, span.ui-link, [onclick]')
+            || (targetCell.closest('[onclick]') ? targetCell : null);
+
+        if (claveLink) {
+            claveLink.click();
+            return { ok: true, colIdx: targetColIdx, method: 'clave_link' };
+        }
+
+        // Clave cell has no link (e.g. retenciones) — scan other cells for a detail/view button
+        let actionBtn = null;
+        for (let i = cells.length - 1; i >= 0; i--) {
+            if (cells[i] === targetCell) continue;
+            const btn = cells[i].querySelector(
+                'a[onclick], button, span[class*="ui-icon-search"], span[class*="ui-icon-info"], ' +
+                'span[class*="ui-icon-eye"], .ui-button, a.ui-commandlink'
+            );
+            if (btn) { actionBtn = btn; break; }
+        }
+
+        if (actionBtn) {
+            actionBtn.click();
+            return { ok: true, colIdx: targetColIdx, method: 'action_button' };
+        }
+
+        // Last fallback: click the cell itself
+        targetCell.click();
+        return { ok: true, colIdx: targetColIdx, method: 'cell_click' };
     }""",
         {"tblId": table_id, "rowIndex": row_index},
     )
 
-    if not clicked:
+    if not clicked.get("ok"):
         return None
 
-    # Wait for the PrimeFaces dialog to become visible
-    random_delay(1.5, 3.0)
-    try:
-        page.wait_for_load_state("networkidle", timeout=10000)
-    except Exception:
-        pass
+    if clicked.get("method") and clicked["method"] != "clave_link":
+        progress("modal-scrape", f"Click via {clicked['method']} (col {clicked.get('colIdx')})")
 
-    modal_data = page.evaluate("""() => {
+    # Force-hide ALL existing detail dialogs so the NEW one is the only visible one
+    page.evaluate("""() => {
+        document.querySelectorAll('.ui-dialog').forEach(d => {
+            const title = (d.querySelector('.ui-dialog-title')?.textContent ?? '').trim();
+            if (title && title !== 'Espere por favor') {
+                d.style.display = 'none';
+            }
+        });
+    }""")
+
+    # Wait for PrimeFaces to show the NEW dialog (display != 'none', has content rows)
+    random_delay(1.0, 2.0)
+    try:
+        page.wait_for_function(
+            """() => {
+                for (const d of document.querySelectorAll('.ui-dialog')) {
+                    if (d.style.display === 'none') continue;
+                    const rect = d.getBoundingClientRect();
+                    if (rect.width === 0 || rect.height === 0) continue;
+                    const title = (d.querySelector('.ui-dialog-title')?.textContent ?? '').trim();
+                    if (!title || title === 'Espere por favor') continue;
+                    if (d.querySelectorAll('tr').length > 5) return true;
+                }
+                return false;
+            }""",
+            timeout=10000,
+        )
+    except Exception:
+        pass  # If dialog never appears, modal_data will be None below
+
+    # Check if dialog is actually visible before attempting extraction
+    dialog_visible = page.evaluate("""() => {
+        for (const d of document.querySelectorAll('.ui-dialog')) {
+            if (d.style.display === 'none') continue;
+            if (d.getAttribute('aria-hidden') === 'true') continue;
+            const rect = d.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                const title = d.querySelector('.ui-dialog-title')?.textContent?.trim() || '(sin título)';
+                return title;
+            }
+        }
+        return null;
+    }""")
+
+    if dialog_visible:
+        progress("modal-scrape", f"Modal abierto: '{dialog_visible}'")
+    else:
+        progress("modal-scrape", "Modal no visible después de espera")
+
+    modal_data = page.evaluate("""(voucherLabel) => {
         // ── Find the visible PrimeFaces dialog ──
+        // We force-set display:none on stale dialogs before each click, so the only
+        // dialog WITHOUT display:none after the click is the newly opened one.
+        // Do NOT check aria-hidden — PrimeFaces toggles it during AJAX transitions.
         function findDialog() {
+            let best = null;
             for (const d of document.querySelectorAll('.ui-dialog')) {
                 if (d.style.display === 'none') continue;
-                if (d.getAttribute('aria-hidden') === 'true') continue;
-                if (d.offsetParent === null) continue;
-                return d;
+                const rect = d.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) continue;
+                const title = (d.querySelector('.ui-dialog-title')?.textContent ?? '').trim();
+                if (!title || title === 'Espere por favor') continue;
+                best = d;
             }
-            return null;
+            return best;
         }
 
         const modal = findDialog();
         if (!modal) return null;
+
+        // ── Resolve content root (dialog may render content inside an iframe) ──
+        let contentRoot = modal;
+        const modalIframe = modal.querySelector('iframe');
+        if (modalIframe) {
+            try {
+                const iframeDoc = modalIframe.contentDocument || modalIframe.contentWindow?.document;
+                if (iframeDoc && iframeDoc.body) contentRoot = iframeDoc.body;
+            } catch(e) {}
+        }
 
         // ── Helpers ──
         function num(s) {
@@ -1469,7 +1585,7 @@ def _click_and_scrape_modal(
 
         // Find the value cell by exact label text in any 2-column table row
         function byLabel(labelText) {
-            for (const row of modal.querySelectorAll('tr')) {
+            for (const row of contentRoot.querySelectorAll('tr')) {
                 const cells = row.querySelectorAll('td');
                 if (cells.length < 2) continue;
                 if ((cells[0].textContent ?? '').trim() === labelText) {
@@ -1479,7 +1595,62 @@ def _click_and_scrape_modal(
             return '';
         }
 
-        // ── Main fields (exact label match) ──
+        // ── Retenciones branch ──
+        if (voucherLabel === 'Retencion') {
+            const data = {
+                clave_acceso:          byLabel('Clave de acceso'),
+                establecimiento:       byLabel('Establecimiento'),
+                punto_emision:         byLabel('Punto de emisión'),
+                secuencial:            byLabel('Secuencial'),
+                tipo_id_sujeto:        byLabel('Tipo de Id de Sujeto Retenido'),
+                id_sujeto:             byLabel('Id de Sujeto Retenido'),
+                razon_social_sujeto:   byLabel('Razón Social de Sujeto Retenido'),
+                retenciones:           [],
+            };
+
+            // Find the retenciones detail table by header containing "Porcentaje"
+            for (const tbl of contentRoot.querySelectorAll('table')) {
+                const ths = Array.from(tbl.querySelectorAll('th'))
+                    .map(th => (th.textContent ?? '').trim());
+                if (!ths.some(h => h.includes('Porcentaje') || h.includes('Retenido'))) continue;
+
+                // Map column headers to indexes dynamically.
+                // NOTE: check 'Fecha' BEFORE 'Doc. Sustento' — "Fecha Doc. Sustento"
+                // would otherwise match the Doc.Sustento rule and overwrite idx.doc.
+                const idx = {};
+                ths.forEach((h, i) => {
+                    if (h === 'Impuesto') idx.impuesto = i;
+                    else if (h.includes('Base Imponible')) idx.base = i;
+                    else if (h.includes('Porcentaje')) idx.pct = i;
+                    else if (h.includes('Valor') && h.includes('Retenido')) idx.val = i;
+                    else if (h.includes('Fecha')) idx.fecha = i;
+                    else if (h.includes('Doc. Sustento') || h.includes('Número Doc') || h.includes('Num')) idx.doc = i;
+                });
+
+                for (const row of tbl.querySelectorAll('tr')) {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length < 4) continue;
+                    const impuesto = idx.impuesto !== undefined
+                        ? (cells[idx.impuesto]?.textContent ?? '').trim() : '';
+                    // Skip paginator/navigation rows (RichFaces scroller footer «»)
+                    if (!impuesto || /[«»]/.test(impuesto)) continue;
+                    data.retenciones.push({
+                        impuesto,
+                        base_imponible:      num(idx.base  !== undefined ? cells[idx.base]?.textContent  : 0),
+                        porcentaje_retenido: num(idx.pct   !== undefined ? cells[idx.pct]?.textContent   : 0),
+                        valor_retenido:      num(idx.val   !== undefined ? cells[idx.val]?.textContent   : 0),
+                        num_doc_sustento:    idx.doc   !== undefined ? (cells[idx.doc]?.textContent   ?? '').trim() : '',
+                        fecha_doc_sustento:  idx.fecha !== undefined ? (cells[idx.fecha]?.textContent ?? '').trim() : '',
+                    });
+                }
+                break;
+            }
+
+            if (!data.id_sujeto && !data.clave_acceso) return null;
+            return data;
+        }
+
+        // ── Regular comprobante branch ──
         const data = {
             clave_acceso:                    byLabel('Clave de acceso'),
             establecimiento:                 byLabel('Establecimiento'),
@@ -1495,8 +1666,7 @@ def _click_and_scrape_modal(
         };
 
         // ── Totales por Impuesto table ──
-        // Identified by a header row containing "Código porcentaje" AND "Base Imponible"
-        for (const tbl of modal.querySelectorAll('table')) {
+        for (const tbl of contentRoot.querySelectorAll('table')) {
             const headerTexts = Array.from(tbl.querySelectorAll('th'))
                 .map(th => (th.textContent ?? '').trim());
             if (
@@ -1518,35 +1688,118 @@ def _click_and_scrape_modal(
             }
         }
 
-        // Only return data if we got at least the buyer identification
         if (!data.identificacion_comprador && !data.clave_acceso) return null;
         return data;
-    }""")
+    }""", voucher_label)
 
+    if modal_data is None:
+        progress("modal-scrape", "No se pudieron extraer datos del modal (null)")
+        # Dump ALL dialogs to diagnose which one is being picked and why it's empty
+        debug = page.evaluate("""() => {
+            const all = [];
+            document.querySelectorAll('.ui-dialog').forEach((d, i) => {
+                const rect = d.getBoundingClientRect();
+                const hidden = d.style.display === 'none' || d.getAttribute('aria-hidden') === 'true';
+                const title = d.querySelector('.ui-dialog-title')?.textContent?.trim() || '(sin título)';
+                const trCount = d.querySelectorAll('tr').length;
+                const iframeCount = d.querySelectorAll('iframe').length;
+                const iframeSrcs = Array.from(d.querySelectorAll('iframe')).map(f => f.src || f.name || '?');
+                const textSnippet = d.textContent?.trim().substring(0, 80) || '';
+
+                // Try iframe content
+                let iframeRows = 0;
+                for (const f of d.querySelectorAll('iframe')) {
+                    try {
+                        const doc = f.contentDocument || f.contentWindow?.document;
+                        if (doc) iframeRows += doc.querySelectorAll('tr').length;
+                    } catch(e) {}
+                }
+
+                all.push({
+                    index: i,
+                    hidden,
+                    title,
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    trCount,
+                    iframeCount,
+                    iframeSrcs,
+                    iframeRows,
+                    textSnippet,
+                });
+            });
+            return all;
+        }""")
+        for d in debug:
+            progress(
+                "modal-scrape",
+                f"Dialog[{d['index']}] hidden={d['hidden']} title='{d['title']}' "
+                f"size={d['width']}x{d['height']} trs={d['trCount']} "
+                f"iframes={d['iframeCount']}(rows={d['iframeRows']}) "
+                f"text='{d['textSnippet'][:60]}'",
+            )
+    elif voucher_label == "Retencion":
+        clave = modal_data.get("clave_acceso", "")
+        sujeto = modal_data.get("id_sujeto", "")
+        razon = modal_data.get("razon_social_sujeto", "")
+        n_ret = len(modal_data.get("retenciones", []))
+        progress("modal-scrape", f"Datos extraídos: clave={clave[:20]}... sujeto={sujeto} razon='{razon}' retenciones={n_ret}")
+        for i, ret in enumerate(modal_data.get("retenciones", [])):
+            progress(
+                "modal-scrape",
+                f"  Ret {i+1}: impuesto={ret.get('impuesto')} base={ret.get('base_imponible')} "
+                f"pct={ret.get('porcentaje_retenido')}% valor={ret.get('valor_retenido')} "
+                f"doc={ret.get('num_doc_sustento')} fecha={ret.get('fecha_doc_sustento')}",
+            )
+    else:
+        clave = modal_data.get("clave_acceso", "")
+        comprador = modal_data.get("identificacion_comprador", "")
+        total = modal_data.get("importe_total", 0)
+        progress("modal-scrape", f"Datos extraídos: clave={clave[:20]}... comprador={comprador} total={total}")
+
+    progress("modal-scrape", "Cerrando modal...")
     _close_modal(page)
     return modal_data
 
 
 def _close_modal(page: Page) -> None:
-    """Close the currently open SRI PrimeFaces dialog."""
+    """Close ALL open SRI PrimeFaces dialogs and overlays."""
+    # 1. Click all visible close buttons via Playwright (reliable real click)
     try:
-        page.evaluate("""() => {
-            for (const d of document.querySelectorAll('.ui-dialog')) {
-                if (d.style.display === 'none') continue;
-                if (d.getAttribute('aria-hidden') === 'true') continue;
-                if (d.offsetParent === null) continue;
-                const btn = d.querySelector('.ui-dialog-titlebar-close');
-                if (btn) { btn.click(); return; }
-            }
-        }""")
-        random_delay(0.3, 0.7)
+        close_btns = page.locator('.ui-dialog:visible .ui-dialog-titlebar-close').all()
+        for btn in close_btns:
+            try:
+                btn.click(timeout=1000)
+                random_delay(0.1, 0.2)
+            except Exception:
+                pass
     except Exception:
         pass
+
+    # 2. Press Escape to dismiss any remaining dialog
     try:
         page.keyboard.press("Escape")
-        random_delay(0.3, 0.6)
+        random_delay(0.2, 0.4)
     except Exception:
         pass
+
+    # 3. Force-hide all remaining dialogs and overlays via JS
+    try:
+        page.evaluate("""() => {
+            document.querySelectorAll('.ui-dialog').forEach(d => {
+                d.style.display = 'none';
+                d.setAttribute('aria-hidden', 'true');
+            });
+            document.querySelectorAll('.ui-widget-overlay, .ui-blockui').forEach(o => {
+                o.style.display = 'none';
+            });
+        }""")
+    except Exception:
+        pass
+    # Give PrimeFaces a moment to settle after force-close
+    random_delay(0.3, 0.5)
+
+    random_delay(0.2, 0.4)
 
 
 # ─── XML Download from Table ──────────────────────────────────────────────────

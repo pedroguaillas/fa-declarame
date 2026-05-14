@@ -18,7 +18,7 @@ import ShopExportModal from "./components/ShopExportModal.vue";
 import type { ActionDef, ActionPayload, ColumnDef } from "@/types/shared";
 import { Paginator } from "@/types";
 import { Shop } from "@/types/tenant";
-import { Download, FileText, Pencil, Receipt, Trash2 } from "lucide-vue-next";
+import { Download, FileText, Pencil, Receipt, Trash2, ClipboardList } from "lucide-vue-next";
 
 // ─── Props ─────────────────────────────────────────────────────────────────
 
@@ -232,6 +232,24 @@ const importForm = useForm<{ file: File | null }>({ file: null });
 const importRetentionsFileInput = ref<HTMLInputElement | null>(null);
 const importRetentionsForm = useForm<{ file: File | null }>({ file: null });
 
+const completeRetentionsForm = useForm({});
+
+const showCompleteRetentions = computed(
+    () => props.isActiveRetention && props.filters.retention === "without" && props.shops.total > 0,
+);
+
+function completeRetentions() {
+    completeRetentionsForm.post(
+        route("tenant.shops.complete-retentions", {
+            search: props.filters.search,
+            period: props.filters.period,
+            retention: props.filters.retention,
+            voucher_type: props.filters.voucher_type,
+        }),
+        { preserveScroll: true },
+    );
+}
+
 function handleFileSelected(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -284,6 +302,16 @@ watch(
                 @click-import="importFileInput?.click()"
             >
                 <template #extra-actions>
+                    <Button
+                        v-if="showCompleteRetentions"
+                        variant="outline"
+                        size="sm"
+                        :disabled="completeRetentionsForm.processing"
+                        @click="completeRetentions"
+                    >
+                        <ClipboardList class="size-4" />
+                        {{ completeRetentionsForm.processing ? "Completando…" : "Completar retenciones" }}
+                    </Button>
                     <Button variant="outline" size="sm" @click="shopExportModal?.open()">
                         <Download class="size-4" />
                         Descargar
