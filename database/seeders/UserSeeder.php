@@ -57,6 +57,7 @@ class UserSeeder extends Seeder
                     'name' => 'DECLARAME',
                     'matrix_address' => 'COLOMBIA',
                     'contributor_type_id' => ContributorType::first()->id,
+                    'type_declaration' => 'mensual',
                 ]);
             });
         }

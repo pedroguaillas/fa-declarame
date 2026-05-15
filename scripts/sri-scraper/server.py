@@ -88,13 +88,13 @@ def start_browser(user_data_dir: str | None = None) -> None:
         Path(user_data_dir).mkdir(parents=True, exist_ok=True)
         context = pw.chromium.launch_persistent_context(
             user_data_dir,
-            headless=False,
+            headless=True,
             args=launch_args,
             **context_opts,
         )
         page = context.pages[0] if context.pages else context.new_page()
     else:
-        browser = pw.chromium.launch(headless=False, args=launch_args)
+        browser = pw.chromium.launch(headless=True, args=launch_args)
         _browser_state["browser"] = browser
         context = browser.new_context(**context_opts)
         page = context.new_page()
