@@ -276,6 +276,7 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
                         :actions="actions"
                         empty-text="No hay ventas registradas."
                         :actionsMode="'icons'"
+                        :rowClass="(item) => item.serie_retention ? 'bg-green-50 dark:bg-green-950/20' : ''"
                         @select="handleSelect"
                         @action="handleAction"
                     />
