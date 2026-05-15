@@ -11,7 +11,7 @@ import {
     ReceiptIndianRupee,
     Contact,
     CloudDownload,
-    FileSpreadsheet,
+    ClipboardList,
 } from "lucide-vue-next";
 import type { User } from "@/types";
 import type { LucideIcon } from "lucide-vue-next";
@@ -116,9 +116,9 @@ export function useNavigation(user: User) {
             icon: Sheet,
         },
         {
-            title: "SRI",
-            url: route("tenant.sri.index"),
-            icon: FileSpreadsheet,
+            title: "Declaración",
+            url: route("tenant.declaration.index"),
+            icon: ClipboardList,
         },
     ];
 

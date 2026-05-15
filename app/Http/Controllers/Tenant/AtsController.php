@@ -30,13 +30,13 @@ class AtsController extends Controller
         try {
             $content = $this->extractXmlContent($uploadedFile->getRealPath(), $uploadedFile->getClientOriginalExtension());
         } catch (\RuntimeException $e) {
-            return redirect()->route('tenant.sri.index')->with('error', $e->getMessage());
+            return redirect()->route('tenant.declaration.index')->with('error', $e->getMessage());
         }
 
         try {
             ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors] = $service->import($content, $company->id, $company->ruc);
         } catch (\RuntimeException $e) {
-            return redirect()->route('tenant.sri.index')->with('error', $e->getMessage());
+            return redirect()->route('tenant.declaration.index')->with('error', $e->getMessage());
         }
 
         $msg = "ATS importado: {$imported} compras importadas, {$skipped} omitidas";
@@ -46,7 +46,7 @@ class AtsController extends Controller
 
         $flashKey = ($errors > 0 || ($imported === 0 && $skipped > 0)) ? 'error' : 'success';
 
-        return redirect()->route('tenant.sri.index')->with($flashKey, $msg.'.');
+        return redirect()->route('tenant.declaration.index')->with($flashKey, $msg.'.');
     }
 
     /**

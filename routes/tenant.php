@@ -10,6 +10,7 @@ use App\Http\Controllers\Tenant\CompanyController;
 use App\Http\Controllers\Tenant\CompanyScopeController;
 use App\Http\Controllers\Tenant\ContactController;
 use App\Http\Controllers\Tenant\DashboardController as TenantDashboardController;
+use App\Http\Controllers\Tenant\DeclarationController;
 use App\Http\Controllers\Tenant\EmployeeController;
 use App\Http\Controllers\Tenant\OrderController;
 use App\Http\Controllers\Tenant\ProfileController as TenantProfileController;
@@ -28,6 +29,8 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
     Route::middleware(RequireCompanyScope::class)->group(function () {
 
         Route::get('reports', [ReportController::class, 'index'])->name('tenant.reports.index');
+
+        Route::get('declaration', [DeclarationController::class, 'index'])->name('tenant.declaration.index');
 
         Route::get('reports/shops-by-account', [ReportController::class, 'shopsByAccount'])
             ->name('tenant.reports.shops-by-account');
