@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Models\Tenant\Company;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\Shop;
 use Carbon\Carbon;
@@ -25,7 +26,10 @@ class DashboardController extends Controller
         $yearStart = $ref->copy()->startOfYear();
         $yearEnd = $ref->copy()->endOfYear();
 
+        $company = Company::find($companyId, ['id', 'ruc', 'name', 'matrix_address', 'phone', 'email', 'type_declaration', 'accounting', 'retention_agent', 'phantom_taxpayer']);
+
         return Inertia::render('Tenant/Dashboard', [
+            'company' => $company,
             'month' => $this->periodStats($companyId, $monthStart, $monthEnd),
             'year' => $this->periodStats($companyId, $yearStart, $yearEnd),
             'monthLabel' => $ref->format('Y-m'),

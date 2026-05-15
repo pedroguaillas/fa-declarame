@@ -1,7 +1,19 @@
 <script setup lang="ts">
 import TenantLayout from "@/layouts/TenantLayout.vue";
-import { Head } from "@inertiajs/vue3";
+import { Head, Link } from "@inertiajs/vue3";
 import { computed, ref } from "vue";
+import {
+    Building2,
+    MapPin,
+    Phone,
+    Mail,
+    CloudDownload,
+    ShoppingCart,
+    ReceiptIndianRupee,
+    ClipboardList,
+    ArrowRight,
+    BadgeCheck,
+} from "lucide-vue-next";
 
 interface PeriodStats {
     count: number;
@@ -27,7 +39,21 @@ interface Provider {
     count: number;
 }
 
+interface CompanyInfo {
+    id: number;
+    ruc: string;
+    name: string;
+    matrix_address: string | null;
+    phone: string | null;
+    email: string | null;
+    type_declaration: string | null;
+    accounting: boolean;
+    retention_agent: number | null;
+    phantom_taxpayer: boolean;
+}
+
 const props = defineProps<{
+    company: CompanyInfo | null;
     month: Period;
     year: Period;
     monthLabel: string;
@@ -35,6 +61,13 @@ const props = defineProps<{
     trend: TrendPoint[];
     topProviders: Provider[];
 }>();
+
+const quickLinks = [
+    { title: "Descarga automática", icon: CloudDownload, route: "tenant.sri-scrape.index" },
+    { title: "Compras", icon: ShoppingCart, route: "tenant.shops.index" },
+    { title: "Ventas", icon: ReceiptIndianRupee, route: "tenant.orders.index" },
+    { title: "Declaración", icon: ClipboardList, route: "tenant.declaration.index" },
+];
 
 const activePeriod = ref<"month" | "year">("month");
 const stats = computed(() => (activePeriod.value === "month" ? props.month : props.year));
@@ -78,9 +111,83 @@ function barHeight(value: number): number {
     <Head title="Panel de control — Resumen tributario" />
 
     <TenantLayout>
+        <!-- Company ficha -->
+        <div v-if="company" class="mb-6 rounded-xl border bg-card p-5">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <!-- Identity -->
+                <div class="flex items-start gap-4">
+                    <div class="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                        <Building2 class="size-6 text-primary" />
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold leading-tight">{{ company.name }}</h1>
+                        <p class="font-mono text-sm text-muted-foreground">{{ company.ruc }}</p>
+
+                        <!-- Badges -->
+                        <div class="mt-2 flex flex-wrap gap-1.5">
+                            <span
+                                v-if="company.accounting"
+                                class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                            >
+                                <BadgeCheck class="size-3" /> Obligado contabilidad
+                            </span>
+                            <span
+                                v-if="company.retention_agent"
+                                class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                            >
+                                <BadgeCheck class="size-3" /> Agente de retención
+                            </span>
+                            <span
+                                v-if="company.phantom_taxpayer"
+                                class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                            >
+                                Contribuyente fantasma
+                            </span>
+                            <span
+                                v-if="company.type_declaration"
+                                class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                            >
+                                {{ company.type_declaration }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contact info -->
+                <div class="flex flex-col gap-1.5 text-sm text-muted-foreground sm:items-end sm:text-right">
+                    <span v-if="company.matrix_address" class="flex items-center gap-1.5 sm:justify-end">
+                        <MapPin class="size-3.5 shrink-0" />
+                        {{ company.matrix_address }}
+                    </span>
+                    <span v-if="company.phone" class="flex items-center gap-1.5 sm:justify-end">
+                        <Phone class="size-3.5 shrink-0" />
+                        {{ company.phone }}
+                    </span>
+                    <span v-if="company.email" class="flex items-center gap-1.5 sm:justify-end">
+                        <Mail class="size-3.5 shrink-0" />
+                        {{ company.email }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Quick access links -->
+            <div class="mt-4 grid grid-cols-2 gap-2 border-t pt-4 sm:grid-cols-4">
+                <Link
+                    v-for="link in quickLinks"
+                    :key="link.route"
+                    :href="route(link.route)"
+                    class="group flex items-center gap-2 rounded-lg border bg-background px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                >
+                    <component :is="link.icon" class="size-4 shrink-0 text-primary" />
+                    <span class="flex-1 truncate">{{ link.title }}</span>
+                    <ArrowRight class="size-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
+                </Link>
+            </div>
+        </div>
+
         <!-- Header -->
         <div class="mb-6 flex items-center justify-between">
-            <h1 class="text-foreground text-2xl font-semibold">Panel de control</h1>
+            <h1 class="text-foreground text-lg font-semibold">Resumen tributario</h1>
 
             <div class="flex items-center gap-3">
                 <!-- Period toggle -->
