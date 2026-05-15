@@ -27,6 +27,8 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
 
     Route::middleware(RequireCompanyScope::class)->group(function () {
 
+        Route::get('reports', [ReportController::class, 'index'])->name('tenant.reports.index');
+
         Route::get('reports/shops-by-account', [ReportController::class, 'shopsByAccount'])
             ->name('tenant.reports.shops-by-account');
         Route::get('reports/shops-by-account/export', [ReportController::class, 'exportShopsByAccount'])

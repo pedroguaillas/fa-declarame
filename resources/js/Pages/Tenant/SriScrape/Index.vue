@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm, usePage } from "@inertiajs/vue3";
+import { Head, useForm, usePage, Link } from "@inertiajs/vue3";
 import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 
 import TenantLayout from "@/layouts/TenantLayout.vue";
@@ -24,6 +24,10 @@ import {
     XCircle,
     Clock,
     AlertTriangle,
+    ShoppingCart,
+    ReceiptIndianRupee,
+    Sheet,
+    ArrowRight,
 } from "lucide-vue-next";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -399,8 +403,31 @@ defineOptions({ layout: TenantLayout });
                             </p>
                         </div>
 
-                        <div class="text-muted-foreground text-xs">
-                            {{ new Date(job.created_at).toLocaleString("es-EC") }}
+                        <div class="flex flex-col items-end gap-2">
+                            <span class="text-muted-foreground text-xs">
+                                {{ new Date(job.created_at).toLocaleString("es-EC") }}
+                            </span>
+
+                            <!-- Quick access buttons for completed jobs -->
+                            <div v-if="job.status === 'completed'" class="flex gap-2">
+                                <Link
+                                    :href="route(job.type === 'compras' ? 'tenant.shops.index' : 'tenant.orders.index')"
+                                    class="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                                >
+                                    <ShoppingCart v-if="job.type === 'compras'" class="size-3" />
+                                    <ReceiptIndianRupee v-else class="size-3" />
+                                    {{ job.type === 'compras' ? 'Ver Compras' : 'Ver Ventas' }}
+                                    <ArrowRight class="size-3 opacity-60" />
+                                </Link>
+                                <Link
+                                    :href="route('tenant.reports.index')"
+                                    class="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                                >
+                                    <Sheet class="size-3" />
+                                    Reportes
+                                    <ArrowRight class="size-3 opacity-60" />
+                                </Link>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -67,20 +67,50 @@ function selectCompany(company: CompanyScope) {
 <template>
     <Popover v-model:open="open">
         <PopoverTrigger as-child>
+            <!-- Contribuyente seleccionado: chip outline con nombre + RUC -->
             <Button
-                variant="ghost"
+                v-if="currentCompany"
+                variant="outline"
                 size="sm"
-                class="flex h-8 items-center gap-2 px-2 text-sm font-medium"
-                :class="!currentCompany ? 'text-destructive' : ''"
+                class="hidden h-9 max-w-72 gap-2 px-3 sm:flex"
             >
-                <Building2 class="size-4 shrink-0" />
-                <span class="hidden max-w-40 truncate sm:inline-block">
-                    {{ currentCompany?.name ?? "Seleccionar contribuyente" }}
-                </span>
+                <Building2 class="size-4 shrink-0 text-primary" />
+                <div class="flex min-w-0 flex-1 flex-col items-start leading-tight">
+                    <span class="max-w-44 truncate text-sm font-semibold leading-none">
+                        {{ currentCompany.name }}
+                    </span>
+                    <span class="font-mono text-[10px] leading-none text-muted-foreground">
+                        {{ currentCompany.ruc }}
+                    </span>
+                </div>
                 <ChevronsUpDown class="size-3.5 shrink-0 opacity-50" />
             </Button>
+
+            <!-- Móvil: solo ícono cuando hay selección -->
+            <Button
+                v-if="currentCompany"
+                variant="outline"
+                size="icon"
+                class="size-9 sm:hidden"
+                :title="currentCompany.name"
+            >
+                <Building2 class="size-4 text-primary" />
+            </Button>
+
+            <!-- Sin contribuyente: botón amber pulsante -->
+            <Button
+                v-if="!currentCompany"
+                variant="outline"
+                size="sm"
+                class="h-9 animate-pulse gap-2 border-amber-400 bg-amber-50 px-3 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-400 dark:hover:bg-amber-950/60"
+            >
+                <Building2 class="size-4 shrink-0" />
+                <span class="hidden sm:inline">Seleccionar contribuyente</span>
+                <ChevronsUpDown class="size-3.5 shrink-0 opacity-70" />
+            </Button>
         </PopoverTrigger>
-        <PopoverContent class="w-72 p-0" align="start">
+
+        <PopoverContent class="w-80 p-0" align="start">
             <Command :filter-function="() => true">
                 <CommandInput
                     v-model="search"

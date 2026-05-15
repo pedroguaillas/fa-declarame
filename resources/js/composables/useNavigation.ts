@@ -4,7 +4,6 @@ import {
     ShieldCheck,
     CreditCard,
     Sheet,
-    LucideSheet,
     Book,
     Settings,
     Building2,
@@ -112,42 +111,9 @@ export function useNavigation(user: User) {
             icon: Book,
         },
         {
-            title: "Reportes Compras",
-            url: "#",
+            title: "Reportes",
+            url: route("tenant.reports.index"),
             icon: Sheet,
-            items: [
-                {
-                    title: "Mayor analítico",
-                    url: route("tenant.reports.shops-by-account"),
-                },
-                {
-                    title: "Por tipo de comprobante",
-                    url: route("tenant.reports.shops-by-voucher-type"),
-                },
-                {
-                    title: "Por proveedor",
-                    url: route("tenant.reports.shops-by-provider"),
-                },
-                {
-                    title: "Retenciones",
-                    url: route("tenant.reports.shops-by-retention"),
-                },
-            ],
-        },
-        {
-            title: "Reportes Ventas",
-            url: "#",
-            icon: LucideSheet,
-            items: [
-                {
-                    title: "Por tipo de comprobante",
-                    url: route("tenant.reports.orders-by-voucher-type"),
-                },
-                {
-                    title: "Por cliente",
-                    url: route("tenant.reports.orders-by-client"),
-                },
-            ],
         },
         {
             title: "SRI",

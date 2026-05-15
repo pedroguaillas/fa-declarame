@@ -22,6 +22,11 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ReportController extends Controller
 {
+    public function index(): Response
+    {
+        return Inertia::render('Tenant/Reports/Index');
+    }
+
     public function shopsByAccount(Request $request): Response
     {
         $filters = $this->resolvedFilters($request);
