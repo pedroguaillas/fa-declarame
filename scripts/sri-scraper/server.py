@@ -168,6 +168,7 @@ def handle_scrape(config: dict) -> dict:
     month = config.get("month", 5)
     mode = config.get("mode", "txt_download")
     download_dir = Path(config.get("downloadDir", "/tmp/sri-scrape-py"))
+    skip_claves = set(config.get("skipClaves") or [])
     download_dir.mkdir(parents=True, exist_ok=True)
 
     if not ensure_logged_in(ruc, password):
@@ -193,12 +194,14 @@ def handle_scrape(config: dict) -> dict:
                 if tipo == "ventas":
                     # Emitidos: consultar día por día (TEST: solo 10 días)
                     result = scraper.download_for_voucher_type_by_day(
-                        page, vt, year, month, download_dir, api_key, tipo
+                        page, vt, year, month, download_dir, api_key, tipo,
+                        skip_claves=skip_claves,
                     )
                 else:
                     # Recibidos: consultar todo el mes
                     result = scraper.download_for_voucher_type(
-                        page, vt, year, month, download_dir, api_key, tipo
+                        page, vt, year, month, download_dir, api_key, tipo,
+                        skip_claves=skip_claves,
                     )
                 files.append(result)
                 content_len = len(result.get("content") or "")

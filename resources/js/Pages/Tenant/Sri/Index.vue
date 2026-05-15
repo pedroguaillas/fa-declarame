@@ -163,11 +163,11 @@ defineOptions({ layout: TenantLayout });
                     </p>
                     <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
                         <div class="flex flex-1 flex-col gap-1.5">
-                            <label class="text-sm font-medium">Archivo XML</label>
+                            <label class="text-sm font-medium">Archivo XML o ZIP</label>
                             <input
                                 ref="importFileInput"
                                 type="file"
-                                accept=".xml"
+                                accept=".xml,.zip"
                                 class="border-border bg-background text-foreground focus:ring-ring/30 h-9 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-medium"
                                 @change="onFileSelected"
                             />

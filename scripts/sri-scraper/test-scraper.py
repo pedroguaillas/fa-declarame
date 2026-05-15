@@ -64,11 +64,12 @@ VOUCHER_TYPES = [
     {"value": "6", "label": "Retencion"},
 ]
 
-# Comprobantes recibidos (compras): solo facturas, notas de crédito y débito
+# Comprobantes recibidos (compras): facturas, notas de crédito/débito y retenciones recibidas
 COMPRAS_VOUCHER_TYPES = [
     {"value": "1", "label": "Factura"},
     {"value": "3", "label": "NotaCredito"},
     {"value": "4", "label": "NotaDebito"},
+    {"value": "6", "label": "Retencion"},
 ]
 
 TWOCAPTCHA_IN = "https://2captcha.com/in.php"
@@ -968,6 +969,7 @@ def download_for_voucher_type(
     api_key: str | None,
     tipo: str,
     day: int = 0,
+    skip_claves: set | None = None,
 ) -> dict:
     label = voucher_type["label"]
     if tipo == "ventas":
@@ -1102,6 +1104,16 @@ def download_for_voucher_type(
     claves = extract_claves_from_txt(final_content)
     recent_claves, old_claves = classify_claves(claves)
 
+    # ── Skip claves already in the DB ────────────────────────────────────────
+    if skip_claves:
+        before_old = len(old_claves)
+        before_recent = len(recent_claves)
+        old_claves = [c for c in old_claves if c not in skip_claves]
+        recent_claves = [c for c in recent_claves if c not in skip_claves]
+        skipped_count = (before_old - len(old_claves)) + (before_recent - len(recent_claves))
+        if skipped_count:
+            progress(label, f"Saltando {skipped_count} claves ya importadas ({before_old + before_recent} → {len(old_claves) + len(recent_claves)})")
+
     # Build clave → txt line lookup for old claves (needed by PHP for ventas modal entries)
     clave_to_line: dict[str, str] = {}
     if old_claves:
@@ -1163,6 +1175,7 @@ def download_for_voucher_type_by_day(
     api_key: str | None,
     tipo: str,
     max_days: int = 0,
+    skip_claves: set | None = None,
 ) -> dict:
     """For ventas (emitidos): download day by day and concatenate all content."""
     import calendar
@@ -1183,7 +1196,7 @@ def download_for_voucher_type_by_day(
         progress(label, f"Día {day}/{days_in_month}...")
 
         result = download_for_voucher_type(
-            page, voucher_type, year, month, download_dir, api_key, tipo, day
+            page, voucher_type, year, month, download_dir, api_key, tipo, day, skip_claves
         )
 
         if result["status"] == "downloaded":

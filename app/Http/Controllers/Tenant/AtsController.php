@@ -21,11 +21,17 @@ class AtsController extends Controller
     public function import(Request $request, AtsXmlImportService $service): RedirectResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'max:20480', 'mimes:xml'],
+            'file' => ['required', 'file', 'max:20480', 'mimes:xml,zip'],
         ]);
 
         $company = company();
-        $content = file_get_contents($request->file('file')->getRealPath());
+        $uploadedFile = $request->file('file');
+
+        try {
+            $content = $this->extractXmlContent($uploadedFile->getRealPath(), $uploadedFile->getClientOriginalExtension());
+        } catch (\RuntimeException $e) {
+            return redirect()->route('tenant.sri.index')->with('error', $e->getMessage());
+        }
 
         try {
             ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors] = $service->import($content, $company->id, $company->ruc);
@@ -41,6 +47,45 @@ class AtsController extends Controller
         $flashKey = ($errors > 0 || ($imported === 0 && $skipped > 0)) ? 'error' : 'success';
 
         return redirect()->route('tenant.sri.index')->with($flashKey, $msg.'.');
+    }
+
+    /**
+     * Extract XML content from an uploaded file (XML or ZIP containing one XML).
+     *
+     * @throws \RuntimeException
+     */
+    private function extractXmlContent(string $realPath, string $extension): string
+    {
+        if (strtolower($extension) !== 'zip') {
+            return file_get_contents($realPath);
+        }
+
+        $zip = new \ZipArchive;
+
+        if ($zip->open($realPath) !== true) {
+            throw new \RuntimeException('No se pudo abrir el archivo ZIP.');
+        }
+
+        $xmlContent = null;
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+
+            if (strtolower(pathinfo($name, PATHINFO_EXTENSION)) !== 'xml') {
+                continue;
+            }
+
+            $xmlContent = $zip->getFromIndex($i);
+            break;
+        }
+
+        $zip->close();
+
+        if ($xmlContent === false || $xmlContent === null) {
+            throw new \RuntimeException('El ZIP no contiene ningún archivo XML.');
+        }
+
+        return $xmlContent;
     }
 
     public function export(Request $request, AtsXmlService $service): Response

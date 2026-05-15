@@ -57,7 +57,7 @@ const columns: ColumnDef<Order>[] = [
         key: "code",
         label: "Tipo",
         badge: {
-            value: (item) => voucherTypes[item.code]?.label ?? item.code,
+            value: (item) => voucherTypes[item.code]?.label ?? "Otros",
             class: (item) => voucherTypes[item.code]?.class ?? "",
         },
     },
@@ -304,7 +304,11 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
             title="¿Eliminar venta?"
             :description="`Se eliminará la venta ${deleteTarget?.serie}. Esta acción no se puede deshacer.`"
             :loading="deleteLoading"
-            @update:open="(v) => { if (!v) deleteTarget = null; }"
+            @update:open="
+                (v) => {
+                    if (!v) deleteTarget = null;
+                }
+            "
             @confirm="confirmDelete"
             @cancel="deleteTarget = null"
         />

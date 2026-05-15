@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant\Company;
 use App\Models\Tenant\Contact;
+use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\Retention;
 use App\Models\Tenant\Shop;
@@ -71,6 +72,9 @@ class SriScraperService
             if ($captchaKey) {
                 $config['apiKey'] = $captchaKey;
             }
+
+            // Skip claves already in the DB to avoid redundant SOAP calls / modal scrapes
+            $config['skipClaves'] = $this->getExistingClavesForMonth($scrapeJob, $company);
 
             $result = $serverUrl
                 ? $this->runViaServer($serverUrl, $config, $scrapeJob)
@@ -467,16 +471,25 @@ class SriScraperService
                 // ── Buyer contact ──
                 $buyerIdentification = $entry['identificacion_comprador'] ?? null;
                 $buyerName = $entry['razon_social_comprador'] ?? null;
+                $tipoIdentRaw = strtoupper(trim($entry['tipo_identificacion_comprador'] ?? ''));
+
+                $identificationTypeId = $this->resolveIdentificationTypeId($tipoIdentRaw, $buyerIdentification ?? '9999999999999');
 
                 if ($buyerIdentification) {
                     $contact = Contact::firstOrCreate(
                         ['identification' => $buyerIdentification],
-                        ['name' => $buyerName ?? $buyerIdentification],
+                        [
+                            'identification_type_id' => $identificationTypeId,
+                            'name' => $buyerName ?? $buyerIdentification,
+                        ],
                     );
                 } else {
                     $contact = Contact::firstOrCreate(
                         ['identification' => '9999999999999'],
-                        ['name' => 'Consumidor Final'],
+                        [
+                            'identification_type_id' => $identificationTypeId,
+                            'name' => 'Consumidor Final',
+                        ],
                     );
                 }
 
@@ -697,6 +710,92 @@ class SriScraperService
         }
 
         return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
+    }
+
+    /**
+     * Resolve the IdentificationType DB id from a raw SRI label or code.
+     *
+     * Tries in order:
+     *   1. code_order match (e.g. "04", "05", "06")
+     *   2. description match (e.g. "RUC", "CEDULA", "PASAPORTE")
+     *   3. Identification length fallback: 13 digits → RUC (04), 10 → Cédula (05), other → Pasaporte (06)
+     */
+    private function resolveIdentificationTypeId(string $tipoRaw, string $identification): ?int
+    {
+        static $cache = [];
+
+        $cacheKey = $tipoRaw ?: ('len:'.strlen($identification));
+        if (isset($cache[$cacheKey])) {
+            return $cache[$cacheKey];
+        }
+
+        $id = null;
+
+        if ($tipoRaw !== '') {
+            $id = IdentificationType::where('code_order', $tipoRaw)->value('id')
+                ?? IdentificationType::whereRaw('UPPER(description) LIKE ?', ['%'.strtoupper($tipoRaw).'%'])->value('id');
+        }
+
+        if (! $id) {
+            $code = match (strlen($identification)) {
+                13 => '04',
+                10 => '05',
+                default => '06',
+            };
+            $id = IdentificationType::where('code_order', $code)->value('id');
+        }
+
+        return $cache[$cacheKey] = $id;
+    }
+
+    /**
+     * Return all access keys (claves de acceso) already stored in the DB for the
+     * given job's month/year so the Python scraper can skip redundant processing.
+     *
+     * ventas: Orders (Facturas/NC/ND emitidas) + Shop.autorization_retention (Retenciones emitidas)
+     * compras: Shops (Facturas/NC/ND recibidas)
+     *
+     * @return array<int, string>
+     */
+    private function getExistingClavesForMonth(SriScrapeJob $scrapeJob, Company $company): array
+    {
+        $year = $scrapeJob->year;
+        $month = $scrapeJob->month;
+
+        if ($scrapeJob->type === 'ventas') {
+            $orderClaves = Order::where('company_id', $company->id)
+                ->whereYear('emision', $year)
+                ->whereMonth('emision', $month)
+                ->whereNotNull('autorization')
+                ->pluck('autorization')
+                ->all();
+
+            $retentionClaves = Shop::where('company_id', $company->id)
+                ->whereYear('date_retention', $year)
+                ->whereMonth('date_retention', $month)
+                ->whereNotNull('autorization_retention')
+                ->pluck('autorization_retention')
+                ->all();
+
+            return array_values(array_unique(array_merge($orderClaves, $retentionClaves)));
+        }
+
+        // compras: facturas/NC/ND recibidas (Shop) + retenciones recibidas (Order)
+        $shopClaves = Shop::where('company_id', $company->id)
+            ->whereYear('emision', $year)
+            ->whereMonth('emision', $month)
+            ->whereNotNull('autorization')
+            ->pluck('autorization')
+            ->all();
+
+        $orderRetentionClaves = Order::where('company_id', $company->id)
+            ->whereYear('emision', $year)
+            ->whereMonth('emision', $month)
+            ->whereNotNull('autorization_retention')
+            ->pluck('autorization_retention')
+            ->all();
+
+        return array_values(array_unique(array_merge($shopClaves, $orderRetentionClaves)));
     }
 
     /**

@@ -79,12 +79,13 @@ const voucherTypesByMode: Record<string, { value: string; label: string }[]> = {
         { value: "1", label: "Facturas" },
         { value: "3", label: "Notas de Crédito" },
         { value: "4", label: "Notas de Débito" },
+        { value: "6", label: "Retenciones Recibidas" },
     ],
     ventas: [
         { value: "1", label: "Facturas" },
         { value: "3", label: "Notas de Crédito" },
         { value: "4", label: "Notas de Débito" },
-        { value: "6", label: "Retenciones" },
+        { value: "6", label: "Retenciones Emitidas" },
     ],
 };
 
@@ -102,9 +103,9 @@ function toggleVoucherType(value: string) {
     }
 }
 
-// Al cambiar tipo, resetear según el modo
-watch(() => form.type, (type) => {
-    selectedVoucherTypes.value = type === "ventas" ? ["1"] : ["1", "3", "4"];
+// Al cambiar tipo, resetear selección por defecto
+watch(() => form.type, () => {
+    selectedVoucherTypes.value = ["1", "3", "4"];
 });
 
 // ─── Years & Months ─────────────────────────────────────────────────────────
@@ -207,7 +208,7 @@ watch(hasActiveJobs, (active) => {
 // ─── Submit ─────────────────────────────────────────────────────────────────
 
 function submit() {
-    form.voucher_types = form.type === "ventas" ? selectedVoucherTypes.value : ["1", "3", "4"];
+    form.voucher_types = selectedVoucherTypes.value;
     form.post(route("tenant.sri-scrape.store"), {
         preserveScroll: true,
         onSuccess: () => {
@@ -311,8 +312,8 @@ defineOptions({ layout: TenantLayout });
                         </Button>
                     </div>
 
-                    <!-- Voucher type switches — solo para ventas (emitidos) -->
-                    <div v-if="form.type === 'ventas'" class="flex flex-col gap-2">
+                    <!-- Voucher type switches -->
+                    <div class="flex flex-col gap-2">
                         <label class="text-sm font-medium">Comprobantes</label>
                         <div class="flex flex-wrap gap-6">
                             <label
@@ -327,11 +328,14 @@ defineOptions({ layout: TenantLayout });
                                 <span class="text-sm">{{ vt.label }}</span>
                             </label>
                         </div>
-                        <p class="text-muted-foreground text-xs">
+                        <p v-if="form.type === 'ventas'" class="text-muted-foreground text-xs">
                             En emitidos se consulta día por día. Seleccione solo los tipos necesarios para mayor agilidad.
                         </p>
-                        <p v-if="selectedVoucherTypes.includes('6')" class="text-xs text-amber-600 dark:text-amber-400">
-                            Las retenciones recibidas se descargarán e importarán en Compras. No se pueden combinar con otros tipos.
+                        <p v-if="selectedVoucherTypes.includes('6') && form.type === 'compras'" class="text-xs text-amber-600 dark:text-amber-400">
+                            Las retenciones recibidas se importarán en Ventas. No se pueden combinar con otros tipos.
+                        </p>
+                        <p v-if="selectedVoucherTypes.includes('6') && form.type === 'ventas'" class="text-xs text-amber-600 dark:text-amber-400">
+                            Las retenciones emitidas se importarán en Compras. No se pueden combinar con otros tipos.
                         </p>
                     </div>
                 </form>
