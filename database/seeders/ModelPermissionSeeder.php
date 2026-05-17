@@ -29,26 +29,5 @@ class ModelPermissionSeeder extends Seeder
                 ]);
             }
         }
-
-        // Admin → ver, crear, editar, eliminar usuarios y suscripciones
-        $adminPermissions = ['view', 'create', 'edit', 'delete'];
-        $adminModels = ['users', 'subscriptions'];
-
-        foreach ($adminModels as $modelSlug) {
-            foreach ($adminPermissions as $permSlug) {
-                ModelPermission::updateOrCreate([
-                    'role_id' => $roles['admin']->id,
-                    'permission_id' => $permissions[$permSlug]->id,
-                    'model_entity_id' => $models[$modelSlug]->id,
-                ]);
-            }
-        }
-
-        // Employee → solo ver usuarios
-        ModelPermission::updateOrCreate([
-            'role_id' => $roles['employee']->id,
-            'permission_id' => $permissions['view']->id,
-            'model_entity_id' => $models['users']->id,
-        ]);
     }
 }

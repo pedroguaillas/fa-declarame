@@ -52,7 +52,7 @@ export function useNavigation(user: User) {
             icon: Building2,
         },
         {
-            title: "Roles y Permisos",
+            title: "Sistema",
             url: "#",
             icon: ShieldCheck,
             items: [

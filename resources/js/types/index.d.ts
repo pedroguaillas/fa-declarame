@@ -18,6 +18,7 @@ export interface Domain {
 export interface User {
     id: number;
     name: string;
+    username: string;
     email: string;
     role: Role;
     admin_id: number | null;

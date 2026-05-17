@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Tenant;
+use App\Models\Tenant\Company;
 use App\Models\Tenant\ContributorType;
 use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\TaxSupport;
@@ -59,7 +60,8 @@ class TenantSetupService
             ]);
 
             $identificationType = IdentificationType::create([
-                'code_order' => '07', 'description' => 'CONSUMIDOR FINAL',
+                'code_order' => '07',
+                'description' => 'CONSUMIDOR FINAL',
             ]);
 
             $identificationType->contacts()->create([
@@ -87,6 +89,14 @@ class TenantSetupService
             ]);
 
             VoucherType::insert($voucherTypes);
+
+            // Company::create([
+            //     'ruc' => '1105167694001',
+            //     'name' => 'DECLARAME',
+            //     'matrix_address' => 'COLOMBIA',
+            //     'contributor_type_id' => ContributorType::first()->id,
+            //     'type_declaration' => 'mensual',
+            // ]);
 
             (new RetentionSeeder)->run();
         });

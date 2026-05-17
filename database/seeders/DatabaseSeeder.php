@@ -14,7 +14,7 @@ class DatabaseSeeder extends Seeder
             PermissionSeeder::class,
             ModelEntitySeeder::class,
             ModelPermissionSeeder::class,
-            TenantSeeder::class,  
+            TenantSeeder::class,
             UserSeeder::class,
             SubscriptionSeeder::class,
         ]);

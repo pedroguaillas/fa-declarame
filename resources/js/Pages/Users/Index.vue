@@ -36,7 +36,6 @@ import { Users, Plus, Pencil, Trash2 } from "lucide-vue-next";
 const props = defineProps<{
     users: Paginator<User>;
     roles: Role[];
-    admins: User[];
     tenants: Tenant[];
 }>();
 
@@ -138,28 +137,22 @@ function handleDelete() {
 function goToPage(url: string | null) {
     if (url) router.visit(url, { preserveScroll: true });
 }
-
-function getRoleBadgeVariant(slug: string) {
-    if (slug === "admin") return "secondary" as const;
-    return "outline" as const;
-}
 </script>
 
 <template>
+
     <Head title="Gestión de usuarios" />
     <AppLayout>
         <div class="space-y-6">
             <!-- Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h1
-                        class="text-2xl font-bold text-foreground flex items-center gap-2"
-                    >
+                    <h1 class="text-2xl font-bold text-foreground flex items-center gap-2">
                         <Users class="size-6" />
                         Usuarios
                     </h1>
                     <p class="text-muted-foreground text-sm mt-1">
-                        Gestiona administradores y empleados del sistema.
+                        Gestiona los usuarios del sistema central.
                     </p>
                 </div>
                 <Button @click="openCreate">
@@ -175,7 +168,8 @@ function getRoleBadgeVariant(slug: string) {
                         <TableRow>
                             <TableHead>Usuario</TableHead>
                             <TableHead>Rol</TableHead>
-                            <TableHead>Admin padre</TableHead>
+                            <TableHead>Tenant</TableHead>
+                            <TableHead>Administrador</TableHead>
                             <TableHead class="text-center">Activo</TableHead>
                             <TableHead class="text-right">Acciones</TableHead>
                         </TableRow>
@@ -189,50 +183,36 @@ function getRoleBadgeVariant(slug: string) {
                                 </div>
                             </TableCell>
                             <TableCell>
-                                <Badge
-                                    :variant="
-                                        getRoleBadgeVariant(user.role.slug)
-                                    "
-                                >
+                                <Badge variant="secondary">
                                     {{ user.role.name }}
                                 </Badge>
+                            </TableCell>
+                            <TableCell class="text-sm text-muted-foreground">
+                                <template v-if="user.role.slug === 'admin'">
+                                    {{ user.tenant?.name ?? "—" }}
+                                </template>
+                                <span v-else class="text-muted-foreground/50">—</span>
                             </TableCell>
                             <TableCell class="text-sm text-muted-foreground">
                                 {{ user.admin?.name ?? "—" }}
                             </TableCell>
                             <TableCell class="text-center">
-                                <Switch
-                                    :model-value="user.is_active"
-                                    @update:model-value="toggleActive(user)"
-                                />
+                                <Switch :model-value="user.is_active" @update:model-value="toggleActive(user)" />
                             </TableCell>
                             <TableCell class="text-right">
-                                <div
-                                    class="flex items-center justify-end gap-2"
-                                >
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        @click="openEdit(user)"
-                                    >
+                                <div class="flex items-center justify-end gap-2">
+                                    <Button variant="ghost" size="icon" @click="openEdit(user)">
                                         <Pencil class="size-4" />
                                     </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        class="text-destructive hover:text-destructive"
-                                        @click="confirmDelete(user)"
-                                    >
+                                    <Button variant="ghost" size="icon" class="text-destructive hover:text-destructive"
+                                        :disabled="user.role.slug === 'super_admin'" @click="confirmDelete(user)">
                                         <Trash2 class="size-4" />
                                     </Button>
                                 </div>
                             </TableCell>
                         </TableRow>
                         <TableRow v-if="users.data.length === 0">
-                            <TableCell
-                                colspan="5"
-                                class="text-center text-muted-foreground py-8"
-                            >
+                            <TableCell colspan="6" class="text-center text-muted-foreground py-8">
                                 No hay usuarios registrados.
                             </TableCell>
                         </TableRow>
@@ -240,28 +220,18 @@ function getRoleBadgeVariant(slug: string) {
                 </Table>
 
                 <!-- Paginación -->
-                <div
-                    v-if="users.last_page > 1"
-                    class="flex items-center justify-between px-4 py-3 border-t border-border"
-                >
+                <div v-if="users.last_page > 1"
+                    class="flex items-center justify-between px-4 py-3 border-t border-border">
                     <p class="text-sm text-muted-foreground">
                         Mostrando {{ users.from }} - {{ users.to }} de
                         {{ users.total }}
                     </p>
                     <div class="flex gap-1">
-                        <Button
-                            v-for="link in users.links"
-                            :key="link.label"
-                            variant="outline"
-                            size="sm"
-                            :disabled="!link.url"
-                            :class="{
+                        <Button v-for="link in users.links" :key="link.label" variant="outline" size="sm"
+                            :disabled="!link.url" :class="{
                                 'bg-primary text-primary-foreground':
                                     link.active,
-                            }"
-                            @click="goToPage(link.url)"
-                            v-html="link.label"
-                        />
+                            }" @click="goToPage(link.url)" v-html="link.label" />
                     </div>
                 </div>
             </div>
@@ -272,206 +242,105 @@ function getRoleBadgeVariant(slug: string) {
             <DialogContent class="max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Nuevo usuario</DialogTitle>
-                    <DialogDescription
-                        >Completa los datos para registrar un
-                        usuario.</DialogDescription
-                    >
+                    <DialogDescription>Completa los datos para registrar un
+                        usuario.</DialogDescription>
                 </DialogHeader>
                 <form @submit.prevent="store" class="space-y-4">
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-2">
                             <Label>Nombre</Label>
-                            <Input
-                                v-model="createForm.name"
-                                placeholder="Nombre completo"
-                                :class="{
-                                    'border-destructive':
-                                        createForm.errors.name,
-                                }"
-                            />
-                            <p
-                                v-if="createForm.errors.name"
-                                class="text-xs text-destructive"
-                            >
+                            <Input v-model="createForm.name" placeholder="Nombre completo" :class="{
+                                'border-destructive':
+                                    createForm.errors.name,
+                            }" />
+                            <p v-if="createForm.errors.name" class="text-xs text-destructive">
                                 {{ createForm.errors.name }}
                             </p>
                         </div>
                         <div class="space-y-2">
                             <Label>Usuario</Label>
-                            <Input
-                                v-model="createForm.username"
-                                placeholder="nombre_usuario"
-                                :class="{
-                                    'border-destructive':
-                                        createForm.errors.username,
-                                }"
-                            />
-                            <p
-                                v-if="createForm.errors.username"
-                                class="text-xs text-destructive"
-                            >
+                            <Input v-model="createForm.username" placeholder="nombre_usuario" :class="{
+                                'border-destructive':
+                                    createForm.errors.username,
+                            }" />
+                            <p v-if="createForm.errors.username" class="text-xs text-destructive">
                                 {{ createForm.errors.username }}
                             </p>
                         </div>
                         <div class="space-y-2">
                             <Label>Correo electrónico</Label>
-                            <Input
-                                v-model="createForm.email"
-                                type="email"
-                                placeholder="correo@ejemplo.com"
-                                :class="{
-                                    'border-destructive':
-                                        createForm.errors.email,
-                                }"
-                            />
-                            <p
-                                v-if="createForm.errors.email"
-                                class="text-xs text-destructive"
-                            >
+                            <Input v-model="createForm.email" type="email" placeholder="correo@ejemplo.com" :class="{
+                                'border-destructive':
+                                    createForm.errors.email,
+                            }" />
+                            <p v-if="createForm.errors.email" class="text-xs text-destructive">
                                 {{ createForm.errors.email }}
                             </p>
                         </div>
                         <div class="space-y-2">
                             <Label>Contraseña</Label>
-                            <Input
-                                v-model="createForm.password"
-                                type="password"
-                                placeholder="Mínimo 8 caracteres"
+                            <Input v-model="createForm.password" type="password" placeholder="Mínimo 8 caracteres"
                                 :class="{
                                     'border-destructive':
                                         createForm.errors.password,
-                                }"
-                            />
-                            <p
-                                v-if="createForm.errors.password"
-                                class="text-xs text-destructive"
-                            >
+                                }" />
+                            <p v-if="createForm.errors.password" class="text-xs text-destructive">
                                 {{ createForm.errors.password }}
                             </p>
                         </div>
                         <div class="space-y-2">
                             <Label>Rol</Label>
                             <Select v-model="createForm.role_id">
-                                <SelectTrigger
-                                    class="w-full"
-                                    :class="{
-                                        'border-destructive':
-                                            createForm.errors.role_id,
-                                    }"
-                                >
-                                    <SelectValue
-                                        placeholder="Seleccionar rol..."
-                                    />
+                                <SelectTrigger class="w-full" :class="{
+                                    'border-destructive':
+                                        createForm.errors.role_id,
+                                }">
+                                    <SelectValue placeholder="Seleccionar rol..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem
-                                        v-for="role in roles"
-                                        :key="role.id"
-                                        :value="String(role.id)"
-                                    >
+                                    <SelectItem v-for="role in roles" :key="role.id" :value="String(role.id)">
                                         {{ role.name }}
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <p
-                                v-if="createForm.errors.role_id"
-                                class="text-xs text-destructive"
-                            >
+                            <p v-if="createForm.errors.role_id" class="text-xs text-destructive">
                                 {{ createForm.errors.role_id }}
                             </p>
                         </div>
 
                         <!-- Tenant — solo si es admin -->
-                        <div
-                            v-if="createRoleSlug === 'admin'"
-                            class="col-span-2 space-y-2"
-                        >
+                        <div v-if="createRoleSlug === 'admin'" class="col-span-2 space-y-2">
                             <Label>Tenant (empresa)</Label>
                             <Select v-model="createForm.tenant_id">
-                                <SelectTrigger
-                                    class="w-full"
-                                    :class="{
-                                        'border-destructive':
-                                            createForm.errors.tenant_id,
-                                    }"
-                                >
-                                    <SelectValue
-                                        placeholder="Seleccionar tenant..."
-                                    />
+                                <SelectTrigger class="w-full" :class="{
+                                    'border-destructive':
+                                        createForm.errors.tenant_id,
+                                }">
+                                    <SelectValue placeholder="Seleccionar tenant..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem
-                                        v-for="tenant in tenants"
-                                        :key="tenant.id"
-                                        :value="tenant.id"
-                                    >
+                                    <SelectItem v-for="tenant in tenants" :key="tenant.id" :value="tenant.id">
                                         {{ tenant.name }} —
                                         {{ tenant.domains?.[0]?.domain }}
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <p
-                                v-if="createForm.errors.tenant_id"
-                                class="text-xs text-destructive"
-                            >
+                            <p v-if="createForm.errors.tenant_id" class="text-xs text-destructive">
                                 {{ createForm.errors.tenant_id }}
                             </p>
                         </div>
 
-                        <div
-                            v-if="createRoleSlug === 'employee'"
-                            class="col-span-2 space-y-2"
-                        >
-                            <Label>Administrador al que pertenece</Label>
-                            <Select v-model="createForm.admin_id">
-                                <SelectTrigger
-                                    class="w-full"
-                                    :class="{
-                                        'border-destructive':
-                                            createForm.errors.admin_id,
-                                    }"
-                                >
-                                    <SelectValue
-                                        placeholder="Seleccionar administrador..."
-                                    />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem
-                                        v-for="admin in admins"
-                                        :key="admin.id"
-                                        :value="String(admin.id)"
-                                    >
-                                        {{ admin.name }} — {{ admin.email }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p
-                                v-if="createForm.errors.admin_id"
-                                class="text-xs text-destructive"
-                            >
-                                {{ createForm.errors.admin_id }}
-                            </p>
-                        </div>
+
                         <div class="col-span-2 flex items-center gap-3">
-                            <Switch
-                                :model-value="createForm.is_active"
-                                @update:model-value="
-                                    (val) => (createForm.is_active = val)
-                                "
-                            />
+                            <Switch :model-value="createForm.is_active" @update:model-value="
+                                (val) => (createForm.is_active = val)
+                            " />
                             <Label class="cursor-pointer">Usuario activo</Label>
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            @click="createDialog = false"
-                            >Cancelar</Button
-                        >
-                        <Button type="submit" :disabled="createForm.processing"
-                            >Crear usuario</Button
-                        >
+                        <Button type="button" variant="outline" @click="createDialog = false">Cancelar</Button>
+                        <Button type="submit" :disabled="createForm.processing">Crear usuario</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
@@ -484,86 +353,52 @@ function getRoleBadgeVariant(slug: string) {
                     <DialogTitle>Editar usuario</DialogTitle>
                     <DialogDescription>
                         Modifica los datos de
-                        <strong>{{ editing?.name }}</strong
-                        >.
+                        <strong>{{ editing?.name }}</strong>.
                     </DialogDescription>
                 </DialogHeader>
                 <form @submit.prevent="update" class="space-y-4">
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-2">
                             <Label>Nombre</Label>
-                            <Input
-                                v-model="editForm.name"
-                                :class="{
-                                    'border-destructive': editForm.errors.name,
-                                }"
-                            />
-                            <p
-                                v-if="editForm.errors.name"
-                                class="text-xs text-destructive"
-                            >
+                            <Input v-model="editForm.name" :class="{
+                                'border-destructive': editForm.errors.name,
+                            }" />
+                            <p v-if="editForm.errors.name" class="text-xs text-destructive">
                                 {{ editForm.errors.name }}
                             </p>
                         </div>
                         <div class="space-y-2">
                             <Label>Usuario</Label>
-                            <Input
-                                v-model="editForm.username"
-                                :class="{
-                                    'border-destructive':
-                                        editForm.errors.username,
-                                }"
-                            />
-                            <p
-                                v-if="editForm.errors.username"
-                                class="text-xs text-destructive"
-                            >
+                            <Input v-model="editForm.username" :class="{
+                                'border-destructive':
+                                    editForm.errors.username,
+                            }" />
+                            <p v-if="editForm.errors.username" class="text-xs text-destructive">
                                 {{ editForm.errors.username }}
                             </p>
                         </div>
                         <div class="space-y-2">
                             <Label>Correo electrónico</Label>
-                            <Input
-                                v-model="editForm.email"
-                                type="email"
-                                :class="{
-                                    'border-destructive': editForm.errors.email,
-                                }"
-                            />
-                            <p
-                                v-if="editForm.errors.email"
-                                class="text-xs text-destructive"
-                            >
+                            <Input v-model="editForm.email" type="email" :class="{
+                                'border-destructive': editForm.errors.email,
+                            }" />
+                            <p v-if="editForm.errors.email" class="text-xs text-destructive">
                                 {{ editForm.errors.email }}
                             </p>
                         </div>
                         <div class="col-span-2 space-y-2">
-                            <Label
-                                >Nueva contraseña
-                                <span class="text-muted-foreground text-xs"
-                                    >(dejar vacío para no cambiar)</span
-                                ></Label
-                            >
-                            <Input
-                                v-model="editForm.password"
-                                type="password"
-                                placeholder="Mínimo 8 caracteres"
-                            />
+                            <Label>Nueva contraseña
+                                <span class="text-muted-foreground text-xs">(dejar vacío para no cambiar)</span></Label>
+                            <Input v-model="editForm.password" type="password" placeholder="Mínimo 8 caracteres" />
                         </div>
                         <div class="space-y-2">
                             <Label>Rol</Label>
                             <Select v-model="editForm.role_id">
                                 <SelectTrigger class="w-full">
-                                    <SelectValue
-                                        placeholder="Seleccionar rol..."
-                                    />
+                                    <SelectValue placeholder="Seleccionar rol..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem
-                                        v-for="role in roles"
-                                        :key="role.id"
-                                        :value="String(role.id)"
-                                    >
+                                    <SelectItem v-for="role in roles" :key="role.id" :value="String(role.id)">
                                         {{ role.name }}
                                     </SelectItem>
                                 </SelectContent>
@@ -573,76 +408,35 @@ function getRoleBadgeVariant(slug: string) {
                         <div v-if="editRoleSlug === 'admin'" class="space-y-2">
                             <Label>Tenant (empresa)</Label>
                             <Select v-model="editForm.tenant_id">
-                                <SelectTrigger
-                                    class="w-full"
-                                    :class="{
-                                        'border-destructive':
-                                            editForm.errors.tenant_id,
-                                    }"
-                                >
-                                    <SelectValue
-                                        placeholder="Seleccionar tenant..."
-                                    />
+                                <SelectTrigger class="w-full" :class="{
+                                    'border-destructive':
+                                        editForm.errors.tenant_id,
+                                }">
+                                    <SelectValue placeholder="Seleccionar tenant..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem
-                                        v-for="tenant in tenants"
-                                        :key="tenant.id"
-                                        :value="tenant.id"
-                                    >
+                                    <SelectItem v-for="tenant in tenants" :key="tenant.id" :value="tenant.id">
                                         {{ tenant.name }} —
                                         {{ tenant.domains?.[0]?.domain }}
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <p
-                                v-if="editForm.errors.tenant_id"
-                                class="text-xs text-destructive"
-                            >
+                            <p v-if="editForm.errors.tenant_id" class="text-xs text-destructive">
                                 {{ editForm.errors.tenant_id }}
                             </p>
                         </div>
 
-                        <div
-                            v-if="editRoleSlug === 'employee'"
-                            class="space-y-2"
-                        >
-                            <Label>Administrador</Label>
-                            <Select v-model="editForm.admin_id">
-                                <SelectTrigger class="w-full">
-                                    <SelectValue placeholder="Seleccionar..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem
-                                        v-for="admin in admins"
-                                        :key="admin.id"
-                                        :value="String(admin.id)"
-                                    >
-                                        {{ admin.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+
                         <div class="col-span-2 flex items-center gap-3">
-                            <Switch
-                                :model-value="editForm.is_active"
-                                @update:model-value="
-                                    (val) => (editForm.is_active = val)
-                                "
-                            />
+                            <Switch :model-value="editForm.is_active" @update:model-value="
+                                (val) => (editForm.is_active = val)
+                            " />
                             <Label class="cursor-pointer">Usuario activo</Label>
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            @click="editDialog = false"
-                            >Cancelar</Button
-                        >
-                        <Button type="submit" :disabled="editForm.processing"
-                            >Guardar cambios</Button
-                        >
+                        <Button type="button" variant="outline" @click="editDialog = false">Cancelar</Button>
+                        <Button type="submit" :disabled="editForm.processing">Guardar cambios</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
@@ -655,17 +449,12 @@ function getRoleBadgeVariant(slug: string) {
                     <DialogTitle>¿Eliminar usuario?</DialogTitle>
                     <DialogDescription>
                         Estás a punto de eliminar a
-                        <strong>{{ toDelete?.name }}</strong
-                        >. Esta acción no se puede deshacer.
+                        <strong>{{ toDelete?.name }}</strong>. Esta acción no se puede deshacer.
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="outline" @click="deleteDialog = false"
-                        >Cancelar</Button
-                    >
-                    <Button variant="destructive" @click="handleDelete"
-                        >Eliminar</Button
-                    >
+                    <Button variant="outline" @click="deleteDialog = false">Cancelar</Button>
+                    <Button variant="destructive" @click="handleDelete">Eliminar</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

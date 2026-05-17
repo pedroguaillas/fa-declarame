@@ -2,42 +2,53 @@
 
 namespace Database\Seeders;
 
+use App\Models\Role;
 use App\Models\Tenant;
+use App\Models\User;
+use App\Services\TenantSetupService;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Artisan;
 
 class TenantSeeder extends Seeder
 {
     public function run(): void
     {
+        // generar un tenant por defecto
         $domain = config('app.domain', 'localhost');
 
-        $tenants = [
-            [
-                'id'   => 'factus',
-                'name' => 'Factus S.A',
-            ],
+        $tenantData = [
+            'id' => 'factus',
+            'name' => 'Factus S.A',
         ];
 
-        foreach ($tenants as $tenantData) {
-            $tenant = Tenant::updateOrCreate(
-                ['id' => $tenantData['id']],
-                ['name' => $tenantData['name']]
-            );
+        $tenant = Tenant::updateOrCreate(
+            ['id' => $tenantData['id']],
+            ['name' => $tenantData['name']]
+        );
 
-            // Crear dominio si no existe
-            if (!$tenant->domains()->exists()) {
-                $tenant->domains()->create([
-                    'domain' => $tenantData['id'] . '.' . $domain,
-                ]);
-            }
-
-            // Correr migraciones del tenant
-            // tenancy()->initialize($tenant);
-            // Artisan::call('tenants:migrate', [
-            //     '--tenants' => [$tenant->id],
-            // ]);
-            // tenancy()->end();
+        if (! $tenant->domains()->exists()) {
+            $tenant->domains()->create([
+                'domain' => $tenantData['id'].'.'.$domain,
+            ]);
         }
+
+        // generar el usuario administrador del tenant
+        $adminRole = Role::where('slug', 'admin')->first();
+
+        $admin = User::create([
+            'email' => 'info@facec.ec',
+            'username' => 'declarame',
+            'name' => 'Administrador Demo',
+            'password' => 'Demo123',
+            'role_id' => $adminRole->id,
+            'tenant_id' => $tenant?->id,
+            'admin_id' => null,
+            'is_active' => true,
+        ]);
+
+        $tenant->user_id = $admin->id;
+        $tenant->save();
+
+        // inicializar datos iniciales del tenant
+        app(TenantSetupService::class)->setup($tenant);
     }
 }

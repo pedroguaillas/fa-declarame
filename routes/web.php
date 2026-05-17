@@ -1,18 +1,17 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Central\ModelEntityController;
+use App\Http\Controllers\Central\PermissionController;
+use App\Http\Controllers\Central\RoleController;
+use App\Http\Controllers\Central\UserController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\ModelEntityController;
-use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TenantController;
-use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [

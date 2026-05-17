@@ -45,19 +45,18 @@ function handleDelete() {
     });
 }
 
-const systemSlugs = ["super_admin", "admin", "employee"];
+const systemSlugs = ["super_admin", "admin"];
 </script>
 
 <template>
+
     <Head title="Roles del sistema" />
     <AppLayout>
         <div class="space-y-6">
             <!-- Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h1
-                        class="text-2xl font-bold text-foreground flex items-center gap-2"
-                    >
+                    <h1 class="text-2xl font-bold text-foreground flex items-center gap-2">
                         <ShieldCheck class="size-6" />
                         Roles
                     </h1>
@@ -88,18 +87,12 @@ const systemSlugs = ["super_admin", "admin", "employee"];
                         <TableRow v-for="role in roles" :key="role.id">
                             <TableCell class="font-medium">
                                 {{ role.name }}
-                                <Badge
-                                    v-if="systemSlugs.includes(role.slug)"
-                                    variant="secondary"
-                                    class="ml-2 text-xs"
-                                >
+                                <Badge v-if="systemSlugs.includes(role.slug)" variant="secondary" class="ml-2 text-xs">
                                     Sistema
                                 </Badge>
                             </TableCell>
                             <TableCell>
-                                <code
-                                    class="text-xs bg-muted px-1.5 py-0.5 rounded"
-                                >
+                                <code class="text-xs bg-muted px-1.5 py-0.5 rounded">
                                     {{ role.slug }}
                                 </code>
                             </TableCell>
@@ -117,39 +110,25 @@ const systemSlugs = ["super_admin", "admin", "employee"];
                                 }}</Badge>
                             </TableCell>
                             <TableCell class="text-right">
-                                <div
-                                    class="flex items-center justify-end gap-2"
-                                >
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        @click="
+                                <div class="flex items-center justify-end gap-2">
+                                    <Button variant="ghost" size="icon" :disabled="systemSlugs.includes(role.slug)
+                                        " @click="
                                             router.visit(
                                                 route('roles.edit', role.id),
                                             )
-                                        "
-                                    >
+                                            ">
                                         <Pencil class="size-4" />
                                     </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        class="text-destructive hover:text-destructive"
-                                        :disabled="
-                                            systemSlugs.includes(role.slug)
-                                        "
-                                        @click="confirmDelete(role)"
-                                    >
+                                    <Button variant="ghost" size="icon" class="text-destructive hover:text-destructive"
+                                        :disabled="systemSlugs.includes(role.slug)
+                                            " @click="confirmDelete(role)">
                                         <Trash2 class="size-4" />
                                     </Button>
                                 </div>
                             </TableCell>
                         </TableRow>
                         <TableRow v-if="roles.length === 0">
-                            <TableCell
-                                colspan="6"
-                                class="text-center text-muted-foreground py-8"
-                            >
+                            <TableCell colspan="6" class="text-center text-muted-foreground py-8">
                                 No hay roles registrados.
                             </TableCell>
                         </TableRow>
@@ -165,17 +144,12 @@ const systemSlugs = ["super_admin", "admin", "employee"];
                     <DialogTitle>¿Eliminar rol?</DialogTitle>
                     <DialogDescription>
                         Estás a punto de eliminar el rol
-                        <strong>{{ roleToDelete?.name }}</strong
-                        >. Esta acción no se puede deshacer.
+                        <strong>{{ roleToDelete?.name }}</strong>. Esta acción no se puede deshacer.
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="outline" @click="deleteDialog = false"
-                        >Cancelar</Button
-                    >
-                    <Button variant="destructive" @click="handleDelete"
-                        >Eliminar</Button
-                    >
+                    <Button variant="outline" @click="deleteDialog = false">Cancelar</Button>
+                    <Button variant="destructive" @click="handleDelete">Eliminar</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

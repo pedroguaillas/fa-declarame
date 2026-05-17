@@ -40,7 +40,7 @@ import {
 const props = defineProps<{
     stats: {
         total_admins: number;
-        total_employees: number;
+        total_staff: number;
         active_subscriptions: number;
         expired_subscriptions: number;
     };
@@ -176,16 +176,16 @@ function salesRangeLabel() {
                     >
                         <CardTitle
                             class="text-sm font-medium text-muted-foreground"
-                            >Empleados</CardTitle
+                            >Staff</CardTitle
                         >
                         <Users class="size-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         <p class="text-3xl font-bold">
-                            {{ stats.total_employees }}
+                            {{ stats.total_staff }}
                         </p>
                         <p class="text-xs text-muted-foreground mt-1">
-                            en todos los equipos
+                            usuarios del sistema
                         </p>
                     </CardContent>
                 </Card>

@@ -21,13 +21,13 @@ class DashboardController extends Controller
         $today = today();
         $validated = $request->validate([
             'sales_start_date' => 'nullable|date',
-            'sales_end_date'   => 'nullable|date|after_or_equal:sales_start_date',
+            'sales_end_date' => 'nullable|date|after_or_equal:sales_start_date',
         ]);
         $salesStartDate = $validated['sales_start_date'] ?? null;
         $salesEndDate = $validated['sales_end_date'] ?? null;
 
-        $totalAdmins = User::whereHas('role', fn($q) => $q->where('slug', 'admin'))->count();
-        $totalEmployees = User::whereHas('role', fn($q) => $q->where('slug', 'employee'))->count();
+        $totalAdmins = User::whereHas('role', fn ($q) => $q->where('slug', 'admin'))->count();
+        $totalStaff = User::whereHas('role', fn ($q) => $q->whereNotIn('slug', ['super_admin', 'admin']))->count();
 
         $activeSubscriptions = Subscription::where('is_active', true)
             ->whereDate('end_date', '>=', $today)
@@ -43,14 +43,14 @@ class DashboardController extends Controller
             ->get();
 
         $revenueByPlan = Plan::withCount([
-            'subscriptions' => fn($q) => $q->where('is_active', true)->whereDate('end_date', '>=', $today),
+            'subscriptions' => fn ($q) => $q->where('is_active', true)->whereDate('end_date', '>=', $today),
         ])
             ->get()
-            ->map(fn($plan) => [
-                'name'    => $plan->name,
-                'count'   => $plan->subscriptions_count,
+            ->map(fn ($plan) => [
+                'name' => $plan->name,
+                'count' => $plan->subscriptions_count,
                 'revenue' => $plan->subscriptions_count * $plan->price,
-                'price'   => $plan->price,
+                'price' => $plan->price,
             ]);
 
         $recentSubscriptions = Subscription::with(['user:id,name,email', 'plan:id,name,price'])
@@ -61,39 +61,39 @@ class DashboardController extends Controller
         $salesByPlan = Plan::query()
             ->withCount([
                 'subscriptions as sold_count' => function ($q) use ($salesStartDate, $salesEndDate) {
-                    $q->when($salesStartDate, fn($query) => $query->whereDate('created_at', '>=', $salesStartDate))
-                        ->when($salesEndDate, fn($query) => $query->whereDate('created_at', '<=', $salesEndDate));
+                    $q->when($salesStartDate, fn ($query) => $query->whereDate('created_at', '>=', $salesStartDate))
+                        ->when($salesEndDate, fn ($query) => $query->whereDate('created_at', '<=', $salesEndDate));
                 },
             ])
             ->get()
-            ->map(fn($plan) => [
-                'name'         => $plan->name,
-                'price'        => $plan->price,
-                'count'        => $plan->sold_count,
-                'total'        => $plan->sold_count * $plan->price,
+            ->map(fn ($plan) => [
+                'name' => $plan->name,
+                'price' => $plan->price,
+                'count' => $plan->sold_count,
+                'total' => $plan->sold_count * $plan->price,
             ])
             ->sortByDesc('count')
             ->values();
 
         $salesSummary = [
-            'total_sold'    => $salesByPlan->sum('count'),
+            'total_sold' => $salesByPlan->sum('count'),
             'total_revenue' => $salesByPlan->sum('total'),
         ];
 
         return Inertia::render('Dashboard/SuperAdmin', [
             'stats' => [
-                'total_admins'            => $totalAdmins,
-                'total_employees'         => $totalEmployees,
-                'active_subscriptions'    => $activeSubscriptions,
-                'expired_subscriptions'   => $expiredSubscriptions,
+                'total_admins' => $totalAdmins,
+                'total_staff' => $totalStaff,
+                'active_subscriptions' => $activeSubscriptions,
+                'expired_subscriptions' => $expiredSubscriptions,
             ],
-            'expiring_soon'        => $expiringSoon,
-            'revenue_by_plan'      => $revenueByPlan,
-            'sales_by_plan'        => $salesByPlan,
-            'sales_summary'        => $salesSummary,
-            'sales_filters'        => [
+            'expiring_soon' => $expiringSoon,
+            'revenue_by_plan' => $revenueByPlan,
+            'sales_by_plan' => $salesByPlan,
+            'sales_summary' => $salesSummary,
+            'sales_filters' => [
                 'start_date' => $salesStartDate,
-                'end_date'   => $salesEndDate,
+                'end_date' => $salesEndDate,
             ],
             'recent_subscriptions' => $recentSubscriptions,
         ]);
