@@ -2,7 +2,7 @@
 
 namespace App\Services\Central;
 
-use App\Models\Tenant;
+use App\Models\Central\Tenant;
 
 class TenantService
 {
@@ -11,6 +11,42 @@ class TenantService
         return Tenant::with('domains')
             ->orderBy('id')
             ->get();
+    }
+
+    public function paginate(int $perPage = 15)
+    {
+        return Tenant::with(['user', 'domains'])
+            ->latest()
+            ->paginate($perPage);
+    }
+
+    public function create(array $data): Tenant
+    {
+        $domain = config('app.domain', 'localhost');
+
+        $tenant = Tenant::create([
+            'id' => $data['subdomain'],
+            'name' => $data['name'],
+        ]);
+
+        $tenant->domains()->create([
+            'domain' => $data['subdomain'].'.'.$domain,
+        ]);
+
+        return $tenant;
+    }
+
+    public function update(Tenant $tenant, array $data): Tenant
+    {
+        $tenant->name = $data['name'];
+        $tenant->save();
+
+        return $tenant;
+    }
+
+    public function delete(Tenant $tenant): void
+    {
+        $tenant->delete();
     }
 
     public function findOrFail(int|string $id): Tenant

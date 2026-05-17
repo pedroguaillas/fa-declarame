@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Central;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Central\Role\StoreRoleRequest;
 use App\Http\Requests\Central\Role\UpdateRoleRequest;
-use App\Models\Role;
+use App\Models\Central\Role;
 use App\Services\Central\ModelEntityService;
 use App\Services\Central\PermissionService;
 use App\Services\Central\RoleService;

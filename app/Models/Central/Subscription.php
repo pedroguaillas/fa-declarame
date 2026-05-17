@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Central;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -45,6 +45,6 @@ class Subscription extends Model
 
     public function isValid(): bool
     {
-        return $this->is_active && !$this->isExpired();
+        return $this->is_active && ! $this->isExpired();
     }
 }

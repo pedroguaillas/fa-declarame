@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\ModelEntity;
+use App\Models\Central\ModelEntity;
 use Illuminate\Database\Seeder;
 
 class ModelEntitySeeder extends Seeder

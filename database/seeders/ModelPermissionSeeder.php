@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
-use App\Models\ModelEntity;
-use App\Models\ModelPermission;
-use App\Models\Permission;
-use App\Models\Role;
+use App\Models\Central\ModelEntity;
+use App\Models\Central\ModelPermission;
+use App\Models\Central\Permission;
+use App\Models\Central\Role;
 use Illuminate\Database\Seeder;
 
 class ModelPermissionSeeder extends Seeder

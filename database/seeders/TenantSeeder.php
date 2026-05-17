@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
-use App\Models\Role;
-use App\Models\Tenant;
-use App\Models\User;
+use App\Models\Central\Role;
+use App\Models\Central\Tenant;
+use App\Models\Central\User;
 use App\Services\TenantSetupService;
 use Illuminate\Database\Seeder;
 

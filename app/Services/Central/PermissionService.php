@@ -2,7 +2,7 @@
 
 namespace App\Services\Central;
 
-use App\Models\Permission;
+use App\Models\Central\Permission;
 
 class PermissionService
 {

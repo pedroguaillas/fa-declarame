@@ -2,7 +2,7 @@
 
 namespace App\Models\Tenant;
 
-use App\Models\User as CentralUser;
+use App\Models\Central\User as CentralUser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;

@@ -2,7 +2,7 @@
 
 namespace App\Services\Central;
 
-use App\Models\User;
+use App\Models\Central\User;
 
 class UserService
 {
@@ -12,6 +12,29 @@ class UserService
             ->where('id', '!=', user()->id)
             ->latest()
             ->paginate($perPage);
+    }
+
+    public function countAdmins(): int
+    {
+        return User::whereHas('role', fn ($q) => $q->where('slug', 'admin'))->count();
+    }
+
+    public function countStaff(): int
+    {
+        return User::whereHas('role', fn ($q) => $q->whereNotIn('slug', ['super_admin', 'admin']))->count();
+    }
+
+    public function detachTenant(int $tenantId): void
+    {
+        User::where('tenant_id', $tenantId)->update(['tenant_id' => null]);
+    }
+
+    public function getAdmins()
+    {
+        return User::whereHas('role', fn ($q) => $q->where('slug', 'admin'))
+            ->select('id', 'name', 'email')
+            ->orderBy('name')
+            ->get();
     }
 
     public function create(array $data): User

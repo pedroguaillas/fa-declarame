@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Central;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Central\User\StoreUserRequest;
 use App\Http\Requests\Central\User\UpdateUserRequest;
-use App\Models\User;
+use App\Models\Central\User;
 use App\Services\Central\RoleService;
 use App\Services\Central\TenantService;
 use App\Services\Central\UserService;

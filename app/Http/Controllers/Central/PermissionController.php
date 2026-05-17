@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Central;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Central\Permission\StorePermissionRequest;
 use App\Http\Requests\Central\Permission\UpdatePermissionRequest;
-use App\Models\Permission;
+use App\Models\Central\Permission;
 use App\Services\Central\PermissionService;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;

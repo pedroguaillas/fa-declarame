@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests\Central\User;
 
-use App\Models\Role;
-use App\Models\User;
+use App\Models\Central\Role;
+use App\Models\Central\User;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\User as CentralUser;
+use App\Models\Central\User as CentralUser;
 use App\Services\SSOTokenService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;

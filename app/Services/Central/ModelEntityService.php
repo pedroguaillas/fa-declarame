@@ -2,7 +2,7 @@
 
 namespace App\Services\Central;
 
-use App\Models\ModelEntity;
+use App\Models\Central\ModelEntity;
 
 class ModelEntityService
 {

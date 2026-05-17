@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware\Tenant;
 
-use App\Models\User as CentralUser;
+use App\Models\Central\User as CentralUser;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;

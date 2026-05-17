@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Tenant;
+use App\Models\Central\Tenant;
 use App\Models\Tenant\Company;
 use App\Models\Tenant\ContributorType;
 use App\Models\Tenant\IdentificationType;

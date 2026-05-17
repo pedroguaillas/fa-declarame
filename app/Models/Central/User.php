@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Central;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -37,7 +37,6 @@ class User extends Authenticatable
         'is_active' => 'boolean',
     ];
 
-    // Relaciones
     public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
@@ -73,7 +72,6 @@ class User extends Authenticatable
         return ! is_null($this->tenant_id);
     }
 
-    // Helpers de rol
     public function isSuperAdmin(): bool
     {
         return $this->role->slug === 'super_admin';
@@ -89,7 +87,6 @@ class User extends Authenticatable
         return $this->role->slug === 'employee';
     }
 
-    // Suscripción activa y vigente
     public function activeSubscription(): ?Subscription
     {
         return $this->subscriptions()
@@ -112,7 +109,6 @@ class User extends Authenticatable
             ->latest('id');
     }
 
-    // Verificar permiso
     public function hasPermission(string $permissionSlug, string $modelSlug): bool
     {
         if ($this->isSuperAdmin()) {

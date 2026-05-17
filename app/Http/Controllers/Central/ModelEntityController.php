@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Central;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Central\ModelEntity\StoreModelEntityRequest;
 use App\Http\Requests\Central\ModelEntity\UpdateModelEntityRequest;
-use App\Models\ModelEntity;
+use App\Models\Central\ModelEntity;
 use App\Services\Central\ModelEntityService;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;

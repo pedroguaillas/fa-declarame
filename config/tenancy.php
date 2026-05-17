@@ -8,13 +8,14 @@ use Stancl\Tenancy\Bootstrappers\FilesystemTenancyBootstrapper;
 use Stancl\Tenancy\Bootstrappers\QueueTenancyBootstrapper;
 use Stancl\Tenancy\Database\Models\Domain;
 use Stancl\Tenancy\Database\Models\Tenant;
+use Stancl\Tenancy\Features\ViteBundler;
 use Stancl\Tenancy\TenantDatabaseManagers\MySQLDatabaseManager;
 use Stancl\Tenancy\TenantDatabaseManagers\PostgreSQLDatabaseManager;
 use Stancl\Tenancy\TenantDatabaseManagers\SQLiteDatabaseManager;
 use Stancl\Tenancy\UUIDGenerator;
 
 return [
-    'tenant_model' => App\Models\Tenant::class,
+    'tenant_model' => App\Models\Central\Tenant::class,
     'id_generator' => UUIDGenerator::class,
 
     'domain_model' => Domain::class,
@@ -176,7 +177,7 @@ return [
         // Stancl\Tenancy\Features\UniversalRoutes::class,
         // Stancl\Tenancy\Features\TenantConfig::class, // https://tenancyforlaravel.com/docs/v3/features/tenant-config
         // Stancl\Tenancy\Features\CrossDomainRedirect::class, // https://tenancyforlaravel.com/docs/v3/features/cross-domain-redirect
-        Stancl\Tenancy\Features\ViteBundler::class,
+        ViteBundler::class,
     ],
 
     /**
