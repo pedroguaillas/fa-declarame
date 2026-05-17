@@ -24,7 +24,7 @@ class SubscriptionController extends Controller
 
     public function index(): Response
     {
-        return Inertia::render('Subscriptions/Index', [
+        return Inertia::render('Central/Subscriptions/Index', [
             'subscriptions' => $this->subscriptionSvc->paginate(),
             'plans' => $this->planSvc->allActive(),
             'admins' => $this->userSvc->getAdmins(),
@@ -61,7 +61,7 @@ class SubscriptionController extends Controller
 
     public function history(User $user): Response
     {
-        return Inertia::render('Subscriptions/History', [
+        return Inertia::render('Central/Subscriptions/History', [
             'admin' => $user->load('role'),
             'subscriptions' => $this->subscriptionSvc->history($user),
             'plans' => $this->planSvc->allActive(),

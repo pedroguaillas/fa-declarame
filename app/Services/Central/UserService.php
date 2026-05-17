@@ -24,7 +24,7 @@ class UserService
         return User::whereHas('role', fn ($q) => $q->whereNotIn('slug', ['super_admin', 'admin']))->count();
     }
 
-    public function detachTenant(int $tenantId): void
+    public function detachTenant(string $tenantId): void
     {
         User::where('tenant_id', $tenantId)->update(['tenant_id' => null]);
     }

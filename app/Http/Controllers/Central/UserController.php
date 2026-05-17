@@ -23,7 +23,7 @@ class UserController extends Controller
 
     public function index(): Response
     {
-        return Inertia::render('Users/Index', [
+        return Inertia::render('Central/Users/Index', [
             'users' => $this->userSvc->paginate(),
             'roles' => $this->roleSvc->all(),
             'tenants' => $this->tenantSvc->all(),

@@ -122,29 +122,9 @@ export function useNavigation(user: User) {
         },
     ];
 
-    const employeeNav: NavItem[] = [
-        {
-            title: "Dashboard",
-            url: route("dashboard"),
-            icon: LayoutDashboard,
-        },
-        {
-            title: "Configuración",
-            url: "#",
-            icon: Settings,
-            items: [
-                {
-                    title: "Mi perfil",
-                    url: route("profile.edit"),
-                },
-            ],
-        },
-    ];
-
     const navMap: Record<string, NavItem[]> = {
         super_admin: superAdminNav,
         admin: adminNav,
-        employee: employeeNav,
     };
 
     return {

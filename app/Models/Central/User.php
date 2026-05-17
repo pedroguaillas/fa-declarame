@@ -120,4 +120,21 @@ class User extends Authenticatable
             ->whereHas('modelEntity', fn ($q) => $q->where('slug', $modelSlug))
             ->exists();
     }
+
+    public function resolveAdmin(): self
+    {
+        return match (true) {
+            $this->isSuperAdmin(), $this->isAdmin() => $this,
+            default => $this->admin,
+        };
+    }
+
+    public function resolveAdminId(): int
+    {
+        return match (true) {
+            $this->isSuperAdmin() => $this->id,
+            $this->isAdmin() => $this->id,
+            default => $this->admin_id,
+        };
+    }
 }

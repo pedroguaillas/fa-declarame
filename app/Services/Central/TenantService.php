@@ -55,12 +55,12 @@ class TenantService
             ->findOrFail($id);
     }
 
-    public function assignAdmin(int $tenantId, int $userId): void
+    public function assignAdmin(string $tenantId, int $userId): void
     {
         Tenant::where('id', $tenantId)->update(['user_id' => $userId]);
     }
 
-    public function reassignAdmin(int $userId, ?int $newTenantId): void
+    public function reassignAdmin(int $userId, ?string $newTenantId): void
     {
         Tenant::where('user_id', $userId)
             ->where('id', '!=', $newTenantId ?? '')

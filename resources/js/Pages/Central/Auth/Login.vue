@@ -125,7 +125,7 @@ const submit = () => {
                         label="Usuario"
                         v-model="form.username"
                         type="text"
-                        placeholder="nombre.usuario"
+                        placeholder="usuario"
                         :error="form.errors.username"
                         required
                     />

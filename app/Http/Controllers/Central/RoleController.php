@@ -23,14 +23,14 @@ class RoleController extends Controller
 
     public function index(): Response
     {
-        return Inertia::render('Roles/Index', [
+        return Inertia::render('Central/Roles/Index', [
             'roles' => $this->roleSvc->allWithCountUser(),
         ]);
     }
 
     public function create(): Response
     {
-        return Inertia::render('Roles/Form', [
+        return Inertia::render('Central/Roles/Form', [
             'permissions' => $this->permissionSvc->all(),
             'modelEntities' => $this->modelEntitySvc->all(),
         ]);
@@ -48,7 +48,7 @@ class RoleController extends Controller
     {
         $role->load(['modelPermissions']);
 
-        return Inertia::render('Roles/Form', [
+        return Inertia::render('Central/Roles/Form', [
             'role' => $role,
             'permissions' => $this->permissionSvc->all(),
             'modelEntities' => $this->modelEntitySvc->all(),

@@ -23,7 +23,7 @@ class TenantController extends Controller
 
     public function index(): Response
     {
-        return Inertia::render('Tenants/Index', [
+        return Inertia::render('Central/Tenants/Index', [
             'tenants' => $this->tenantSvc->paginate(),
         ]);
     }

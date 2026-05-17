@@ -19,7 +19,7 @@ class PlanController extends Controller
 
     public function index(): Response
     {
-        return Inertia::render('Plans/Index', [
+        return Inertia::render('Central/Plans/Index', [
             'plans' => $this->planSvc->allWithCount(),
         ]);
     }

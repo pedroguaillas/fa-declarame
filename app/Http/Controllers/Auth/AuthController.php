@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\Central\User as CentralUser;
+use App\Models\Central\User;
 use App\Services\SSOTokenService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +17,7 @@ class AuthController extends Controller
 
     public function showLogin(): InertiaResponse
     {
-        return Inertia::render('Auth/Login');
+        return Inertia::render('Central/Auth/Login');
     }
 
     public function login(Request $request): Response
@@ -40,7 +40,7 @@ class AuthController extends Controller
         return match (true) {
             $user->isSuperAdmin() => redirect()->intended(route('dashboard')),
             $user->isAdmin() => $this->redirectToTenant($user),
-            default => Inertia::location(route('login')),
+            default => $this->redirectEmployee($user),
         };
     }
 
@@ -58,7 +58,7 @@ class AuthController extends Controller
         return Inertia::location(route('login'));
     }
 
-    private function redirectToTenant(CentralUser $user): Response
+    private function redirectToTenant(User $user): Response
     {
         $domain = $user->tenant->domains()->value('domain');
 
@@ -73,5 +73,16 @@ class AuthController extends Controller
         return Inertia::location(
             tenant_route($domain, 'tenant.sso', ['token' => $token])
         );
+    }
+
+    private function redirectEmployee(User $user): Response
+    {
+        $admin = $user->resolveAdmin();
+
+        return match (true) {
+            $admin->isSuperAdmin() => redirect()->intended(route('dashboard')),
+            $admin->isAdmin() => $this->redirectToTenant($admin),
+            default => Inertia::location(route('login')),
+        };
     }
 }

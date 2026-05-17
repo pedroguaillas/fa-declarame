@@ -19,7 +19,7 @@ class PermissionController extends Controller
 
     public function index(): Response
     {
-        return Inertia::render('Permissions/Index', [
+        return Inertia::render('Central/Permissions/Index', [
             'permissions' => $this->permissionSvc->allWithCount(),
         ]);
     }

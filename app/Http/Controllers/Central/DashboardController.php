@@ -40,7 +40,7 @@ class DashboardController extends Controller
             'total_revenue' => $salesByPlan->sum('total'),
         ];
 
-        return Inertia::render('Dashboard/SuperAdmin', [
+        return Inertia::render('Central/Dashboard/SuperAdmin', [
             'stats' => [
                 'total_admins' => $totalAdmins,
                 'total_staff' => $totalStaff,
