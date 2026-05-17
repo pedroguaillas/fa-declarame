@@ -44,12 +44,14 @@ import {
     CalendarX,
     Clock,
 } from "lucide-vue-next";
+import { usePermissions } from "@/composables/usePermissions";
 
 const props = defineProps<{
     subscriptions: Paginator<Subscription>;
     plans: Plan[];
     admins: User[];
 }>();
+const { can } = usePermissions();
 
 // ── Crear ──────────────────────────────────────────────
 const createDialog = ref(false);
@@ -187,7 +189,7 @@ function goToPage(url: string | null) {
                         Gestiona las suscripciones de los administradores.
                     </p>
                 </div>
-                <Button @click="openCreate">
+                <Button v-if="can('create', 'subscriptions')" @click="openCreate">
                     <Plus class="size-4" />
                     Nueva suscripción
                 </Button>
@@ -246,7 +248,7 @@ function goToPage(url: string | null) {
                                 </Badge>
                             </TableCell>
                             <TableCell class="text-center">
-                                <Switch
+                                <Switch v-if="can('edit', 'subscriptions')"
                                     :model-value="sub.is_active"
                                     @update:model-value="toggleActive(sub)"
                                 />
@@ -262,14 +264,14 @@ function goToPage(url: string | null) {
                                     >
                                         <History class="size-4" />
                                     </Button>
-                                    <Button
+                                    <Button v-if="can('edit', 'subscriptions')"
                                         variant="ghost"
                                         size="icon"
                                         @click="openEdit(sub)"
                                     >
                                         <Pencil class="size-4" />
                                     </Button>
-                                    <Button
+                                    <Button v-if="can('delete', 'subscriptions')"
                                         variant="ghost"
                                         size="icon"
                                         class="text-destructive hover:text-destructive"

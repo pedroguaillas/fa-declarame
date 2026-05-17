@@ -31,10 +31,12 @@ import {
     Globe,
     ExternalLink,
 } from "lucide-vue-next";
+import { usePermissions } from "@/composables/usePermissions";
 
 const props = defineProps<{
     tenants: Paginator<Tenant>;
 }>();
+const { can } = usePermissions();
 
 // ── Crear ──────────────────────────────────────────────
 const createDialog = ref(false);
@@ -130,7 +132,7 @@ function getTenantUrl(tenant: Tenant) {
                         propia base de datos.
                     </p>
                 </div>
-                <Button @click="openCreate">
+                <Button v-if="can('create', 'tenants')" @click="openCreate">
                     <Plus class="size-4" />
                     Nuevo tenant
                 </Button>
@@ -198,14 +200,14 @@ function getTenantUrl(tenant: Tenant) {
                                 <div
                                     class="flex items-center justify-end gap-2"
                                 >
-                                    <Button
+                                    <Button v-if="can('edit', 'tenants')"
                                         variant="ghost"
                                         size="icon"
                                         @click="openEdit(tenant)"
                                     >
                                         <Pencil class="size-4" />
                                     </Button>
-                                    <Button
+                                    <Button v-if="can('delete', 'tenants')"
                                         variant="ghost"
                                         size="icon"
                                         class="text-destructive hover:text-destructive"

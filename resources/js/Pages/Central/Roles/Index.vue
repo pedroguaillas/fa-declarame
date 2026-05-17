@@ -22,28 +22,9 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2, ShieldCheck } from "lucide-vue-next";
+import { usePermissions } from "@/composables/usePermissions";
 
-const props = defineProps<{
-    roles: Role[];
-}>();
-
-const deleteDialog = ref(false);
-const roleToDelete = ref<Role | null>(null);
-
-function confirmDelete(role: Role) {
-    roleToDelete.value = role;
-    deleteDialog.value = true;
-}
-
-function handleDelete() {
-    if (!roleToDelete.value) return;
-    router.delete(route("roles.destroy", roleToDelete.value.id), {
-        onFinish: () => {
-            deleteDialog.value = false;
-            roleToDelete.value = null;
-        },
-    });
-}
+const { can } = usePermissions();
 
 const systemSlugs = ["super_admin", "admin"];
 </script>
@@ -64,7 +45,7 @@ const systemSlugs = ["super_admin", "admin"];
                         Gestiona los roles y sus permisos en el sistema.
                     </p>
                 </div>
-                <Button @click="router.visit(route('roles.create'))">
+                <Button v-if="can('create', 'roles')" @click="router.visit(route('roles.create'))">
                     <Plus class="size-4" />
                     Nuevo rol
                 </Button>
@@ -111,7 +92,7 @@ const systemSlugs = ["super_admin", "admin"];
                             </TableCell>
                             <TableCell class="text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <Button variant="ghost" size="icon" :disabled="systemSlugs.includes(role.slug)
+                                    <Button v-if="can('edit', 'roles')" variant="ghost" size="icon" :disabled="systemSlugs.includes(role.slug)
                                         " @click="
                                             router.visit(
                                                 route('roles.edit', role.id),
@@ -119,7 +100,7 @@ const systemSlugs = ["super_admin", "admin"];
                                             ">
                                         <Pencil class="size-4" />
                                     </Button>
-                                    <Button variant="ghost" size="icon" class="text-destructive hover:text-destructive"
+                                    <Button v-if="can('delete', 'roles')" variant="ghost" size="icon" class="text-destructive hover:text-destructive"
                                         :disabled="systemSlugs.includes(role.slug)
                                             " @click="confirmDelete(role)">
                                         <Trash2 class="size-4" />

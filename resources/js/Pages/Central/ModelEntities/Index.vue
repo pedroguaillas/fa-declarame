@@ -24,10 +24,12 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Layers, Plus, Pencil, Trash2, X } from "lucide-vue-next";
+import { usePermissions } from "@/composables/usePermissions";
 
 const props = defineProps<{
     modelEntities: ModelEntity[];
-}>();
+}>()
+const { can } = usePermissions();
 
 const systemSlugs = [
     "permissions",
@@ -168,7 +170,7 @@ function handleDelete() {
                         Gestiona los módulos del sistema y sus permisos.
                     </p>
                 </div>
-                <Button @click="openCreate">
+                <Button v-if="can('create', 'models')" @click="openCreate">
                     <Plus class="size-4" />
                     Nuevo módulo
                 </Button>
@@ -216,10 +218,10 @@ function handleDelete() {
                             </TableCell>
                             <TableCell class="text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <Button variant="ghost" size="icon" @click="openEdit(entity)">
+                                    <Button v-if="can('edit', 'models')" variant="ghost" size="icon" @click="openEdit(entity)">
                                         <Pencil class="size-4" />
                                     </Button>
-                                    <Button
+                                    <Button v-if="can('delete', 'models')"
                                         variant="ghost"
                                         size="icon"
                                         class="text-destructive hover:text-destructive"

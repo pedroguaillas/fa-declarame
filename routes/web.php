@@ -59,7 +59,7 @@ Route::middleware(['auth', 'check.active', 'central.only'])->group(function () {
 
         Route::resource('roles', RoleController::class)
             ->except(['show']);
-Route::resource('model-entities', ModelEntityController::class)
+        Route::resource('model-entities', ModelEntityController::class)
             ->except(['show', 'create', 'edit']);
     });
 });

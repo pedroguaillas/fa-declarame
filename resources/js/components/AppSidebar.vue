@@ -16,7 +16,8 @@ import {
 
 const page = usePage<PageProps>();
 const user = computed(() => page.props.auth.user);
-const { navItems } = useNavigation(user.value);
+const hasTenant = computed(() => !!page.props.tenant);
+const { navItems } = useNavigation(user, hasTenant);
 </script>
 
 <template>

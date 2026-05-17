@@ -17,6 +17,14 @@ class RoleMiddleware
         }
 
         if (!in_array($user->role->slug, $roles)) {
+            if (
+                in_array('super_admin', $roles)
+                && method_exists($user, 'resolveAdmin')
+                && $user->resolveAdmin()->isSuperAdmin()
+            ) {
+                return $next($request);
+            }
+
             abort(403, 'No tienes permisos para acceder a esta sección.');
         }
 

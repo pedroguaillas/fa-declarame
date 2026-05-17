@@ -26,6 +26,7 @@ export interface User {
     tenant_id: string | null;
     tenant?: Tenant;
     is_active: boolean;
+    permissions: { permission: string; model: string }[];
     has_active_subscription: boolean | null;
 }
 
@@ -125,6 +126,6 @@ export type PageProps<
     tenant: {
         id: string;
         name: string;
-    };
+    } | null;
     ziggy: Config & { location: string };
 };

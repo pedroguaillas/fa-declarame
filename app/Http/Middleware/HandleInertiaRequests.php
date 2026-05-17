@@ -21,6 +21,19 @@ class HandleInertiaRequests extends Middleware
         $currentCompanyId = session('current_company_id');
         $isTenant = isTenant();
 
+        $permissions = [];
+        if ($user) {
+            if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+                $permissions = [['permission' => '*', 'model' => '*']];
+            } elseif (method_exists($user, 'role') && $user->role) {
+                $user->load('role.modelPermissions.permission', 'role.modelPermissions.modelEntity');
+                $permissions = $user->role->modelPermissions->map(fn ($mp) => [
+                    'permission' => $mp->permission->slug,
+                    'model' => $mp->modelEntity->slug,
+                ])->values()->all();
+            }
+        }
+
         return array_merge(parent::share($request), [
             'auth' => [
                 'user' => $user ? [
@@ -28,6 +41,7 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->name,
                     'email' => $user->email,
                     'role' => $user->role ?? null,
+                    'permissions' => $permissions,
                     'has_active_subscription' => method_exists($user, 'hasActiveSubscription')
                         ? $user->hasActiveSubscription()
                         : null,

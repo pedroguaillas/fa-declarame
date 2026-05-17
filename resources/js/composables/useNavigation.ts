@@ -1,3 +1,5 @@
+import { computed, type Ref } from "vue";
+import type { LucideIcon } from "lucide-vue-next";
 import {
     LayoutDashboard,
     Users,
@@ -13,120 +15,156 @@ import {
     CloudDownload,
     ClipboardList,
 } from "lucide-vue-next";
+
 import type { User } from "@/types";
-import type { LucideIcon } from "lucide-vue-next";
+import { can } from "@/utils/permissions";
 
 export interface NavItem {
     title: string;
     url: string;
     icon?: LucideIcon;
-    isActive?: boolean;
-    items?: { title: string; url: string }[];
+    permission?: [string, string];
+    items?: NavItem[];
 }
 
-export function useNavigation(user: User) {
-    const superAdminNav: NavItem[] = [
-        {
-            title: "Dashboard",
-            url: route("dashboard"),
-            icon: LayoutDashboard,
-        },
-        {
-            title: "Suscripciones",
-            url: route("subscriptions.index"),
-            icon: CreditCard,
-        },
-        {
-            title: "Usuarios",
-            url: route("users.index"),
-            icon: Users,
-        },
-        {
-            title: "Tenants",
-            url: route("tenants.index"),
-            icon: Building2,
-        },
-        {
-            title: "Planes",
-            url: route("plans.index"),
-            icon: Building2,
-        },
-        {
-            title: "Sistema",
-            url: "#",
-            icon: ShieldCheck,
-            items: [
-                { title: "Roles", url: route("roles.index") },
-                { title: "Módulos", url: route("model-entities.index") },
-            ],
-        },
-        {
-            title: "Configuración",
-            url: "#",
-            icon: Settings,
-            items: [
-                {
-                    title: "Mi perfil",
-                    url: route("profile.edit"),
-                },
-            ],
-        },
-    ];
+const nav: NavItem[] = [
+    {
+        title: "Dashboard",
+        url: route("dashboard"),
+        icon: LayoutDashboard,
+    },
+    {
+        title: "Suscripciones",
+        url: route("subscriptions.index"),
+        icon: CreditCard,
+        permission: ["view", "subscriptions"],
+    },
+    {
+        title: "Usuarios",
+        url: route("users.index"),
+        icon: Users,
+        permission: ["view", "users"],
+    },
+    {
+        title: "Tenants",
+        url: route("tenants.index"),
+        icon: Building2,
+        permission: ["view", "tenants"],
+    },
+    {
+        title: "Planes",
+        url: route("plans.index"),
+        icon: Building2,
+        permission: ["view", "plans"],
+    },
+    {
+        title: "Sistema",
+        url: "#",
+        icon: ShieldCheck,
+        items: [
+            {
+                title: "Roles",
+                url: route("roles.index"),
+                icon: ShieldCheck,
+                permission: ["view", "roles"],
+            },
+            {
+                title: "Módulos",
+                url: route("model-entities.index"),
+                icon: ShieldCheck,
+                permission: ["view", "models"],
+            },
+        ],
+    },
+    {
+        title: "Configuración",
+        url: "#",
+        icon: Settings,
+        items: [
+            {
+                title: "Mi perfil",
+                url: route("profile.edit"),
+                icon: Settings,
+            },
+        ],
+    },
+];
 
-    const adminNav: NavItem[] = [
-        {
-            title: "Panel de control",
-            url: route("tenant.dashboard"),
-            icon: LayoutDashboard,
-        },
-        {
-            title: "Contribuyentes",
-            url: route("tenant.companies.index"),
-            icon: Building2,
-        },
-        {
-            title: "Descarga automática",
-            url: route("tenant.sri-scrape.index"),
-            icon: CloudDownload,
-        },
-        {
-            title: "Compras",
-            url: route("tenant.shops.index"),
-            icon: ShoppingCart,
-        },
-        {
-            title: "Ventas",
-            url: route("tenant.orders.index"),
-            icon: ReceiptIndianRupee,
-        },
-        {
-            title: "Contactos",
-            url: route("tenant.contacts.index"),
-            icon: Contact,
-        },
-        {
-            title: "Plan de cuentas",
-            url: route("tenant.accounts.index"),
-            icon: Book,
-        },
-        {
-            title: "Reportes",
-            url: route("tenant.reports.index"),
-            icon: Sheet,
-        },
-        {
-            title: "Declaración",
-            url: route("tenant.declaration.index"),
-            icon: ClipboardList,
-        },
-    ];
+const tenantNav: NavItem[] = [
+    {
+        title: "Panel de control",
+        url: route("tenant.dashboard"),
+        icon: LayoutDashboard,
+    },
+    {
+        title: "Contribuyentes",
+        url: route("tenant.companies.index"),
+        icon: Building2,
+    },
+    {
+        title: "Descarga automática",
+        url: route("tenant.sri-scrape.index"),
+        icon: CloudDownload,
+    },
+    {
+        title: "Compras",
+        url: route("tenant.shops.index"),
+        icon: ShoppingCart,
+    },
+    {
+        title: "Ventas",
+        url: route("tenant.orders.index"),
+        icon: ReceiptIndianRupee,
+    },
+    {
+        title: "Contactos",
+        url: route("tenant.contacts.index"),
+        icon: Contact,
+    },
+    {
+        title: "Plan de cuentas",
+        url: route("tenant.accounts.index"),
+        icon: Book,
+    },
+    {
+        title: "Reportes",
+        url: route("tenant.reports.index"),
+        icon: Sheet,
+    },
+    {
+        title: "Declaración",
+        url: route("tenant.declaration.index"),
+        icon: ClipboardList,
+    },
+];
 
-    const navMap: Record<string, NavItem[]> = {
-        super_admin: superAdminNav,
-        admin: adminNav,
-    };
+function filterNav(items: NavItem[], user: User): NavItem[] {
+    return items
+        .map((item) => {
+            if (item.permission) {
+                const [perm, model] = item.permission;
+                if (!can(user, perm, model)) return null;
+            }
 
-    return {
-        navItems: navMap[user.role.slug] ?? [],
-    };
+            if (item.items) {
+                const children = filterNav(item.items, user);
+                if (children.length === 0) return null;
+                return { ...item, items: children };
+            }
+
+            return item;
+        })
+        .filter(Boolean) as NavItem[];
+}
+
+export function useNavigation(user: Ref<User | null>, hasTenant: Ref<boolean>) {
+    const navItems = computed(() => {
+        if (!user.value) return [];
+
+        if (hasTenant.value) return tenantNav;
+
+        return filterNav(nav, user.value);
+    });
+
+    return { navItems };
 }

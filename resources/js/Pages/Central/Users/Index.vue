@@ -32,12 +32,14 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Users, Plus, Pencil, Trash2 } from "lucide-vue-next";
+import { usePermissions } from "@/composables/usePermissions";
 
 const props = defineProps<{
     users: Paginator<User>;
     roles: Role[];
     tenants: Tenant[];
 }>();
+const { can } = usePermissions();
 
 // ── Crear ──────────────────────────────────────────────
 const createDialog = ref(false);
@@ -155,7 +157,7 @@ function goToPage(url: string | null) {
                         Gestiona los usuarios del sistema central.
                     </p>
                 </div>
-                <Button @click="openCreate">
+                <Button v-if="can('create', 'users')" @click="openCreate">
                     <Plus class="size-4" />
                     Nuevo usuario
                 </Button>
@@ -197,14 +199,14 @@ function goToPage(url: string | null) {
                                 {{ user.admin?.name ?? "—" }}
                             </TableCell>
                             <TableCell class="text-center">
-                                <Switch :model-value="user.is_active" @update:model-value="toggleActive(user)" />
+                                <Switch v-if="can('edit', 'users')" :model-value="user.is_active" @update:model-value="toggleActive(user)" />
                             </TableCell>
                             <TableCell class="text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <Button variant="ghost" size="icon" @click="openEdit(user)">
+                                    <Button v-if="can('edit', 'users')" variant="ghost" size="icon" @click="openEdit(user)">
                                         <Pencil class="size-4" />
                                     </Button>
-                                    <Button variant="ghost" size="icon" class="text-destructive hover:text-destructive"
+                                    <Button v-if="can('delete', 'users')" variant="ghost" size="icon" class="text-destructive hover:text-destructive"
                                         :disabled="user.role.slug === 'super_admin'" @click="confirmDelete(user)">
                                         <Trash2 class="size-4" />
                                     </Button>

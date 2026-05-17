@@ -84,22 +84,23 @@ rm -rf node_modules/.vite && npm run dev
 
 ```
 app/
-  Http/Controllers/           # Central (Tenants, Users, Plans, etc.)
-  Http/Controllers/Tenant/    # Tenant (Companies, Shops, Orders, etc.)
-  Models/                     # Central Eloquent models
-  Models/Tenant/              # Tenant models (extend BaseModel)
-  Services/                   # Biz logic: SRI SOAP/XML, CSV import, etc.
-  Jobs/                       # Queue jobs
-  Exports/                    # Maatwebsite Excel exports
-  Imports/                    # Maatwebsite Excel imports
+  Http/Controllers/Central/     # Central (Tenants, Users, Plans, etc.)
+  Http/Controllers/Tenant/      # Tenant (Companies, Shops, Orders, etc.)
+  Models/Central/                # Central Eloquent models (User, Role, Plan, etc.)
+  Models/Tenant/                 # Tenant models (extend BaseModel)
+  Services/Central/              # Biz logic per central model (UserService, RoleService, etc.)
+  Services/                      # Other biz logic: SRI SOAP/XML, CSV import, etc.
+  Jobs/                          # Queue jobs
+  Exports/                       # Maatwebsite Excel exports
+  Imports/                       # Maatwebsite Excel imports
 resources/js/
-  Pages/                      # Inertia page components (Vue)
-  Pages/Tenant/               # Tenant-specific pages
-  components/ui/              # shadcn-vue components
-  layouts/                    # AppLayout.vue (sidebar layout)
-  composables/                # useNavigation, useTheme
-  lib/                        # utils.ts (cn helper)
-  types/                      # Global TS interfaces, ziggy types
+  Pages/Central/                 # Central-specific Inertia page components (Vue)
+  Pages/Tenant/                  # Tenant-specific pages
+  components/ui/                 # shadcn-vue components
+  layouts/                       # AppLayout.vue (sidebar layout)
+  composables/                   # useNavigation, usePermissions, useTheme
+  utils/                         # permissions.ts (can()), utils.ts (cn)
+  types/                         # Global TS interfaces, ziggy types
 ```
 
 ### Dashboard
@@ -107,6 +108,107 @@ resources/js/
 - `super_admin` → `Pages/Dashboard/SuperAdmin.vue`
 - `admin` → `Pages/Dashboard/Admin.vue`
 - `employee` → `Pages/Dashboard/Employee.vue`
+
+## Patterns: FormRequest + Service + Controller
+
+### FormRequest
+
+- **Base class** (`app/Http/Requests/Central/{Model}/Base{Model}Request.php`) extends `FormRequest`, defines shared rules.
+- **Child classes** (`Store{Model}Request`, `Update{Model}Request`) extend Base, combine with `array_merge(parent::rules(), [...])`.
+- **Cross-field validation** uses `withValidator()` + `$validator->after()`.
+- **No `authorize()`** — permissions handled by middleware (`role:super_admin`).
+
+```php
+class StoreUserRequest extends BaseUserRequest
+{
+    public function rules(): array
+    {
+        return array_merge(parent::rules(), [
+            'email' => 'required|email|max:255|unique:users,email',
+        ]);
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function ($validator) {
+            // cross-field validation (e.g. tenant_id only for admin role)
+        });
+    }
+}
+```
+
+### Service
+
+- **One per model** in `app/Services/Central/{Model}Service.php`.
+- Works **exclusively with its own model** (no cross-model queries).
+- Methods: `paginate()`, `all()`, `count*()`, `findOrFail()`, `create()`, `update()`.
+- **No validation** — that's the FormRequest's job.
+- `create()` / `update()` receive `array $data` (already validated) and return the model.
+
+### Controller
+
+- **Constructor DI** with typed services (`private readonly` promoted properties).
+- **FormRequest type-hinted** in `store()`/`update()` — Laravel injects + validates automatically.
+- **Orchestration**: `$request->validated()` → service methods → `Inertia::render()` or redirect with flash.
+- **Simple guards** (e.g. `if ($user->isSuperAdmin())`) stay inline — too simple for a service method.
+- **Extra actions** (`create`, `edit`, `toggleActive`) follow the same pattern.
+
+```php
+class UserController extends Controller
+{
+    public function __construct(
+        private readonly UserService $userSvc,
+    ) {}
+
+    public function index(): Response
+    {
+        return Inertia::render('Central/Users/Index', [
+            'users' => $this->userSvc->paginate(),
+        ]);
+    }
+
+    public function store(StoreUserRequest $request): RedirectResponse
+    {
+        $this->userSvc->create($request->validated());
+        return back()->with('success', 'Usuario creado correctamente.');
+    }
+}
+```
+
+### CRUD flow
+
+```
+Route → Middleware (auth, central.only, role:super_admin) → Controller
+  index():   Service::paginate() → Inertia::render()
+  store(StoreRequest):  $request->validated() → Service::create() → redirect
+  update(UpdateRequest, $id):  $request->validated() → Service::update() → redirect
+  destroy($id):  guard → $model->delete() → redirect
+```
+
+## Frontend permissions
+
+### Backend shares permissions
+
+`HandleInertiaRequests` adds `permissions` to `auth.user`:
+- Super_admin → `[{ permission: '*', model: '*' }]`
+- Other roles → array of `{ permission: slug, model: slug }` from `role.modelPermissions`
+
+### Checking permissions
+
+```ts
+import { can } from "@/utils/permissions";
+// or in a Vue component:
+import { usePermissions } from "@/composables/usePermissions";
+const { can } = usePermissions();
+```
+
+Usage in templates: `v-if="can('create', 'users')"`, `v-if="can('edit', 'plans')"`, etc.
+
+### Navigation filtering
+
+`useNavigation(user: Ref<User | null>, hasTenant: Ref<boolean>)`:
+- `hasTenant = true` → tenant nav (all visible)
+- `hasTenant = false` → central nav filtered by `can()` via `filterNav()`
 
 ## Frontend conventions
 

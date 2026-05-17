@@ -25,10 +25,12 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Building2, Plus, Pencil, Trash2, Users } from "lucide-vue-next";
+import { usePermissions } from "@/composables/usePermissions";
 
 const props = defineProps<{
     plans: Plan[];
-}>();
+}>()
+const { can } = usePermissions();
 
 // ── Crear ──────────────────────────────────────────────
 const createDialog = ref(false);
@@ -143,7 +145,7 @@ function formatPrice(price: number) {
                         sistema.
                     </p>
                 </div>
-                <Button @click="openCreate">
+                <Button v-if="can('create', 'plans')" @click="openCreate">
                     <Plus class="size-4" />
                     Nuevo plan
                 </Button>
@@ -203,7 +205,7 @@ function formatPrice(price: number) {
                                 }}</Badge>
                             </TableCell>
                             <TableCell class="text-center">
-                                <Switch
+                                <Switch v-if="can('edit', 'plans')"
                                     :model-value="plan.is_active"
                                     @update:model-value="toggleActive(plan)"
                                 />
@@ -212,14 +214,14 @@ function formatPrice(price: number) {
                                 <div
                                     class="flex items-center justify-end gap-2"
                                 >
-                                    <Button
+                                    <Button v-if="can('edit', 'plans')"
                                         variant="ghost"
                                         size="icon"
                                         @click="openEdit(plan)"
                                     >
                                         <Pencil class="size-4" />
                                     </Button>
-                                    <Button
+                                    <Button v-if="can('delete', 'plans')"
                                         variant="ghost"
                                         size="icon"
                                         class="text-destructive hover:text-destructive"
