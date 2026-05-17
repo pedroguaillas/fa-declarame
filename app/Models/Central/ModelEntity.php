@@ -9,6 +9,11 @@ class ModelEntity extends Model
 {
     protected $fillable = ['name', 'slug', 'description'];
 
+    public function permissions(): HasMany
+    {
+        return $this->hasMany(Permission::class);
+    }
+
     public function modelPermissions(): HasMany
     {
         return $this->hasMany(ModelPermission::class);

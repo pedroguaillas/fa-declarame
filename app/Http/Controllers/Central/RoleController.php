@@ -7,7 +7,6 @@ use App\Http\Requests\Central\Role\StoreRoleRequest;
 use App\Http\Requests\Central\Role\UpdateRoleRequest;
 use App\Models\Central\Role;
 use App\Services\Central\ModelEntityService;
-use App\Services\Central\PermissionService;
 use App\Services\Central\RoleService;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -17,7 +16,6 @@ class RoleController extends Controller
 {
     public function __construct(
         private readonly RoleService $roleSvc,
-        private readonly PermissionService $permissionSvc,
         private readonly ModelEntityService $modelEntitySvc,
     ) {}
 
@@ -31,8 +29,7 @@ class RoleController extends Controller
     public function create(): Response
     {
         return Inertia::render('Central/Roles/Form', [
-            'permissions' => $this->permissionSvc->all(),
-            'modelEntities' => $this->modelEntitySvc->all(),
+            'modelEntities' => $this->modelEntitySvc->allWithPermissions(),
         ]);
     }
 
@@ -50,8 +47,7 @@ class RoleController extends Controller
 
         return Inertia::render('Central/Roles/Form', [
             'role' => $role,
-            'permissions' => $this->permissionSvc->all(),
-            'modelEntities' => $this->modelEntitySvc->all(),
+            'modelEntities' => $this->modelEntitySvc->allWithPermissions(),
         ]);
     }
 

@@ -1,56 +1,42 @@
 <script setup lang="ts">
 import { Head, useForm } from "@inertiajs/vue3";
 import { computed, ref } from "vue";
-import type { Role, Permission, ModelEntity, ModelPermission } from "@/types";
+import type { Role, ModelEntity } from "@/types";
 import AppLayout from "@/layouts/AppLayout.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShieldCheck, ArrowLeft } from "lucide-vue-next";
 import { router } from "@inertiajs/vue3";
+import GroupCheckMatrix from "@/components/Shared/GroupCheckMatrix.vue";
+import type { SelectionGroup } from "@/components/Shared/GroupCheckMatrix.vue";
 
 const props = defineProps<{
     role?: Role;
-    permissions: Permission[];
     modelEntities: ModelEntity[];
 }>();
 
 const isEditing = computed(() => !!props.role);
 
-// Construir matriz de permisos activos
-function buildMatrix(): Record<string, Record<number, boolean>> {
-    const matrix: Record<string, Record<number, boolean>> = {};
-    props.modelEntities.forEach((model) => {
-        matrix[model.slug] = {};
-        props.permissions.forEach((perm) => {
-            matrix[model.slug][perm.id] = false;
-        });
-    });
+const permissionGroups = computed<SelectionGroup[]>(() =>
+    props.modelEntities.map((m) => ({
+        id: m.id,
+        display_name: m.name,
+        items: (m.permissions ?? []).map((p) => ({
+            id: p.id,
+            display_name: p.name,
+        })),
+    })),
+);
 
-    if (props.role?.model_permissions) {
-        props.role.model_permissions.forEach((mp: ModelPermission) => {
-            const model = props.modelEntities.find(
-                (m) => m.id === mp.model_entity_id,
-            );
-            if (model && matrix[model.slug]) {
-                matrix[model.slug][mp.permission_id] = true;
-            }
-        });
+const initialIds: number[] = [];
+if (props.role?.model_permissions) {
+    for (const mp of props.role.model_permissions) {
+        initialIds.push(mp.permission_id);
     }
-
-    return matrix;
 }
-
-const matrix = ref(buildMatrix());
+const selectedPermissionIds = ref<number[]>(initialIds);
 
 const form = useForm({
     name: props.role?.name ?? "",
@@ -68,29 +54,16 @@ function autoSlug() {
     }
 }
 
-function buildPermissions() {
-    const perms: { permission_id: number; model_entity_id: number }[] = [];
-    props.modelEntities.forEach((model) => {
-        props.permissions.forEach((perm) => {
-            if (matrix.value[model.slug]?.[perm.id]) {
-                perms.push({
-                    permission_id: perm.id,
-                    model_entity_id: model.id,
-                });
+function buildPermissions(): { permission_id: number; model_entity_id: number }[] {
+    return selectedPermissionIds.value.map((permId) => {
+        for (const model of props.modelEntities) {
+            const found = (model.permissions ?? []).find((p) => p.id === permId);
+            if (found) {
+                return { permission_id: permId, model_entity_id: model.id };
             }
-        });
+        }
+        throw new Error(`Permission ID ${permId} not found in any model entity`);
     });
-    return perms;
-}
-
-function toggleAll(modelSlug: string, value: boolean) {
-    props.permissions.forEach((perm) => {
-        matrix.value[modelSlug][perm.id] = value;
-    });
-}
-
-function isAllChecked(modelSlug: string): boolean {
-    return props.permissions.every((p) => matrix.value[modelSlug]?.[p.id]);
 }
 
 function submit() {
@@ -204,146 +177,10 @@ function submit() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <!-- Móvil: cards por módulo -->
-                        <div class="space-y-3 md:hidden">
-                            <div
-                                v-for="model in modelEntities"
-                                :key="model.id"
-                                class="rounded-lg border border-border p-4 space-y-3"
-                            >
-                                <div>
-                                    <p class="font-medium text-foreground">
-                                        {{ model.name }}
-                                    </p>
-                                    <p
-                                        v-if="model.description"
-                                        class="text-xs text-muted-foreground"
-                                    >
-                                        {{ model.description }}
-                                    </p>
-                                </div>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div
-                                        v-for="perm in permissions"
-                                        :key="perm.id"
-                                        class="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2"
-                                    >
-                                        <span class="text-sm">{{
-                                            perm.name
-                                        }}</span>
-                                        <Switch
-                                            :model-value="
-                                                matrix[model.slug]?.[perm.id] ??
-                                                false
-                                            "
-                                            @update:model-value="
-                                                (val) =>
-                                                    (matrix[model.slug][
-                                                        perm.id
-                                                    ] = val)
-                                            "
-                                        />
-                                    </div>
-                                    <div
-                                        class="col-span-2 flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
-                                    >
-                                        <span class="text-sm font-medium"
-                                            >Todos los permisos</span
-                                        >
-                                        <Switch
-                                            :model-value="
-                                                isAllChecked(model.slug)
-                                            "
-                                            @update:model-value="
-                                                (val) =>
-                                                    toggleAll(model.slug, val)
-                                            "
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Escritorio: tabla -->
-                        <div class="hidden md:block overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="border-b border-border">
-                                        <th
-                                            class="text-left py-3 pr-4 font-medium text-muted-foreground w-40"
-                                        >
-                                            Módulo
-                                        </th>
-                                        <th
-                                            v-for="perm in permissions"
-                                            :key="perm.id"
-                                            class="text-center py-3 px-4 font-medium text-muted-foreground"
-                                        >
-                                            <Badge variant="outline">{{
-                                                perm.name
-                                            }}</Badge>
-                                        </th>
-                                        <th
-                                            class="text-center py-3 px-4 font-medium text-muted-foreground"
-                                        >
-                                            Todos
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr
-                                        v-for="model in modelEntities"
-                                        :key="model.id"
-                                        class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
-                                    >
-                                        <td class="py-3 pr-4">
-                                            <span
-                                                class="font-medium text-foreground"
-                                                >{{ model.name }}</span
-                                            >
-                                            <p
-                                                class="text-xs text-muted-foreground"
-                                            >
-                                                {{ model.description }}
-                                            </p>
-                                        </td>
-                                        <td
-                                            v-for="perm in permissions"
-                                            :key="perm.id"
-                                            class="text-center py-3 px-4"
-                                        >
-                                            <Switch
-                                                :model-value="
-                                                    matrix[model.slug]?.[
-                                                        perm.id
-                                                    ] ?? false
-                                                "
-                                                @update:model-value="
-                                                    (val) =>
-                                                        (matrix[model.slug][
-                                                            perm.id
-                                                        ] = val)
-                                                "
-                                            />
-                                        </td>
-                                        <td class="text-center py-3 px-4">
-                                            <Switch
-                                                :model-value="
-                                                    isAllChecked(model.slug)
-                                                "
-                                                @update:model-value="
-                                                    (val) =>
-                                                        toggleAll(
-                                                            model.slug,
-                                                            val,
-                                                        )
-                                                "
-                                            />
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                        <GroupCheckMatrix
+                            :groups="permissionGroups"
+                            v-model="selectedPermissionIds"
+                        />
                     </CardContent>
                 </Card>
 

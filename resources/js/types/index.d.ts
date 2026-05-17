@@ -75,6 +75,7 @@ export interface ModelEntity {
     name: string;
     slug: string;
     description: string | null;
+    permissions?: Permission[];
     model_permissions_count?: number;
 }
 

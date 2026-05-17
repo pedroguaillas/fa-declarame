@@ -57,7 +57,6 @@ export function useNavigation(user: User) {
             icon: ShieldCheck,
             items: [
                 { title: "Roles", url: route("roles.index") },
-                { title: "Permisos", url: route("permissions.index") },
                 { title: "Módulos", url: route("model-entities.index") },
             ],
         },

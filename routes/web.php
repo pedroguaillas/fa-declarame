@@ -3,7 +3,6 @@
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Central\DashboardController;
 use App\Http\Controllers\Central\ModelEntityController;
-use App\Http\Controllers\Central\PermissionController;
 use App\Http\Controllers\Central\PlanController;
 use App\Http\Controllers\Central\ProfileController;
 use App\Http\Controllers\Central\RoleController;
@@ -60,9 +59,7 @@ Route::middleware(['auth', 'check.active', 'central.only'])->group(function () {
 
         Route::resource('roles', RoleController::class)
             ->except(['show']);
-        Route::resource('permissions', PermissionController::class)
-            ->except(['show', 'create', 'edit']);
-        Route::resource('model-entities', ModelEntityController::class)
+Route::resource('model-entities', ModelEntityController::class)
             ->except(['show', 'create', 'edit']);
     });
 });

@@ -23,7 +23,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Layers, Plus, Pencil, Trash2 } from "lucide-vue-next";
+import { Layers, Plus, Pencil, Trash2, X } from "lucide-vue-next";
 
 const props = defineProps<{
     modelEntities: ModelEntity[];
@@ -38,12 +38,17 @@ const systemSlugs = [
     "subscriptions",
 ];
 
+function defaultPermissions() {
+    return [{ name: "", slug: "" }];
+}
+
 // ── Crear ──────────────────────────────────────────────
 const createDialog = ref(false);
 const createForm = useForm({
     name: "",
     slug: "",
     description: "",
+    permissions: defaultPermissions(),
 });
 
 function autoSlug() {
@@ -53,8 +58,24 @@ function autoSlug() {
         .replace(/[^a-z0-9_]/g, "");
 }
 
+function autoPermissionSlug(index: number) {
+    createForm.permissions[index].slug = createForm.permissions[index].name
+        .toLowerCase()
+        .replace(/\s+/g, "_")
+        .replace(/[^a-z0-9_]/g, "");
+}
+
+function addPermission() {
+    createForm.permissions.push({ name: "", slug: "" });
+}
+
+function removePermission(index: number) {
+    createForm.permissions.splice(index, 1);
+}
+
 function openCreate() {
     createForm.reset();
+    createForm.permissions = defaultPermissions();
     createDialog.value = true;
 }
 
@@ -63,6 +84,7 @@ function store() {
         onSuccess: () => {
             createDialog.value = false;
             createForm.reset();
+            createForm.permissions = defaultPermissions();
         },
     });
 }
@@ -74,6 +96,7 @@ const editForm = useForm({
     name: "",
     slug: "",
     description: "",
+    permissions: [] as { name: string; slug: string }[],
 });
 
 function openEdit(entity: ModelEntity) {
@@ -81,7 +104,26 @@ function openEdit(entity: ModelEntity) {
     editForm.name = entity.name;
     editForm.slug = entity.slug;
     editForm.description = entity.description ?? "";
+    editForm.permissions = (entity.permissions ?? []).map((p) => ({
+        name: p.name,
+        slug: p.slug,
+    }));
     editDialog.value = true;
+}
+
+function editAutoPermissionSlug(index: number) {
+    editForm.permissions[index].slug = editForm.permissions[index].name
+        .toLowerCase()
+        .replace(/\s+/g, "_")
+        .replace(/[^a-z0-9_]/g, "");
+}
+
+function editAddPermission() {
+    editForm.permissions.push({ name: "", slug: "" });
+}
+
+function editRemovePermission(index: number) {
+    editForm.permissions.splice(index, 1);
 }
 
 function update() {
@@ -116,18 +158,14 @@ function handleDelete() {
     <Head title="Entidades del modelo" />
     <AppLayout>
         <div class="space-y-6">
-            <!-- Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h1
-                        class="text-2xl font-bold text-foreground flex items-center gap-2"
-                    >
+                    <h1 class="text-2xl font-bold text-foreground flex items-center gap-2">
                         <Layers class="size-6" />
                         Módulos
                     </h1>
                     <p class="text-muted-foreground text-sm mt-1">
-                        Gestiona los módulos del sistema sobre los que se
-                        asignan permisos.
+                        Gestiona los módulos del sistema y sus permisos.
                     </p>
                 </div>
                 <Button @click="openCreate">
@@ -136,67 +174,56 @@ function handleDelete() {
                 </Button>
             </div>
 
-            <!-- Tabla -->
             <div class="rounded-lg border border-border bg-card">
                 <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Nombre</TableHead>
                             <TableHead>Slug</TableHead>
-                            <TableHead>Descripción</TableHead>
-                            <TableHead class="text-center"
-                                >Asignado en roles</TableHead
-                            >
+                            <TableHead>Permisos</TableHead>
+                            <TableHead class="text-center">Asignado en roles</TableHead>
                             <TableHead class="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        <TableRow
-                            v-for="entity in modelEntities"
-                            :key="entity.id"
-                        >
+                        <TableRow v-for="entity in modelEntities" :key="entity.id">
                             <TableCell class="font-medium">
                                 {{ entity.name }}
-                                <Badge
-                                    v-if="systemSlugs.includes(entity.slug)"
-                                    variant="secondary"
-                                    class="ml-2 text-xs"
-                                >
+                                <Badge v-if="systemSlugs.includes(entity.slug)" variant="secondary" class="ml-2 text-xs">
                                     Sistema
                                 </Badge>
                             </TableCell>
                             <TableCell>
-                                <code
-                                    class="text-xs bg-muted px-1.5 py-0.5 rounded"
-                                    >{{ entity.slug }}</code
-                                >
+                                <code class="text-xs bg-muted px-1.5 py-0.5 rounded">{{ entity.slug }}</code>
                             </TableCell>
-                            <TableCell class="text-muted-foreground text-sm">
-                                {{ entity.description ?? "—" }}
+                            <TableCell>
+                                <div class="flex flex-wrap gap-1">
+                                    <Badge
+                                        v-for="perm in entity.permissions"
+                                        :key="perm.slug"
+                                        variant="outline"
+                                        class="text-xs"
+                                    >
+                                        {{ perm.name }}
+                                    </Badge>
+                                    <span v-if="!entity.permissions?.length" class="text-xs text-muted-foreground">
+                                        Sin permisos
+                                    </span>
+                                </div>
                             </TableCell>
                             <TableCell class="text-center">
-                                <Badge variant="outline">{{
-                                    entity.model_permissions_count
-                                }}</Badge>
+                                <Badge variant="outline">{{ entity.model_permissions_count }}</Badge>
                             </TableCell>
                             <TableCell class="text-right">
-                                <div
-                                    class="flex items-center justify-end gap-2"
-                                >
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        @click="openEdit(entity)"
-                                    >
+                                <div class="flex items-center justify-end gap-2">
+                                    <Button variant="ghost" size="icon" @click="openEdit(entity)">
                                         <Pencil class="size-4" />
                                     </Button>
                                     <Button
                                         variant="ghost"
                                         size="icon"
                                         class="text-destructive hover:text-destructive"
-                                        :disabled="
-                                            systemSlugs.includes(entity.slug)
-                                        "
+                                        :disabled="systemSlugs.includes(entity.slug)"
                                         @click="confirmDelete(entity)"
                                     >
                                         <Trash2 class="size-4" />
@@ -205,10 +232,7 @@ function handleDelete() {
                             </TableCell>
                         </TableRow>
                         <TableRow v-if="modelEntities.length === 0">
-                            <TableCell
-                                colspan="5"
-                                class="text-center text-muted-foreground py-8"
-                            >
+                            <TableCell colspan="5" class="text-center text-muted-foreground py-8">
                                 No hay módulos registrados.
                             </TableCell>
                         </TableRow>
@@ -222,10 +246,7 @@ function handleDelete() {
             <DialogContent class="max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Nuevo módulo</DialogTitle>
-                    <DialogDescription
-                        >Completa los datos para crear un nuevo
-                        módulo.</DialogDescription
-                    >
+                    <DialogDescription>Completa los datos y define los permisos del módulo.</DialogDescription>
                 </DialogHeader>
                 <form @submit.prevent="store" class="space-y-4">
                     <div class="grid grid-cols-2 gap-4">
@@ -235,58 +256,58 @@ function handleDelete() {
                                 v-model="createForm.name"
                                 placeholder="Ej: Reportes"
                                 @input="autoSlug"
-                                :class="{
-                                    'border-destructive':
-                                        createForm.errors.name,
-                                }"
+                                :class="{ 'border-destructive': createForm.errors.name }"
                             />
-                            <p
-                                v-if="createForm.errors.name"
-                                class="text-xs text-destructive"
-                            >
-                                {{ createForm.errors.name }}
-                            </p>
+                            <p v-if="createForm.errors.name" class="text-xs text-destructive">{{ createForm.errors.name }}</p>
                         </div>
                         <div class="space-y-2">
                             <Label>Slug</Label>
                             <Input
                                 v-model="createForm.slug"
                                 placeholder="Ej: reportes"
-                                :class="{
-                                    'border-destructive':
-                                        createForm.errors.slug,
-                                }"
+                                :class="{ 'border-destructive': createForm.errors.slug }"
                             />
-                            <p
-                                v-if="createForm.errors.slug"
-                                class="text-xs text-destructive"
-                            >
-                                {{ createForm.errors.slug }}
-                            </p>
+                            <p v-if="createForm.errors.slug" class="text-xs text-destructive">{{ createForm.errors.slug }}</p>
                         </div>
                         <div class="col-span-2 space-y-2">
-                            <Label
-                                >Descripción
-                                <span class="text-muted-foreground text-xs"
-                                    >(opcional)</span
-                                ></Label
-                            >
-                            <Input
-                                v-model="createForm.description"
-                                placeholder="Descripción del módulo"
-                            />
+                            <Label>Descripción <span class="text-muted-foreground text-xs">(opcional)</span></Label>
+                            <Input v-model="createForm.description" placeholder="Descripción del módulo" />
                         </div>
                     </div>
+
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <Label>Permisos</Label>
+                            <Button type="button" variant="outline" size="sm" @click="addPermission">
+                                <Plus class="size-3 mr-1" /> Agregar permiso
+                            </Button>
+                        </div>
+                        <div v-for="(perm, i) in createForm.permissions" :key="i" class="flex items-center gap-2">
+                            <div class="flex-1">
+                                <Input
+                                    v-model="perm.name"
+                                    placeholder="Nombre"
+                                    @input="autoPermissionSlug(i)"
+                                    :class="{ 'border-destructive': createForm.errors['permissions.' + i + '.name'] }"
+                                />
+                            </div>
+                            <div class="flex-1">
+                                <Input
+                                    v-model="perm.slug"
+                                    placeholder="Slug"
+                                    :class="{ 'border-destructive': createForm.errors['permissions.' + i + '.slug'] }"
+                                />
+                            </div>
+                            <Button type="button" variant="ghost" size="icon" class="shrink-0" @click="removePermission(i)">
+                                <X class="size-4" />
+                            </Button>
+                        </div>
+                        <p v-if="createForm.errors.permissions" class="text-xs text-destructive">{{ createForm.errors.permissions }}</p>
+                    </div>
+
                     <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            @click="createDialog = false"
-                            >Cancelar</Button
-                        >
-                        <Button type="submit" :disabled="createForm.processing"
-                            >Crear módulo</Button
-                        >
+                        <Button type="button" variant="outline" @click="createDialog = false">Cancelar</Button>
+                        <Button type="submit" :disabled="createForm.processing">Crear módulo</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
@@ -297,11 +318,7 @@ function handleDelete() {
             <DialogContent class="max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Editar módulo</DialogTitle>
-                    <DialogDescription>
-                        Modifica los datos de
-                        <strong>{{ editing?.name }}</strong
-                        >.
-                    </DialogDescription>
+                    <DialogDescription>Modifica los datos y permisos de <strong>{{ editing?.name }}</strong>.</DialogDescription>
                 </DialogHeader>
                 <form @submit.prevent="update" class="space-y-4">
                     <div class="grid grid-cols-2 gap-4">
@@ -309,16 +326,9 @@ function handleDelete() {
                             <Label>Nombre</Label>
                             <Input
                                 v-model="editForm.name"
-                                :class="{
-                                    'border-destructive': editForm.errors.name,
-                                }"
+                                :class="{ 'border-destructive': editForm.errors.name }"
                             />
-                            <p
-                                v-if="editForm.errors.name"
-                                class="text-xs text-destructive"
-                            >
-                                {{ editForm.errors.name }}
-                            </p>
+                            <p v-if="editForm.errors.name" class="text-xs text-destructive">{{ editForm.errors.name }}</p>
                         </div>
                         <div class="space-y-2">
                             <Label>Slug</Label>
@@ -326,22 +336,37 @@ function handleDelete() {
                         </div>
                         <div class="col-span-2 space-y-2">
                             <Label>Descripción</Label>
-                            <Input
-                                v-model="editForm.description"
-                                placeholder="Descripción del módulo"
-                            />
+                            <Input v-model="editForm.description" placeholder="Descripción del módulo" />
                         </div>
                     </div>
+
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <Label>Permisos</Label>
+                            <Button type="button" variant="outline" size="sm" @click="editAddPermission">
+                                <Plus class="size-3 mr-1" /> Agregar permiso
+                            </Button>
+                        </div>
+                        <div v-for="(perm, i) in editForm.permissions" :key="i" class="flex items-center gap-2">
+                            <div class="flex-1">
+                                <Input
+                                    v-model="perm.name"
+                                    placeholder="Nombre"
+                                    @input="editAutoPermissionSlug(i)"
+                                />
+                            </div>
+                            <div class="flex-1">
+                                <Input v-model="perm.slug" placeholder="Slug" />
+                            </div>
+                            <Button type="button" variant="ghost" size="icon" class="shrink-0" @click="editRemovePermission(i)">
+                                <X class="size-4" />
+                            </Button>
+                        </div>
+                    </div>
+
                     <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            @click="editDialog = false"
-                            >Cancelar</Button
-                        >
-                        <Button type="submit" :disabled="editForm.processing"
-                            >Guardar cambios</Button
-                        >
+                        <Button type="button" variant="outline" @click="editDialog = false">Cancelar</Button>
+                        <Button type="submit" :disabled="editForm.processing">Guardar cambios</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
@@ -353,18 +378,13 @@ function handleDelete() {
                 <DialogHeader>
                     <DialogTitle>¿Eliminar módulo?</DialogTitle>
                     <DialogDescription>
-                        Estás a punto de eliminar el módulo
-                        <strong>{{ toDelete?.name }}</strong
-                        >. Si está asignado a algún rol, no podrá eliminarse.
+                        Estás a punto de eliminar el módulo <strong>{{ toDelete?.name }}</strong>.
+                        Si está asignado a algún rol, no podrá eliminarse.
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="outline" @click="deleteDialog = false"
-                        >Cancelar</Button
-                    >
-                    <Button variant="destructive" @click="handleDelete"
-                        >Eliminar</Button
-                    >
+                    <Button variant="outline" @click="deleteDialog = false">Cancelar</Button>
+                    <Button variant="destructive" @click="handleDelete">Eliminar</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

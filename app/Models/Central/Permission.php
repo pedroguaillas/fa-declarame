@@ -3,22 +3,14 @@
 namespace App\Models\Central;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Permission extends Model
 {
-    protected $fillable = ['name', 'slug', 'description'];
+    protected $fillable = ['model_entity_id', 'name', 'slug', 'description'];
 
-    public function modelPermissions(): HasMany
+    public function modelEntity(): BelongsTo
     {
-        return $this->hasMany(ModelPermission::class);
-    }
-
-    public function roles(): BelongsToMany
-    {
-        return $this->belongsToMany(Role::class, 'model_permissions')
-            ->withPivot('model_entity_id')
-            ->withTimestamps();
+        return $this->belongsTo(ModelEntity::class);
     }
 }

@@ -20,7 +20,7 @@ class ModelEntityController extends Controller
     public function index(): Response
     {
         return Inertia::render('Central/ModelEntities/Index', [
-            'modelEntities' => $this->modelEntitySvc->allWithCount(),
+            'modelEntities' => $this->modelEntitySvc->allWithPermissions(),
         ]);
     }
 
