@@ -40,6 +40,7 @@ class UserController extends Controller
 
         if ($isAdmin && ! empty($validated['tenant_id'])) {
             $this->tenantSvc->assignAdmin($validated['tenant_id'], $user->id);
+            $this->tenantSvc->provisionAdmin($validated['tenant_id'], $user, $validated);
         }
 
         return back()->with('success', 'Usuario creado correctamente.');
@@ -54,6 +55,10 @@ class UserController extends Controller
 
         if ($role->slug === 'admin') {
             $this->tenantSvc->reassignAdmin($user->id, $validated['tenant_id'] ?? null);
+
+            if (! empty($validated['tenant_id'])) {
+                $this->tenantSvc->provisionAdmin($validated['tenant_id'], $user, $validated);
+            }
         }
 
         return back()->with('success', 'Usuario actualizado correctamente.');

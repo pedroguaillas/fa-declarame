@@ -166,3 +166,52 @@ export interface OrderRetentionItem {
     percentage: number | string;
     value: number | string;
 }
+
+export interface TenantRole {
+    id: number;
+    name: string;
+    slug: string;
+    description: string | null;
+    users_count?: number;
+    model_permissions?: TenantModelPermission[];
+}
+
+export interface TenantModelEntity {
+    id: number;
+    name: string;
+    slug: string;
+    description: string | null;
+    permissions?: TenantPermission[];
+    model_permissions_count?: number;
+}
+
+export interface TenantPermission {
+    id: number;
+    name: string;
+    slug: string;
+    description: string | null;
+}
+
+export interface TenantModelPermission {
+    id: number;
+    role_id: number;
+    permission_id: number;
+    model_entity_id: number;
+    permission?: TenantPermission;
+    model_entity?: TenantModelEntity;
+}
+
+export interface TenantUser {
+    id: number;
+    name: string;
+    email: string;
+    username: string;
+    role_id: number | null;
+    role?: TenantRole;
+    is_active: boolean;
+    central_user?: {
+        id: number;
+        name: string;
+        email: string;
+    };
+}

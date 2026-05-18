@@ -13,9 +13,9 @@ class DatabaseSeeder extends Seeder
             PlanSeeder::class,
             ModelEntitySeeder::class,
             ModelPermissionSeeder::class,
-            TenantSeeder::class,
+            // TenantSeeder::class,
             UserSeeder::class,
-            SubscriptionSeeder::class,
+            // SubscriptionSeeder::class,
         ]);
     }
 }

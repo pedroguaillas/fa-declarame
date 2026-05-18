@@ -39,8 +39,8 @@ class AuthController extends Controller
 
         return match (true) {
             $user->isSuperAdmin() => redirect()->intended(route('dashboard')),
-            $user->isAdmin() => $this->redirectToTenant($user),
-            default => $this->redirectEmployee($user),
+            $user->isAdmin() => $this->redirectToTenant($request, $user),
+            default => $this->redirectEmployee($request, $user),
         };
     }
 
@@ -58,8 +58,18 @@ class AuthController extends Controller
         return Inertia::location(route('login'));
     }
 
-    private function redirectToTenant(User $user): Response
+    private function redirectToTenant(Request $request, User $user): Response
     {
+        if (! $user->hasActiveSubscription()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')->withErrors([
+                'username' => 'No tienes una suscripción activa. Contacta al administrador.',
+            ]);
+        }
+
         $domain = $user->tenant->domains()->value('domain');
 
         $token = $this->tokenService->generate(
@@ -75,13 +85,13 @@ class AuthController extends Controller
         );
     }
 
-    private function redirectEmployee(User $user): Response
+    private function redirectEmployee(Request $request, User $user): Response
     {
         $admin = $user->resolveAdmin();
 
         return match (true) {
             $admin->isSuperAdmin() => redirect()->intended(route('dashboard')),
-            $admin->isAdmin() => $this->redirectToTenant($admin),
+            $admin->isAdmin() => $this->redirectToTenant($request, $admin),
             default => Inertia::location(route('login')),
         };
     }

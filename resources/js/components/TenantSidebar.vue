@@ -16,8 +16,9 @@ import { useNavigation } from "@/composables/useNavigation";
 import NavMain from "./NavMain.vue";
 
 const page = usePage<PageProps>();
-const user = computed(() => page.props.auth.user);
-const { navItems } = useNavigation(user.value);
+const user = page.props.auth.user;
+const hasTenant = computed(() => true);
+const { navItems } = useNavigation(user, hasTenant);
 const tenant = computed(() => page.props.tenant);
 </script>
 

@@ -3,6 +3,9 @@
 namespace App\Services\Central;
 
 use App\Models\Central\Tenant;
+use App\Models\Central\User;
+use App\Services\Tenant\RoleService as TenantRoleService;
+use App\Services\Tenant\UserService as TenantUserService;
 
 class TenantService
 {
@@ -69,5 +72,18 @@ class TenantService
         if ($newTenantId) {
             Tenant::where('id', $newTenantId)->update(['user_id' => $userId]);
         }
+    }
+
+    public function provisionAdmin(string $tenantId, User $user, array $data): void
+    {
+        $tenant = $this->findOrFail($tenantId);
+
+        $tenant->run(function () use ($user, $data) {
+            $adminRole = app(TenantRoleService::class)->findBySlug('admin');
+            if ($adminRole) {
+                $data['role_id'] = $adminRole->id;
+                app(TenantUserService::class)->ensureFromCentralUser($user, $data);
+            }
+        });
     }
 }

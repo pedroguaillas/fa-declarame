@@ -100,41 +100,79 @@ const tenantNav: NavItem[] = [
         title: "Contribuyentes",
         url: route("tenant.companies.index"),
         icon: Building2,
+        permission: ["view", "companies"],
     },
     {
         title: "Descarga automática",
         url: route("tenant.sri-scrape.index"),
         icon: CloudDownload,
+        permission: ["view", "sri_scrape"],
     },
     {
         title: "Compras",
         url: route("tenant.shops.index"),
         icon: ShoppingCart,
+        permission: ["view", "shops"],
     },
     {
         title: "Ventas",
         url: route("tenant.orders.index"),
         icon: ReceiptIndianRupee,
+        permission: ["view", "orders"],
     },
     {
         title: "Contactos",
         url: route("tenant.contacts.index"),
         icon: Contact,
+        permission: ["view", "contacts"],
     },
     {
         title: "Plan de cuentas",
         url: route("tenant.accounts.index"),
         icon: Book,
+        permission: ["view", "accounts"],
     },
     {
         title: "Reportes",
         url: route("tenant.reports.index"),
         icon: Sheet,
+        permission: ["view", "reports"],
     },
     {
         title: "Declaración",
         url: route("tenant.declaration.index"),
         icon: ClipboardList,
+        permission: ["view", "declaration"],
+    },
+    {
+        title: "Configuración",
+        url: "#",
+        icon: Settings,
+        items: [
+            {
+                title: "Mi perfil",
+                url: route("tenant.profile.edit"),
+                icon: Settings,
+            },
+            {
+                title: "Usuarios",
+                url: route("tenant.users.index"),
+                icon: Users,
+                permission: ["view", "users"],
+            },
+            {
+                title: "Roles",
+                url: route("tenant.roles.index"),
+                icon: ShieldCheck,
+                permission: ["view", "roles"],
+            },
+            {
+                title: "Módulos",
+                url: route("tenant.model-entities.index"),
+                icon: ShieldCheck,
+                permission: ["view", "models"],
+            },
+        ],
     },
 ];
 
@@ -157,13 +195,14 @@ function filterNav(items: NavItem[], user: User): NavItem[] {
         .filter(Boolean) as NavItem[];
 }
 
-export function useNavigation(user: Ref<User | null>, hasTenant: Ref<boolean>) {
+export function useNavigation(user: User | null, hasTenant: Ref<boolean>) {
+
     const navItems = computed(() => {
-        if (!user.value) return [];
+        if (!user) return [];
 
-        if (hasTenant.value) return tenantNav;
+        if (hasTenant.value) return filterNav(tenantNav, user);
 
-        return filterNav(nav, user.value);
+        return filterNav(nav, user);
     });
 
     return { navItems };
