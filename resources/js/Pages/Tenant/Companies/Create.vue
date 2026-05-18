@@ -9,8 +9,11 @@ import { Button } from "@/components/ui/button";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { ContributorType } from "@/types/tenant";
 import { Head, Link, useForm } from "@inertiajs/vue3";
+import { usePermissions } from "@/composables/usePermissions";
 import { Loader2 } from "lucide-vue-next";
 import { computed, ref, watch } from "vue";
+
+const { can } = usePermissions();
 
 const props = defineProps<{
     contributorTypes: ContributorType[];
@@ -230,7 +233,7 @@ function submit() {
                     <Button variant="outline" as-child>
                         <Link :href="route('tenant.companies.index')">Cancelar</Link>
                     </Button>
-                    <Button type="submit" :disabled="form.processing">
+                    <Button v-if="can('create', 'companies')" type="submit" :disabled="form.processing">
                         <Loader2 v-if="form.processing" class="mr-1.5 size-4 animate-spin" />
                         {{ form.processing ? "Guardando..." : "Guardar" }}
                     </Button>

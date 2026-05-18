@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm, usePage } from "@inertiajs/vue3";
 import { computed, ref, watch } from "vue";
+import { usePermissions } from "@/composables/usePermissions";
 
 import DataTableDesktop from "@/components/Shared/DataTableDesktop.vue";
 import DataTableMobile from "@/components/Shared/DataTableMobile.vue";
@@ -28,6 +29,8 @@ interface ShopFilters {
     retention: string;
     voucher_type: string;
 }
+
+const { can } = usePermissions();
 
 const props = defineProps<{
     shops: Paginator<Shop>;
@@ -113,37 +116,41 @@ const columnsWithRetention: ColumnDef<Shop>[] = [
 
 const activeColumns = computed(() => (props.isActiveRetention ? columnsWithRetention : columns));
 
-const actions = computed<ActionDef<Shop>[]>(() => [
-    ...(props.isActiveRetention
-        ? [
-              {
-                  event: "retention",
-                  label: "Retención",
-                  icon: FileText,
-                  show: (item) => (item as any).voucher_type_code !== "04",
-                  class: (item) =>
-                      item.serie_retention
-                          ? "text-green-600! hover:bg-green-100!"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80",
-              } as ActionDef<Shop>,
-          ]
-        : []),
-    {
-        event: "account",
-        label: "Cuenta contable",
-        icon: Receipt,
-        class: (item) =>
-            item.account_id ? "text-blue-600! hover:bg-blue-100!" : "bg-muted text-muted-foreground hover:bg-muted/80",
-    },
-    { event: "edit", label: "Editar", icon: Pencil },
-    {
-        event: "delete",
-        label: "Eliminar",
-        separator: true,
-        class: "text-destructive focus:text-destructive",
-        icon: Trash2,
-    },
-]);
+const actions = computed<ActionDef<Shop>[]>(() => {
+    const items: ActionDef<Shop>[] = [];
+    if (props.isActiveRetention && can("edit", "shops")) {
+        items.push({
+            event: "retention",
+            label: "Retención",
+            icon: FileText,
+            show: (item) => (item as any).voucher_type_code !== "04",
+            class: (item) =>
+                item.serie_retention
+                    ? "text-green-600! hover:bg-green-100!"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80",
+        });
+    }
+    if (can("edit", "shops")) {
+        items.push({
+            event: "account",
+            label: "Cuenta contable",
+            icon: Receipt,
+            class: (item) =>
+                item.account_id ? "text-blue-600! hover:bg-blue-100!" : "bg-muted text-muted-foreground hover:bg-muted/80",
+        });
+        items.push({ event: "edit", label: "Editar", icon: Pencil });
+    }
+    if (can("delete", "shops")) {
+        items.push({
+            event: "delete",
+            label: "Eliminar",
+            separator: true,
+            class: "text-destructive focus:text-destructive",
+            icon: Trash2,
+        });
+    }
+    return items;
+});
 
 // ─── Filters ────────────────────────────────────────────────────────────────
 
@@ -295,15 +302,15 @@ watch(
             <HeaderList
                 title="Compras"
                 :description="`${shops.total} compra${shops.total !== 1 ? 's' : ''} registrada${shops.total !== 1 ? 's' : ''}`"
-                link-label="Nueva compra"
-                :link-href="route('tenant.shops.create')"
-                :show-import="true"
+                :link-label="can('create', 'shops') ? 'Nueva compra' : ''"
+                :link-href="can('create', 'shops') ? route('tenant.shops.create') : ''"
+                :show-import="can('create', 'shops')"
                 import-label="Importar SRI"
                 @click-import="importFileInput?.click()"
             >
                 <template #extra-actions>
                     <Button
-                        v-if="showCompleteRetentions"
+                        v-if="showCompleteRetentions && can('edit', 'shops')"
                         variant="outline"
                         size="sm"
                         :disabled="completeRetentionsForm.processing"
@@ -312,12 +319,12 @@ watch(
                         <ClipboardList class="size-4" />
                         {{ completeRetentionsForm.processing ? "Completando…" : "Completar retenciones" }}
                     </Button>
-                    <Button variant="outline" size="sm" @click="shopExportModal?.open()">
+                    <Button v-if="can('view', 'shops')" variant="outline" size="sm" @click="shopExportModal?.open()">
                         <Download class="size-4" />
                         Descargar
                     </Button>
                     <Button
-                        v-if="isActiveRetention"
+                        v-if="isActiveRetention && can('create', 'shops')"
                         variant="outline"
                         size="sm"
                         class="hidden font-bold md:inline-flex"

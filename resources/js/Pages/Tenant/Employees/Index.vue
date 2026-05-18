@@ -2,7 +2,10 @@
 import { Head, useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import type { Paginator } from "@/types";
+import { usePermissions } from "@/composables/usePermissions";
 import TenantLayout from "@/layouts/TenantLayout.vue";
+
+const { can } = usePermissions();
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -133,7 +136,7 @@ function goToPage(url: string | null) {
                         Gestiona los empleados de tu empresa.
                     </p>
                 </div>
-                <Button @click="openCreate">
+                <Button v-if="can('create', 'employees')" @click="openCreate">
                     <Plus class="size-4" />
                     Nuevo empleado
                 </Button>
@@ -173,6 +176,7 @@ function goToPage(url: string | null) {
                                     class="flex items-center justify-end gap-2"
                                 >
                                     <Button
+                                        v-if="can('edit', 'employees')"
                                         variant="ghost"
                                         size="icon"
                                         @click="openEdit(employee)"
@@ -180,6 +184,7 @@ function goToPage(url: string | null) {
                                         <Pencil class="size-4" />
                                     </Button>
                                     <Button
+                                        v-if="can('delete', 'employees')"
                                         variant="ghost"
                                         size="icon"
                                         class="text-destructive hover:text-destructive"

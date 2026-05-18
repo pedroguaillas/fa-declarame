@@ -2,6 +2,7 @@
 import { Head, useForm } from "@inertiajs/vue3";
 import { computed, ref } from "vue";
 import type { TenantRole, TenantModelEntity } from "@/types/tenant";
+import { usePermissions } from "@/composables/usePermissions";
 import AppLayout from "@/layouts/AppLayout.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,8 @@ import { ShieldCheck, ArrowLeft } from "lucide-vue-next";
 import { router } from "@inertiajs/vue3";
 import GroupCheckMatrix from "@/components/Shared/GroupCheckMatrix.vue";
 import type { SelectionGroup } from "@/components/Shared/GroupCheckMatrix.vue";
+
+const { can } = usePermissions();
 
 const props = defineProps<{
     role?: TenantRole;
@@ -148,7 +151,7 @@ function submit() {
                     <Button type="button" variant="outline" class="w-full sm:w-auto" @click="router.visit(route('tenant.roles.index'))">
                         Cancelar
                     </Button>
-                    <Button type="submit" class="w-full sm:w-auto" :disabled="form.processing">
+                    <Button v-if="can(isEditing ? 'edit' : 'create', 'roles')" type="submit" class="w-full sm:w-auto" :disabled="form.processing">
                         {{ form.processing ? "Guardando..." : isEditing ? "Actualizar rol" : "Crear rol" }}
                     </Button>
                 </div>

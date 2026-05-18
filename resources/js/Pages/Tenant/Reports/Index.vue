@@ -3,6 +3,7 @@ import TenantLayout from "@/layouts/TenantLayout.vue";
 import HeaderList from "@/components/Shared/HeaderList.vue";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "@inertiajs/vue3";
+import { usePermissions } from "@/composables/usePermissions";
 import {
     BookOpen,
     FileText,
@@ -12,6 +13,8 @@ import {
     UserCheck,
     ArrowRight,
 } from "lucide-vue-next";
+
+const { can } = usePermissions();
 
 const comprasReports = [
     {
@@ -63,7 +66,8 @@ defineOptions({ layout: TenantLayout });
 
     <div class="mt-6 space-y-8 px-1">
         <!-- Compras -->
-        <section>
+        <!-- Compras -->
+        <section v-if="can('view', 'reports')">
             <h2 class="text-muted-foreground mb-3 text-xs font-semibold tracking-widest uppercase">
                 Compras
             </h2>
@@ -93,7 +97,7 @@ defineOptions({ layout: TenantLayout });
         </section>
 
         <!-- Ventas -->
-        <section>
+        <section v-if="can('view', 'reports')">
             <h2 class="text-muted-foreground mb-3 text-xs font-semibold tracking-widest uppercase">
                 Ventas
             </h2>

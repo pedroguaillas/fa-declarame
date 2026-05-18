@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { Head, router } from "@inertiajs/vue3";
 import { ref, watch } from "vue";
+import { usePermissions } from "@/composables/usePermissions";
 import TenantLayout from "@/layouts/TenantLayout.vue";
+
+const { can } = usePermissions();
 import HeaderList from "@/components/Shared/HeaderList.vue";
 import Pagination from "@/components/Shared/Pagination.vue";
 import { Button } from "@/components/ui/button";
@@ -111,7 +114,7 @@ function isConsumidorFinal(contact: Contact) {
             <HeaderList
                 title="Contactos"
                 :description="`${contacts.total} contacto${contacts.total !== 1 ? 's' : ''}`"
-                link-label="Nuevo contacto"
+                :link-label="can('create', 'contacts') ? 'Nuevo contacto' : ''"
                 @click-link="openCreate"
             />
 
@@ -166,6 +169,7 @@ function isConsumidorFinal(contact: Contact) {
                             <TableCell class="text-right">
                                 <div v-if="!isConsumidorFinal(contact)" class="flex items-center justify-end gap-1">
                                     <Button
+                                        v-if="can('edit', 'contacts')"
                                         variant="ghost"
                                         size="icon"
                                         class="h-8 w-8"
@@ -174,6 +178,7 @@ function isConsumidorFinal(contact: Contact) {
                                         <Pencil class="size-4" />
                                     </Button>
                                     <Button
+                                        v-if="can('delete', 'contacts')"
                                         variant="ghost"
                                         size="icon"
                                         class="h-8 w-8 text-destructive hover:text-destructive"

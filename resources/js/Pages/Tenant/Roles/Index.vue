@@ -2,7 +2,6 @@
 import { Head, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import type { TenantRole } from "@/types/tenant";
-import AppLayout from "@/layouts/AppLayout.vue";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2, ShieldCheck } from "lucide-vue-next";
 import { usePermissions } from "@/composables/usePermissions";
+import TenantLayout from "@/layouts/TenantLayout.vue";
 
 const props = defineProps<{
     roles: TenantRole[];
@@ -52,7 +52,7 @@ function handleDelete() {
 
 <template>
     <Head title="Roles del tenant" />
-    <AppLayout>
+    <TenantLayout>
         <div class="space-y-6">
             <div class="flex items-center justify-between">
                 <div>
@@ -143,5 +143,5 @@ function handleDelete() {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    </AppLayout>
+    </TenantLayout>
 </template>

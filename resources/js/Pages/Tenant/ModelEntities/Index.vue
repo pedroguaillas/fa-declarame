@@ -2,7 +2,6 @@
 import { Head, useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import type { TenantModelEntity } from "@/types/tenant";
-import AppLayout from "@/layouts/AppLayout.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Layers, Plus, Pencil, Trash2, X } from "lucide-vue-next";
 import { usePermissions } from "@/composables/usePermissions";
+import TenantLayout from "@/layouts/TenantLayout.vue";
 
 const props = defineProps<{
     modelEntities: TenantModelEntity[];
@@ -149,7 +149,7 @@ function handleDelete() {
 
 <template>
     <Head title="Módulos del tenant" />
-    <AppLayout>
+    <TenantLayout>
         <div class="space-y-6">
             <div class="flex items-center justify-between">
                 <div>
@@ -375,5 +375,5 @@ function handleDelete() {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    </AppLayout>
+    </TenantLayout>
 </template>

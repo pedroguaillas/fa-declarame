@@ -21,7 +21,16 @@ const page = usePage<PageProps>();
 const user = computed(() => page.props.auth.user);
 const currentCompany = computed(() => page.props.currentCompany);
 
-const OVERLAY_EXEMPT = ["Tenant/Companies/Index", "Tenant/Companies/Create", "Tenant/Companies/Edit"];
+const OVERLAY_EXEMPT = [
+    "Tenant/Companies/Index",
+    "Tenant/Companies/Create",
+    "Tenant/Companies/Edit",
+    "Tenant/Profile/Edit",
+    "Tenant/Users/Index",
+    "Tenant/Roles/Index",
+    "Tenant/Roles/Form",
+    "Tenant/ModelEntities/Index",
+];
 const showOverlay = computed(() => !currentCompany.value && !OVERLAY_EXEMPT.includes(page.component as string));
 
 const overlaySearch = ref("");

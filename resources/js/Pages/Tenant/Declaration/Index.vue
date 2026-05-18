@@ -3,6 +3,7 @@ import TenantLayout from "@/layouts/TenantLayout.vue";
 import HeaderList from "@/components/Shared/HeaderList.vue";
 import { router, Link, useForm, usePage } from "@inertiajs/vue3";
 import { ref, computed } from "vue";
+import { usePermissions } from "@/composables/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -40,6 +41,8 @@ interface Summary {
     a_pagar?: number;
     a_cobrar?: number;
 }
+
+const { can } = usePermissions();
 
 const props = defineProps<{
     year: number;
@@ -227,6 +230,7 @@ defineOptions({ layout: TenantLayout });
                     </div>
                     <div class="flex justify-end pt-1">
                         <Button
+                            v-if="can('export', 'declaration')"
                             variant="outline"
                             size="sm"
                             @click="downloadReport('tenant.reports.shops-by-voucher-type.export')"
@@ -278,6 +282,7 @@ defineOptions({ layout: TenantLayout });
                     </div>
                     <div class="flex justify-end pt-1">
                         <Button
+                            v-if="can('export', 'declaration')"
                             variant="outline"
                             size="sm"
                             @click="downloadReport('tenant.reports.orders-by-voucher-type.export')"
@@ -305,7 +310,7 @@ defineOptions({ layout: TenantLayout });
                         Genera el XML del Anexo Transaccional para
                         <strong>{{ monthName(month) }} {{ year }}</strong> listo para subir al portal del SRI.
                     </p>
-                    <Button @click="downloadAts">
+                    <Button v-if="can('export', 'declaration')" @click="downloadAts">
                         <FileSpreadsheet class="size-4" />
                         Descargar ATS XML
                     </Button>
@@ -339,6 +344,7 @@ defineOptions({ layout: TenantLayout });
                             </p>
                         </div>
                         <Button
+                            v-if="can('export', 'declaration')"
                             :disabled="!importForm.file || importForm.processing"
                             @click="submitImport"
                         >
@@ -360,6 +366,7 @@ defineOptions({ layout: TenantLayout });
                 <Link
                     v-for="r in reportLinks"
                     :key="r.route"
+                    v-if="can('view', 'reports')"
                     :href="route(r.route)"
                     class="group flex items-center gap-3 rounded-lg border bg-card px-4 py-3 transition-shadow hover:shadow-md"
                 >

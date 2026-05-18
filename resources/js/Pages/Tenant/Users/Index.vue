@@ -3,7 +3,6 @@ import { Head, useForm, router } from "@inertiajs/vue3";
 import { ref } from "vue";
 import type { TenantUser, TenantRole } from "@/types/tenant";
 import type { Paginator } from "@/types";
-import AppLayout from "@/layouts/AppLayout.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import { Users, Plus, Pencil, Trash2 } from "lucide-vue-next";
 import { usePermissions } from "@/composables/usePermissions";
+import TenantLayout from "@/layouts/TenantLayout.vue";
 
 const props = defineProps<{
     users: Paginator<TenantUser>;
@@ -128,8 +128,9 @@ function goToPage(url: string | null) {
 </script>
 
 <template>
+
     <Head title="Usuarios del tenant" />
-    <AppLayout>
+    <TenantLayout>
         <div class="space-y-6">
             <div class="flex items-center justify-between">
                 <div>
@@ -172,20 +173,17 @@ function goToPage(url: string | null) {
                                 {{ user.central_user?.name ?? "—" }}
                             </TableCell>
                             <TableCell class="text-center">
-                                <Switch
-                                    v-if="can('edit', 'users')"
-                                    :model-value="user.is_active"
-                                    @update:model-value="toggleActive(user)"
-                                />
+                                <Switch v-if="can('edit', 'users')" :model-value="user.is_active"
+                                    @update:model-value="toggleActive(user)" />
                             </TableCell>
                             <TableCell class="text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <Button v-if="can('edit', 'users')" variant="ghost" size="icon" @click="openEdit(user)">
+                                    <Button v-if="can('edit', 'users')" variant="ghost" size="icon"
+                                        @click="openEdit(user)">
                                         <Pencil class="size-4" />
                                     </Button>
                                     <Button v-if="can('delete', 'users')" variant="ghost" size="icon"
-                                        class="text-destructive hover:text-destructive"
-                                        @click="confirmDelete(user)">
+                                        class="text-destructive hover:text-destructive" @click="confirmDelete(user)">
                                         <Trash2 class="size-4" />
                                     </Button>
                                 </div>
@@ -206,8 +204,7 @@ function goToPage(url: string | null) {
                     </p>
                     <div class="flex gap-1">
                         <Button v-for="link in users.links" :key="link.label" variant="outline" size="sm"
-                            :disabled="!link.url"
-                            :class="{ 'bg-primary text-primary-foreground': link.active }"
+                            :disabled="!link.url" :class="{ 'bg-primary text-primary-foreground': link.active }"
                             @click="goToPage(link.url)" v-html="link.label" />
                     </div>
                 </div>
@@ -227,30 +224,35 @@ function goToPage(url: string | null) {
                             <Label>Nombre</Label>
                             <Input v-model="createForm.name" placeholder="Nombre completo"
                                 :class="{ 'border-destructive': createForm.errors.name }" />
-                            <p v-if="createForm.errors.name" class="text-xs text-destructive">{{ createForm.errors.name }}</p>
+                            <p v-if="createForm.errors.name" class="text-xs text-destructive">{{ createForm.errors.name
+                                }}</p>
                         </div>
                         <div class="space-y-2">
                             <Label>Usuario</Label>
                             <Input v-model="createForm.username" placeholder="nombre_usuario"
                                 :class="{ 'border-destructive': createForm.errors.username }" />
-                            <p v-if="createForm.errors.username" class="text-xs text-destructive">{{ createForm.errors.username }}</p>
+                            <p v-if="createForm.errors.username" class="text-xs text-destructive">{{
+                                createForm.errors.username }}</p>
                         </div>
                         <div class="space-y-2">
                             <Label>Correo electrónico</Label>
                             <Input v-model="createForm.email" type="email" placeholder="correo@ejemplo.com"
                                 :class="{ 'border-destructive': createForm.errors.email }" />
-                            <p v-if="createForm.errors.email" class="text-xs text-destructive">{{ createForm.errors.email }}</p>
+                            <p v-if="createForm.errors.email" class="text-xs text-destructive">{{
+                                createForm.errors.email }}</p>
                         </div>
                         <div class="space-y-2">
                             <Label>Contraseña</Label>
                             <Input v-model="createForm.password" type="password" placeholder="Mínimo 8 caracteres"
                                 :class="{ 'border-destructive': createForm.errors.password }" />
-                            <p v-if="createForm.errors.password" class="text-xs text-destructive">{{ createForm.errors.password }}</p>
+                            <p v-if="createForm.errors.password" class="text-xs text-destructive">{{
+                                createForm.errors.password }}</p>
                         </div>
                         <div class="space-y-2">
                             <Label>Rol</Label>
                             <Select v-model="createForm.role_id">
-                                <SelectTrigger class="w-full" :class="{ 'border-destructive': createForm.errors.role_id }">
+                                <SelectTrigger class="w-full"
+                                    :class="{ 'border-destructive': createForm.errors.role_id }">
                                     <SelectValue placeholder="Seleccionar rol..." />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -259,7 +261,8 @@ function goToPage(url: string | null) {
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <p v-if="createForm.errors.role_id" class="text-xs text-destructive">{{ createForm.errors.role_id }}</p>
+                            <p v-if="createForm.errors.role_id" class="text-xs text-destructive">{{
+                                createForm.errors.role_id }}</p>
                         </div>
                         <div class="col-span-2 flex items-center gap-3">
                             <Switch :model-value="createForm.is_active"
@@ -287,18 +290,22 @@ function goToPage(url: string | null) {
                         <div class="space-y-2">
                             <Label>Nombre</Label>
                             <Input v-model="editForm.name" :class="{ 'border-destructive': editForm.errors.name }" />
-                            <p v-if="editForm.errors.name" class="text-xs text-destructive">{{ editForm.errors.name }}</p>
+                            <p v-if="editForm.errors.name" class="text-xs text-destructive">{{ editForm.errors.name }}
+                            </p>
                         </div>
                         <div class="space-y-2">
                             <Label>Usuario</Label>
-                            <Input v-model="editForm.username" :class="{ 'border-destructive': editForm.errors.username }" />
-                            <p v-if="editForm.errors.username" class="text-xs text-destructive">{{ editForm.errors.username }}</p>
+                            <Input v-model="editForm.username"
+                                :class="{ 'border-destructive': editForm.errors.username }" />
+                            <p v-if="editForm.errors.username" class="text-xs text-destructive">{{
+                                editForm.errors.username }}</p>
                         </div>
                         <div class="space-y-2">
                             <Label>Correo electrónico</Label>
                             <Input v-model="editForm.email" type="email"
                                 :class="{ 'border-destructive': editForm.errors.email }" />
-                            <p v-if="editForm.errors.email" class="text-xs text-destructive">{{ editForm.errors.email }}</p>
+                            <p v-if="editForm.errors.email" class="text-xs text-destructive">{{ editForm.errors.email }}
+                            </p>
                         </div>
                         <div class="col-span-2 space-y-2">
                             <Label>Nueva contraseña
@@ -349,5 +356,5 @@ function goToPage(url: string | null) {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    </AppLayout>
+    </TenantLayout>
 </template>

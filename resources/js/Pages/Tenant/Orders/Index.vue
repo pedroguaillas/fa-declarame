@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm, usePage } from "@inertiajs/vue3";
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { usePermissions } from "@/composables/usePermissions";
 
 import ConfirmDialog from "@/components/Shared/ConfirmDialog.vue";
 import DataTableDesktop from "@/components/Shared/DataTableDesktop.vue";
@@ -26,6 +27,8 @@ interface OrderFilters {
     period: string;
     voucher_type: string;
 }
+
+const { can } = usePermissions();
 
 const props = defineProps<{
     orders: Paginator<Order>;
@@ -80,30 +83,32 @@ const columns: ColumnDef<Order>[] = [
     },
 ];
 
-const actions: ActionDef<Order>[] = [
-    {
-        event: "retention",
-        label: "Retención",
-        icon: Receipt,
-        show: (item) => (item as any).code !== "04",
-        class: (item) =>
-            item.serie_retention
-                ? "text-green-600! hover:bg-green-100!"
-                : "bg-muted text-muted-foreground hover:bg-muted/80",
-    },
-    {
-        event: "edit",
-        label: "Editar",
-        icon: Pencil,
-    },
-    {
-        event: "delete",
-        label: "Eliminar",
-        icon: Trash2,
-        separator: true,
-        class: "text-destructive focus:text-destructive",
-    },
-];
+const actions = computed<ActionDef<Order>[]>(() => {
+    const items: ActionDef<Order>[] = [];
+    if (can("edit", "orders")) {
+        items.push({
+            event: "retention",
+            label: "Retención",
+            icon: Receipt,
+            show: (item) => (item as any).code !== "04",
+            class: (item) =>
+                item.serie_retention
+                    ? "text-green-600! hover:bg-green-100!"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80",
+        });
+        items.push({ event: "edit", label: "Editar", icon: Pencil });
+    }
+    if (can("delete", "orders")) {
+        items.push({
+            event: "delete",
+            label: "Eliminar",
+            icon: Trash2,
+            separator: true,
+            class: "text-destructive focus:text-destructive",
+        });
+    }
+    return items;
+});
 
 // ─── Filters ────────────────────────────────────────────────────────────────
 
@@ -217,14 +222,14 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
             <HeaderList
                 title="Ventas"
                 :description="`${orders.total} venta${orders.total !== 1 ? 's' : ''} registrada${orders.total !== 1 ? 's' : ''}`"
-                link-label="Nueva venta"
-                :link-href="route('tenant.orders.create')"
-                :show-import="true"
+                :link-label="can('create', 'orders') ? 'Nueva venta' : ''"
+                :link-href="can('create', 'orders') ? route('tenant.orders.create') : ''"
+                :show-import="can('create', 'orders')"
                 import-label="Importar SRI"
                 @click-import="importFileInput?.click()"
             >
                 <template #extra-actions>
-                    <Button variant="outline" size="sm" @click="orderExportModal?.open()">
+                    <Button v-if="can('view', 'orders')" variant="outline" size="sm" @click="orderExportModal?.open()">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             fill="none"
@@ -242,6 +247,7 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
                         <span class="hidden md:inline-block">Exportar Excel</span>
                     </Button>
                     <Button
+                        v-if="can('create', 'orders')"
                         variant="outline"
                         size="sm"
                         class="hidden font-bold md:inline-flex"

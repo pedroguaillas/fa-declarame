@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { Head, useForm } from "@inertiajs/vue3";
+import { usePermissions } from "@/composables/usePermissions";
 
 import HeaderForm from "@/components/Shared/HeaderForm.vue";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import ShopForm from "./partials/ShopForm.vue";
 import { VoucherType } from "@/types/tenant";
+
+const { can } = usePermissions();
 
 const props = defineProps<{
     voucherTypes: VoucherType[];
@@ -65,6 +68,7 @@ function submit() {
                     :form="form"
                     :voucher-types="props.voucherTypes"
                     submit-label="Registrar compra"
+                    :submit-disabled="!can('create', 'shops')"
                     @submit="submit"
                 />
             </div>

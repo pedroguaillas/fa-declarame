@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import AppLayout from "@/layouts/AppLayout.vue";
 import { Head, router } from "@inertiajs/vue3";
+import { computed } from "vue";
 import type { Paginator } from "@/types";
 import type { ActionPayload, ColumnDef } from "@/types/shared";
 import { Company } from "@/types/tenant";
+import { usePermissions } from "@/composables/usePermissions";
 
 import DataTableDesktop from "@/components/Shared/DataTableDesktop.vue";
 import DataTableMobile from "@/components/Shared/DataTableMobile.vue";
 import HeaderList from "@/components/Shared/HeaderList.vue";
 import Pagination from "@/components/Shared/Pagination.vue";
 import TenantLayout from "@/layouts/TenantLayout.vue";
+
+const { can } = usePermissions();
 
 const props = defineProps<{
     companies: Paginator<Company>;
@@ -38,12 +42,11 @@ const columns: ColumnDef<Company>[] = [
     { key: "email", label: "Email" },
 ];
 
-const actions = [
-    {
-        event: "edit",
-        label: "Editar",
-    },
-];
+const actions = computed(() => {
+    const items: { event: string; label: string }[] = [];
+    if (can("edit", "companies")) items.push({ event: "edit", label: "Editar" });
+    return items;
+});
 
 function handleAction({ event, item }: ActionPayload<Company>) {
     if (event === "edit") {
@@ -70,8 +73,8 @@ function handlePageChange(page: number) {
             <HeaderList
                 title="Contribuyentes"
                 :description="`${companies.total} contribuyente${companies.total !== 1 ? 's' : ''} registrado${companies.total !== 1 ? 's' : ''}`"
-                link-label="Nuevo contribuyente"
-                :link-href="route('tenant.companies.create')"
+                :link-label="can('create', 'companies') ? 'Nuevo contribuyente' : ''"
+                :link-href="can('create', 'companies') ? route('tenant.companies.create') : ''"
             />
 
             <div

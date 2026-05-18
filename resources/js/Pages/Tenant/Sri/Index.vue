@@ -2,8 +2,11 @@
 import { useForm, usePage } from "@inertiajs/vue3";
 import { ref, computed } from "vue";
 
+import { usePermissions } from "@/composables/usePermissions";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import HeaderList from "@/components/Shared/HeaderList.vue";
+
+const { can } = usePermissions();
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -141,7 +144,7 @@ defineOptions({ layout: TenantLayout });
                             </Select>
                         </div>
 
-                        <Button @click="downloadAts" class="font-bold">
+                        <Button v-if="can('export', 'declaration')" @click="downloadAts" class="font-bold">
                             <FileDown class="size-4" />
                             Descargar XML
                         </Button>
@@ -177,6 +180,7 @@ defineOptions({ layout: TenantLayout });
                         </div>
 
                         <Button
+                            v-if="can('export', 'declaration')"
                             @click="submitImport"
                             :disabled="!importForm.file || importForm.processing"
                             class="font-bold"

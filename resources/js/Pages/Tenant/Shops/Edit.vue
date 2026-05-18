@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { Head, useForm } from "@inertiajs/vue3";
+import { usePermissions } from "@/composables/usePermissions";
 
 import HeaderForm from "@/components/Shared/HeaderForm.vue";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import ShopForm from "./partials/ShopForm.vue";
 import { Shop, VoucherType } from "@/types/tenant";
+
+const { can } = usePermissions();
 
 const props = defineProps<{
     shop: Shop;
@@ -78,6 +81,7 @@ function submit() {
                     :initial-contact-name="props.shop.contact?.name ?? ''"
                     :with-cedula="props.shop.data_additional?.with_cedula ?? false"
                     submit-label="Actualizar compra"
+                    :submit-disabled="!can('edit', 'shops')"
                     @submit="submit"
                 />
             </div>
