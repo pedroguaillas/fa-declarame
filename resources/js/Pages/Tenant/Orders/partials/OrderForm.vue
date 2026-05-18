@@ -55,10 +55,12 @@ const props = withDefaults(
         submitLabel: string;
         initialContactIdentification?: string;
         initialContactName?: string;
+        submitDisabled?: boolean;
     }>(),
     {
         initialContactIdentification: "",
         initialContactName: "",
+        submitDisabled: false,
     },
 );
 
@@ -441,7 +443,7 @@ watchEffect(() => {
                 <Link :href="route('tenant.orders.index')"> Cancelar </Link>
             </Button>
 
-            <Button type="submit" :disabled="form.processing">
+            <Button type="submit" :disabled="form.processing || props.submitDisabled">
                 {{ form.processing ? "Guardando..." : submitLabel }}
             </Button>
         </div>

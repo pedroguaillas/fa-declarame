@@ -1,18 +1,16 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\ModelEntityController;
-use App\Http\Controllers\PermissionController;
-use App\Http\Controllers\PlanController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\RoleController;
-use App\Http\Controllers\SubscriptionController;
-use App\Http\Controllers\TenantController;
-use App\Http\Controllers\UserController;
+use App\Http\Controllers\Central\DashboardController;
+use App\Http\Controllers\Central\ModelEntityController;
+use App\Http\Controllers\Central\PlanController;
+use App\Http\Controllers\Central\ProfileController;
+use App\Http\Controllers\Central\RoleController;
+use App\Http\Controllers\Central\SubscriptionController;
+use App\Http\Controllers\Central\TenantController;
+use App\Http\Controllers\Central\UserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -61,8 +59,6 @@ Route::middleware(['auth', 'check.active', 'central.only'])->group(function () {
 
         Route::resource('roles', RoleController::class)
             ->except(['show']);
-        Route::resource('permissions', PermissionController::class)
-            ->except(['show', 'create', 'edit']);
         Route::resource('model-entities', ModelEntityController::class)
             ->except(['show', 'create', 'edit']);
     });

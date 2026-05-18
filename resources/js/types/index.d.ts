@@ -18,6 +18,7 @@ export interface Domain {
 export interface User {
     id: number;
     name: string;
+    username: string;
     email: string;
     role: Role;
     admin_id: number | null;
@@ -25,6 +26,7 @@ export interface User {
     tenant_id: string | null;
     tenant?: Tenant;
     is_active: boolean;
+    permissions: { permission: string; model: string }[];
     has_active_subscription: boolean | null;
 }
 
@@ -74,6 +76,7 @@ export interface ModelEntity {
     name: string;
     slug: string;
     description: string | null;
+    permissions?: Permission[];
     model_permissions_count?: number;
 }
 
@@ -123,6 +126,6 @@ export type PageProps<
     tenant: {
         id: string;
         name: string;
-    };
+    } | null;
     ziggy: Config & { location: string };
 };

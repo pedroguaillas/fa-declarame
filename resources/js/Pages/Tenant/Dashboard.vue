@@ -2,6 +2,7 @@
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Head, Link } from "@inertiajs/vue3";
 import { computed, ref } from "vue";
+import { usePermissions } from "@/composables/usePermissions";
 import {
     Building2,
     MapPin,
@@ -14,6 +15,8 @@ import {
     ArrowRight,
     BadgeCheck,
 } from "lucide-vue-next";
+
+const { can } = usePermissions();
 
 interface PeriodStats {
     count: number;
@@ -62,12 +65,12 @@ const props = defineProps<{
     topProviders: Provider[];
 }>();
 
-const quickLinks = [
-    { title: "Descarga automática", icon: CloudDownload, route: "tenant.sri-scrape.index" },
-    { title: "Compras", icon: ShoppingCart, route: "tenant.shops.index" },
-    { title: "Ventas", icon: ReceiptIndianRupee, route: "tenant.orders.index" },
-    { title: "Declaración", icon: ClipboardList, route: "tenant.declaration.index" },
-];
+const quickLinks = computed(() => [
+    { title: "Descarga automática", icon: CloudDownload, route: "tenant.sri-scrape.index", show: can("execute", "sri_scrape") },
+    { title: "Compras", icon: ShoppingCart, route: "tenant.shops.index", show: can("view", "shops") },
+    { title: "Ventas", icon: ReceiptIndianRupee, route: "tenant.orders.index", show: can("view", "orders") },
+    { title: "Declaración", icon: ClipboardList, route: "tenant.declaration.index", show: can("view", "declaration") },
+].filter((l) => l.show));
 
 const activePeriod = ref<"month" | "year">("month");
 const stats = computed(() => (activePeriod.value === "month" ? props.month : props.year));

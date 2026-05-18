@@ -13,12 +13,15 @@ class EnsureCentralUser
     {
         $user = user();
 
-        if (!$user) {
+        if (! $user) {
             return redirect()->route('login');
         }
 
-        // Solo super_admin puede acceder al panel central
-        if (!method_exists($user, 'isSuperAdmin') || !$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
+            if ($user->resolveAdmin()->isSuperAdmin()) {
+                return $next($request);
+            }
+
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

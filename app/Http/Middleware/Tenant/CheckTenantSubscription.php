@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware\Tenant;
 
-use App\Models\User as CentralUser;
+use App\Models\Central\User as CentralUser;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,7 +29,11 @@ class CheckTenantSubscription
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
-            return redirect()->route('login')->withErrors([
+            $centralDomain = config('tenancy.central_domains')[0] ?? 'localhost';
+            $scheme = $request->getScheme();
+            $loginUrl = "{$scheme}://{$centralDomain}/login";
+
+            return redirect()->away($loginUrl)->withErrors([
                 'username' => 'La suscripción de esta empresa ha vencido. Contacta al administrador.',
             ]);
         }

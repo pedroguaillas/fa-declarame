@@ -10,10 +10,13 @@ return new class extends Migration
     {
         Schema::create('permissions', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('model_entity_id')->constrained()->cascadeOnDelete();
             $table->string('name');
-            $table->string('slug')->unique();
+            $table->string('slug');
             $table->string('description')->nullable();
             $table->timestamps();
+
+            $table->unique(['model_entity_id', 'slug']);
         });
     }
 

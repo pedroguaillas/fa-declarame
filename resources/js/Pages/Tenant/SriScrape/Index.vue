@@ -2,8 +2,11 @@
 import { Head, useForm, usePage, Link } from "@inertiajs/vue3";
 import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 
+import { usePermissions } from "@/composables/usePermissions";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import HeaderList from "@/components/Shared/HeaderList.vue";
+
+const { can } = usePermissions();
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -249,7 +252,7 @@ defineOptions({ layout: TenantLayout });
         </Alert>
 
         <!-- Form -->
-        <Card>
+        <Card v-if="can('execute', 'sri_scrape')">
             <CardHeader>
                 <CardTitle class="text-lg">Nueva descarga</CardTitle>
             </CardHeader>

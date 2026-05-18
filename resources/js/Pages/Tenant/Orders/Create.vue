@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { Head, useForm } from "@inertiajs/vue3";
+import { usePermissions } from "@/composables/usePermissions";
 
 import HeaderForm from "@/components/Shared/HeaderForm.vue";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import OrderForm from "./partials/OrderForm.vue";
 import type { VoucherType } from "@/types/tenant";
+
+const { can } = usePermissions();
 
 const props = defineProps<{
     voucherTypes: VoucherType[];
@@ -54,7 +57,7 @@ function submit() {
             <HeaderForm title="Nueva Venta" :link-href="route('tenant.orders.index')" />
 
             <div class="border-border bg-card overflow-hidden rounded-lg border">
-                <OrderForm :form="form" :voucher-types="props.voucherTypes" submit-label="Registrar venta" @submit="submit" />
+                <OrderForm :form="form" :voucher-types="props.voucherTypes" submit-label="Registrar venta" :submit-disabled="!can('create', 'orders')" @submit="submit" />
             </div>
         </div>
     </TenantLayout>

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\User as CentralUser;
+use App\Models\Central\User;
 use App\Services\SSOTokenService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +17,7 @@ class AuthController extends Controller
 
     public function showLogin(): InertiaResponse
     {
-        return Inertia::render('Auth/Login');
+        return Inertia::render('Central/Auth/Login');
     }
 
     public function login(Request $request): Response
@@ -39,8 +39,8 @@ class AuthController extends Controller
 
         return match (true) {
             $user->isSuperAdmin() => redirect()->intended(route('dashboard')),
-            $user->isAdmin() => $this->redirectToTenant($user),
-            default => Inertia::location(route('login')),
+            $user->isAdmin() => $this->redirectToTenant($request, $user),
+            default => $this->redirectEmployee($request, $user),
         };
     }
 
@@ -58,8 +58,18 @@ class AuthController extends Controller
         return Inertia::location(route('login'));
     }
 
-    private function redirectToTenant(CentralUser $user): Response
+    private function redirectToTenant(Request $request, User $user): Response
     {
+        if (! $user->hasActiveSubscription()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')->withErrors([
+                'username' => 'No tienes una suscripción activa. Contacta al administrador.',
+            ]);
+        }
+
         $domain = $user->tenant->domains()->value('domain');
 
         $token = $this->tokenService->generate(
@@ -73,5 +83,16 @@ class AuthController extends Controller
         return Inertia::location(
             tenant_route($domain, 'tenant.sso', ['token' => $token])
         );
+    }
+
+    private function redirectEmployee(Request $request, User $user): Response
+    {
+        $admin = $user->resolveAdmin();
+
+        return match (true) {
+            $admin->isSuperAdmin() => redirect()->intended(route('dashboard')),
+            $admin->isAdmin() => $this->redirectToTenant($request, $admin),
+            default => Inertia::location(route('login')),
+        };
     }
 }

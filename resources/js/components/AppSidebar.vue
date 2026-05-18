@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/sidebar";
 
 const page = usePage<PageProps>();
-const user = computed(() => page.props.auth.user);
-const { navItems } = useNavigation(user.value);
+const user = page.props.auth.user;
+const hasTenant = computed(() => !!page.props.tenant);
+const { navItems } = useNavigation(user, hasTenant);
 </script>
 
 <template>

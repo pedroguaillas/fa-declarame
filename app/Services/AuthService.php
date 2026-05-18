@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\User as CentralUser;
+use App\Models\Central\User as CentralUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -13,10 +13,12 @@ class AuthService
     public function verifiyAccess(Request $request)
     {
         $token = $request->query('token');
-        if (!$token) return false;
+        if (! $token) {
+            return false;
+        }
 
         $payload = $this->tokenService->validate($token);
-        if (!$payload || $payload['tenant_id'] !== tenant('id')) {
+        if (! $payload || $payload['tenant_id'] !== tenant('id')) {
             return false;
         }
 

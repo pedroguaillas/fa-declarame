@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { Head, useForm } from "@inertiajs/vue3";
+import { usePermissions } from "@/composables/usePermissions";
 
 import HeaderForm from "@/components/Shared/HeaderForm.vue";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import OrderForm from "./partials/OrderForm.vue";
 import type { Order, VoucherType } from "@/types/tenant";
+
+const { can } = usePermissions();
 
 const props = defineProps<{
     order: Order;
@@ -70,6 +73,7 @@ function submit() {
                     :initial-contact-identification="props.order.contact?.identification ?? ''"
                     :initial-contact-name="props.order.contact?.name ?? ''"
                     submit-label="Actualizar venta"
+                    :submit-disabled="!can('edit', 'orders')"
                     @submit="submit"
                 />
             </div>

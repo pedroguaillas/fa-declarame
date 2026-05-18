@@ -18,7 +18,6 @@ import { VoucherType } from "@/types/tenant";
 import type { InertiaForm } from "@inertiajs/vue3";
 
 interface ShopFormFields {
-    contact_id: number | null;
     voucher_type_id: number | string;
     type_identification: string | undefined;
     emision: string;
@@ -62,11 +61,13 @@ const props = withDefaults(
         initialContactIdentification?: string;
         initialContactName?: string;
         withCedula?: boolean;
+        submitDisabled?: boolean;
     }>(),
     {
         initialContactIdentification: "",
         initialContactName: "",
         withCedula: false,
+        submitDisabled: false,
     },
 );
 
@@ -575,7 +576,7 @@ watch(
                 <Link :href="route('tenant.shops.index')"> Cancelar </Link>
             </Button>
 
-            <Button type="submit" :disabled="form.processing">
+            <Button type="submit" :disabled="form.processing || props.submitDisabled">
                 {{ form.processing ? "Guardando..." : submitLabel }}
             </Button>
         </div>

@@ -2,7 +2,7 @@
 
 namespace App\Models\Tenant;
 
-use App\Models\User as CentralUser;
+use App\Models\Central\User as CentralUser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -16,11 +16,14 @@ class User extends Authenticatable
         'name',
         'email',
         'username',
+        'password',
         'central_user_id',
+        'role_id',
         'is_active',
     ];
 
     protected $hidden = [
+        'password',
         'remember_token',
     ];
 
@@ -28,11 +31,17 @@ class User extends Authenticatable
     {
         return [
             'is_active' => 'boolean',
+            'password' => 'hashed',
         ];
     }
 
     public function centralUser(): BelongsTo
     {
         return $this->belongsTo(CentralUser::class, 'central_user_id');
+    }
+
+    public function role(): BelongsTo
+    {
+        return $this->belongsTo(Role::class);
     }
 }

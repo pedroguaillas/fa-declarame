@@ -12,12 +12,15 @@ use App\Http\Controllers\Tenant\ContactController;
 use App\Http\Controllers\Tenant\DashboardController as TenantDashboardController;
 use App\Http\Controllers\Tenant\DeclarationController;
 use App\Http\Controllers\Tenant\EmployeeController;
+use App\Http\Controllers\Tenant\ModelEntityController;
 use App\Http\Controllers\Tenant\OrderController;
 use App\Http\Controllers\Tenant\ProfileController as TenantProfileController;
 use App\Http\Controllers\Tenant\ReportController;
 use App\Http\Controllers\Tenant\RetentionController;
+use App\Http\Controllers\Tenant\RoleController as TenantRoleController;
 use App\Http\Controllers\Tenant\ShopController;
 use App\Http\Controllers\Tenant\SriScrapeController;
+use App\Http\Controllers\Tenant\UserController as TenantUserController;
 use App\Http\Middleware\Tenant\RequireCompanyScope;
 use Illuminate\Support\Facades\Route;
 
@@ -157,5 +160,23 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
             ->except(['show', 'create', 'edit']);
         Route::patch('employees/{employee}/toggle-active', [EmployeeController::class, 'toggleActive'])
             ->name('employees.toggle-active');
+
+        Route::get('model-entities', [ModelEntityController::class, 'index'])->name('tenant.model-entities.index');
+        Route::post('model-entities', [ModelEntityController::class, 'store'])->name('tenant.model-entities.store');
+        Route::patch('model-entities/{modelEntity}', [ModelEntityController::class, 'update'])->name('tenant.model-entities.update');
+        Route::delete('model-entities/{modelEntity}', [ModelEntityController::class, 'destroy'])->name('tenant.model-entities.destroy');
+
+        Route::get('roles', [TenantRoleController::class, 'index'])->name('tenant.roles.index');
+        Route::get('roles/create', [TenantRoleController::class, 'create'])->name('tenant.roles.create');
+        Route::post('roles', [TenantRoleController::class, 'store'])->name('tenant.roles.store');
+        Route::get('roles/{role}/edit', [TenantRoleController::class, 'edit'])->name('tenant.roles.edit');
+        Route::put('roles/{role}', [TenantRoleController::class, 'update'])->name('tenant.roles.update');
+        Route::delete('roles/{role}', [TenantRoleController::class, 'destroy'])->name('tenant.roles.destroy');
+
+        Route::get('users', [TenantUserController::class, 'index'])->name('tenant.users.index');
+        Route::post('users', [TenantUserController::class, 'store'])->name('tenant.users.store');
+        Route::patch('users/{user}', [TenantUserController::class, 'update'])->name('tenant.users.update');
+        Route::delete('users/{user}', [TenantUserController::class, 'destroy'])->name('tenant.users.destroy');
+        Route::patch('users/{user}/toggle-active', [TenantUserController::class, 'toggleActive'])->name('tenant.users.toggle-active');
     });
 });

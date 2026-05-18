@@ -2,10 +2,9 @@
 
 namespace Database\Seeders;
 
-use App\Models\ModelEntity;
-use App\Models\ModelPermission;
-use App\Models\Permission;
-use App\Models\Role;
+use App\Models\Central\ModelEntity;
+use App\Models\Central\ModelPermission;
+use App\Models\Central\Role;
 use Illuminate\Database\Seeder;
 
 class ModelPermissionSeeder extends Seeder
@@ -13,42 +12,24 @@ class ModelPermissionSeeder extends Seeder
     public function run(): void
     {
         $roles = Role::all()->keyBy('slug');
-        $permissions = Permission::all()->keyBy('slug');
-        $models = ModelEntity::all()->keyBy('slug');
+        $models = ModelEntity::with('permissions')->get()->keyBy('slug');
 
-        $allPermissions = ['view', 'create', 'edit', 'delete', 'assign'];
         $allModels = ['permissions', 'models', 'roles', 'users', 'plans', 'subscriptions'];
 
-        // Super Admin → todo
+        // Super Admin → todos los permisos de todos los módulos
         foreach ($allModels as $modelSlug) {
-            foreach ($allPermissions as $permSlug) {
+            $model = $models[$modelSlug] ?? null;
+            if (! $model) {
+                continue;
+            }
+
+            foreach ($model->permissions as $perm) {
                 ModelPermission::updateOrCreate([
                     'role_id' => $roles['super_admin']->id,
-                    'permission_id' => $permissions[$permSlug]->id,
-                    'model_entity_id' => $models[$modelSlug]->id,
+                    'permission_id' => $perm->id,
+                    'model_entity_id' => $model->id,
                 ]);
             }
         }
-
-        // Admin → ver, crear, editar, eliminar usuarios y suscripciones
-        $adminPermissions = ['view', 'create', 'edit', 'delete'];
-        $adminModels = ['users', 'subscriptions'];
-
-        foreach ($adminModels as $modelSlug) {
-            foreach ($adminPermissions as $permSlug) {
-                ModelPermission::updateOrCreate([
-                    'role_id' => $roles['admin']->id,
-                    'permission_id' => $permissions[$permSlug]->id,
-                    'model_entity_id' => $models[$modelSlug]->id,
-                ]);
-            }
-        }
-
-        // Employee → solo ver usuarios
-        ModelPermission::updateOrCreate([
-            'role_id' => $roles['employee']->id,
-            'permission_id' => $permissions['view']->id,
-            'model_entity_id' => $models['users']->id,
-        ]);
     }
 }

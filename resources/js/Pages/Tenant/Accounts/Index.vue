@@ -2,6 +2,9 @@
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Head, useForm } from "@inertiajs/vue3";
 import { ref } from "vue";
+import { usePermissions } from "@/composables/usePermissions";
+
+const { can } = usePermissions();
 
 interface Account {
     id: number;
@@ -72,7 +75,7 @@ function indentLevel(code: string): number {
                 <span v-if="form.processing" class="text-muted-foreground text-sm"> Importando… </span>
 
                 <button
-                    v-if="accounts.length > 0"
+                    v-if="accounts.length > 0 && can('create', 'accounts')"
                     type="button"
                     class="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60"
                     :disabled="form.processing"
@@ -121,6 +124,7 @@ function indentLevel(code: string): number {
             <p class="text-foreground mb-1 text-sm font-medium">No hay cuentas registradas</p>
             <p class="text-muted-foreground mb-6 text-sm">Importa el plan de cuentas desde un archivo Excel (.xlsx)</p>
             <button
+                v-if="can('create', 'accounts')"
                 type="button"
                 class="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-md px-5 py-2.5 text-sm font-medium transition-colors disabled:opacity-60"
                 :disabled="form.processing"
