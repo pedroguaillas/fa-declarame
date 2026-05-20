@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLayout from "@/layouts/AppLayout.vue";
 import { Head, router } from "@inertiajs/vue3";
+import { Pencil } from "lucide-vue-next";
 import type { Paginator } from "@/types";
 import type { ActionPayload, ColumnDef } from "@/types/shared";
 import { Company } from "@/types/tenant";
@@ -42,6 +43,7 @@ const actions = [
     {
         event: "edit",
         label: "Editar",
+        icon: Pencil,
     },
 ];
 
@@ -83,6 +85,7 @@ function handlePageChange(page: number) {
                         :columns="columns"
                         :items="companies.data"
                         :actions="actions"
+                        actions-mode="icons"
                         empty-text="No hay contribuyentes registrados."
                         @select="handleSelect"
                         @action="handleAction"
@@ -95,6 +98,7 @@ function handlePageChange(page: number) {
                         :columns="columns"
                         :items="companies.data"
                         :actions="actions"
+                        actions-mode="icons"
                         empty-text="No hay contribuyentes registrados."
                         @select="handleSelect"
                         @action="handleAction"

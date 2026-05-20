@@ -37,3 +37,7 @@ Probar script
 `source venv/bin/activate`
   
 `python server.py`
+
+# Seed faltante
+
+`./vendor/bin/sail php artisan tenant:seed-identification-types`

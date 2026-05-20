@@ -1,23 +1,22 @@
 """
-SRI Scraper Test Script (Python + Playwright) — 3-Layer Strategy
+SRI Scraper Test Script (Python + Playwright) — 2-Layer Strategy
 
 Layer 1: Stealth (playwright-stealth) — make browser undetectable
 Layer 2: Human behavior simulation — mouse, scroll, timing
-Layer 3: 2Captcha fallback — only when stealth+behavior isn't enough
 
 Usage:
     # Install dependencies:
-    pip install playwright playwright-stealth requests
+    pip install playwright playwright-stealth
     playwright install chromium
 
     # Run with credentials:
-    echo '{"ruc":"0102030405001","password":"mypass","apiKey":"2captcha-key","year":2026,"month":4,"type":"compras","mode":"txt_download"}' | python test-scraper.py
+    echo '{"ruc":"0102030405001","password":"mypass","year":2026,"month":4,"type":"compras","mode":"txt_download"}' | python test-scraper.py
 
     # Or with args:
-    python test-scraper.py --ruc=0102030405001 --password=mypass --api-key=xxx --year=2026 --month=4 --type=compras
+    python test-scraper.py --ruc=0102030405001 --password=mypass --year=2026 --month=4 --type=compras
 
     # Visible browser (for debugging):
-    python test-scraper.py --visible --ruc=... --password=... --api-key=...
+    python test-scraper.py --visible --ruc=... --password=...
 """
 
 import argparse
@@ -30,7 +29,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import requests
 from playwright.sync_api import Page, sync_playwright
 
 # ─── Stealth Import (v2 → v1 → none) ────────────────────────────────────────
@@ -72,14 +70,12 @@ COMPRAS_VOUCHER_TYPES = [
     {"value": "6", "label": "Retencion"},
 ]
 
-TWOCAPTCHA_IN = "https://2captcha.com/in.php"
-TWOCAPTCHA_RES = "https://2captcha.com/res.php"
-
-# Realistic Chrome user agent
+# Realistic Chrome user agent — must match Playwright's bundled Chromium build exactly.
+# Run: .venv/bin/python -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(); pg=b.new_page(); print(pg.evaluate('navigator.userAgent'))"
 CHROME_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/147.0.0.0 Safari/537.36"
+    "Chrome/147.0.7727.15 Safari/537.36"
 )
 
 
@@ -199,216 +195,6 @@ def simulate_human_presence(page: Page, duration_s: float = 8.0) -> None:
             random_delay(0.8, 2.0)
         else:
             random_delay(1.0, 3.0)
-
-
-# ─── Layer 3: 2Captcha Fallback ──────────────────────────────────────────────
-
-
-def solve_captcha_2captcha(api_key: str, sitekey: str, page_url: str) -> str | None:
-    """Solve reCAPTCHA via 2Captcha service (paid fallback)."""
-    progress(
-        "captcha-2captcha",
-        f"Enviando reCAPTCHA a 2Captcha (sitekey={sitekey[:10]}...)...",
-    )
-
-    resp = requests.post(
-        TWOCAPTCHA_IN,
-        data={
-            "key": api_key,
-            "method": "userrecaptcha",
-            "googlekey": sitekey,
-            "pageurl": page_url,
-            "json": "1",
-        },
-    )
-    data = resp.json()
-
-    if data.get("status") != 1:
-        progress("captcha-2captcha", f"2Captcha submit error: {data.get('request')}")
-        return None
-
-    captcha_id = data["request"]
-    progress(
-        "captcha-2captcha", f"Captcha enviado, ID={captcha_id}. Esperando solución..."
-    )
-
-    time.sleep(5)
-
-    for poll in range(24):
-        resp = requests.get(
-            TWOCAPTCHA_RES,
-            params={
-                "key": api_key,
-                "action": "get",
-                "id": captcha_id,
-                "json": "1",
-            },
-        )
-        data = resp.json()
-
-        if data.get("status") == 1:
-            token = data["request"]
-            progress("captcha-2captcha", f"Token obtenido ({len(token)} chars)")
-            return token
-
-        if data.get("request") != "CAPCHA_NOT_READY":
-            progress("captcha-2captcha", f"2Captcha error: {data.get('request')}")
-            return None
-
-        progress("captcha-2captcha", f"Esperando solución... ({(poll + 1) * 5}s)")
-        time.sleep(5)
-
-    progress("captcha-2captcha", "2Captcha timeout - no se recibió solución")
-    return None
-
-
-# ─── Layer 1+2: Auto Captcha (stealth + behavior) ────────────────────────────
-
-
-def try_auto_captcha(page: Page, tipo: str) -> str | None:
-    """
-    Attempt to pass reCAPTCHA automatically by triggering grecaptcha.execute()
-    and waiting for the token. Works when the browser looks legitimate enough
-    that Google gives a high score (like manual navigation).
-
-    Returns the token if auto-passed, None otherwise.
-    """
-    progress("captcha-auto", "Intentando pasar reCAPTCHA automáticamente (stealth)...")
-
-    # Simulate human presence before triggering captcha
-    simulate_human_presence(page, duration_s=random.uniform(5, 10))
-
-    # Move mouse near the form area
-    human_mouse_move(
-        page, target_x=random.randint(400, 800), target_y=random.randint(300, 500)
-    )
-    random_delay(0.5, 1.0)
-
-    # Try to trigger reCAPTCHA naturally via grecaptcha.execute()
-    execute_result = page.evaluate("""() => {
-        // Clear any existing token first
-        const respEl = document.getElementById('g-recaptcha-response');
-        if (respEl) respEl.value = '';
-
-        if (typeof grecaptcha === 'undefined') {
-            return { executed: false, error: 'grecaptcha not defined' };
-        }
-
-        try {
-            // Method 1: Execute with explicit widget ID 0
-            grecaptcha.execute(0);
-            return { executed: true, method: 'execute_widget_0' };
-        } catch(e1) {
-            try {
-                // Method 2: Execute without arguments
-                grecaptcha.execute();
-                return { executed: true, method: 'execute_default' };
-            } catch(e2) {
-                try {
-                    // Method 3: Find widget via container
-                    const container = document.querySelector('.g-recaptcha');
-                    if (container) {
-                        const widgetId = container.getAttribute('data-widget-id');
-                        if (widgetId !== null) {
-                            grecaptcha.execute(parseInt(widgetId));
-                            return { executed: true, method: 'execute_widget_' + widgetId };
-                        }
-                        // Try rendering and executing
-                        const sitekey = container.getAttribute('data-sitekey');
-                        if (sitekey) {
-                            const wid = grecaptcha.render(container, {
-                                sitekey: sitekey,
-                                size: 'invisible',
-                                callback: function(token) {
-                                    document.getElementById('g-recaptcha-response').value = token;
-                                }
-                            });
-                            grecaptcha.execute(wid);
-                            return { executed: true, method: 'render_and_execute' };
-                        }
-                    }
-                    return { executed: false, error: 'no widget found: ' + e2.message };
-                } catch(e3) {
-                    return { executed: false, error: e3.message };
-                }
-            }
-        }
-    }""")
-
-    progress("captcha-auto", f"grecaptcha.execute() → {execute_result}")
-
-    if not execute_result.get("executed"):
-        progress(
-            "captcha-auto",
-            "No se pudo ejecutar grecaptcha, probando click en botón buscar...",
-        )
-        # Try clicking the actual search button which may trigger captcha
-        clicked = page.evaluate("""() => {
-            // Look for a search/buscar button that triggers captcha
-            const buttons = document.querySelectorAll('button, input[type="submit"], a.ui-commandlink');
-            for (const btn of buttons) {
-                const text = (btn.textContent || btn.value || '').toLowerCase();
-                if (text.includes('buscar') || text.includes('consultar')) {
-                    btn.click();
-                    return true;
-                }
-            }
-            return false;
-        }""")
-        if not clicked:
-            progress("captcha-auto", "No se encontró botón de búsqueda")
-            return None
-
-    # Poll for token (Google may auto-generate it if score is high)
-    progress("captcha-auto", "Esperando token automático de reCAPTCHA...")
-
-    for i in range(20):  # Poll for ~10 seconds
-        time.sleep(0.5)
-
-        token = page.evaluate("""() => {
-            const el = document.getElementById('g-recaptcha-response');
-            if (el && el.value && el.value.length > 20) {
-                return el.value;
-            }
-            // Also check if callback already fired and search executed
-            const allTextareas = document.querySelectorAll('textarea[name="g-recaptcha-response"]');
-            for (const ta of allTextareas) {
-                if (ta.value && ta.value.length > 20) return ta.value;
-            }
-            return null;
-        }""")
-
-        if token:
-            progress(
-                "captcha-auto",
-                f"Token automático obtenido ({len(token)} chars) — stealth funcionó!",
-            )
-            return token
-
-        # Check if a visible challenge appeared (means stealth wasn't enough)
-        challenge_visible = page.evaluate("""() => {
-            // Check for visible reCAPTCHA challenge iframe
-            const frames = document.querySelectorAll('iframe[src*="recaptcha"][title*="challenge"]');
-            for (const frame of frames) {
-                const rect = frame.getBoundingClientRect();
-                if (rect.width > 100 && rect.height > 100) return true;
-            }
-            // Check for reCAPTCHA overlay
-            const overlay = document.querySelector('.rc-imageselect, .rc-audiochallenge');
-            if (overlay) return true;
-
-            return false;
-        }""")
-
-        if challenge_visible:
-            progress(
-                "captcha-auto",
-                "Challenge visible detectado — stealth insuficiente, necesita 2Captcha",
-            )
-            return None
-
-    progress("captcha-auto", "No se obtuvo token automático en 10s")
-    return None
 
 
 # ─── Login ────────────────────────────────────────────────────────────────────
@@ -578,36 +364,6 @@ def _navigate_ventas(page: Page) -> None:
     progress("navigate", "Página de Comprobantes Emitidos cargada")
 
 
-# ─── Sitekey Extraction ──────────────────────────────────────────────────────
-
-
-def extract_sitekey(page: Page) -> str | None:
-    return page.evaluate("""() => {
-        const el = document.getElementsByClassName('g-recaptcha')[0];
-        if (el) return el.getAttribute('data-sitekey');
-
-        const iframes = document.querySelectorAll('iframe[src*="recaptcha"]');
-        for (const iframe of iframes) {
-            const match = iframe.src.match(/[?&]k=([^&]+)/);
-            if (match) return match[1];
-        }
-
-        const scripts = document.querySelectorAll('script');
-        for (const script of scripts) {
-            const text = script.textContent || '';
-            const cargarMatch = text.match(/cargarRecaptcha\\s*\\([^,]+,\\s*['"]([A-Za-z0-9_-]{40})['"]/);
-            if (cargarMatch) return cargarMatch[1];
-            const match = text.match(/sitekey['\":\\s]+['"]([A-Za-z0-9_-]{40})['"]/);
-            if (match) return match[1];
-        }
-
-        const allElements = document.querySelectorAll('[data-sitekey]');
-        if (allElements.length > 0) return allElements[0].getAttribute('data-sitekey');
-
-        return null;
-    }""")
-
-
 # ─── Set Filters ──────────────────────────────────────────────────────────────
 
 
@@ -653,30 +409,6 @@ def set_filters(
 
         page.select_option("#frmPrincipal\\:cmbTipoComprobante", voucher_type["value"])
         random_delay(0.8, 1.5)
-
-
-# ─── Inject Token & Search ────────────────────────────────────────────────────
-
-
-def inject_token_and_search(page: Page, token: str) -> None:
-    page.evaluate(
-        """(t) => {
-        const el = document.getElementById('g-recaptcha-response');
-        if (el) {
-            el.style.display = 'block';
-            el.removeAttribute('disabled');
-            el.value = t;
-        }
-        document.querySelectorAll('textarea[name="g-recaptcha-response"]').forEach(el => {
-            el.style.display = 'block';
-            el.removeAttribute('disabled');
-            el.value = t;
-        });
-    }""",
-        token,
-    )
-
-    page.evaluate("(t) => { rcBuscar(t); }", token)
 
 
 # ─── Check Page State ─────────────────────────────────────────────────────────
@@ -765,30 +497,68 @@ def search_direct(
     return result["state"] in ("has_results", "no_results")
 
 
-# ─── Search With Captcha (3-Layer Strategy) ──────────────────────────────────
+# ─── Search With Captcha (Human Simulation) ──────────────────────────────────
 
 
-def click_buscar_button(page: Page) -> bool:
-    """Try to click the search/buscar button directly on the page."""
-    return page.evaluate("""() => {
-        // PrimeFaces commandLink / commandButton with "buscar" or "consultar" text
-        const candidates = document.querySelectorAll(
-            'button, input[type="submit"], a.ui-commandlink, .ui-button'
-        );
-        for (const btn of candidates) {
-            const text = (btn.textContent || btn.value || '').toLowerCase().trim();
-            if (text.includes('buscar') || text.includes('consultar')) {
-                btn.click();
-                return true;
-            }
-        }
-        // Fallback: PrimeFaces buttons by id containing "btnBuscar" or "btnConsultar"
-        for (const id of ['btnBuscar', 'btnConsultar']) {
-            const el = document.querySelector(`[id*="${id}"]`);
-            if (el) { el.click(); return true; }
-        }
-        return false;
-    }""")
+def _human_click_buscar(page: Page, label: str) -> bool:
+    """
+    Find the Buscar/Consultar button and click it using a real Playwright click
+    (not JavaScript .click()). The invisible reCAPTCHA fires automatically via
+    the button's onclick handler (rcBuscar) — no token injection needed.
+    """
+    # PrimeFaces IDs use colons which CSS requires escaping — try multiple selectors
+    selectors = [
+        "[id*='btnBuscar']",
+        "[id*='Buscar']",
+        "button:text('Buscar')",
+        "input[type='submit'][value*='Buscar']",
+        "a.ui-commandlink:text('Buscar')",
+        ".ui-button:text('Buscar')",
+    ]
+
+    buscar_el = None
+    for selector in selectors:
+        try:
+            loc = page.locator(selector).first
+            if loc.count() > 0:
+                buscar_el = loc
+                break
+        except Exception:
+            continue
+
+    if buscar_el is None:
+        progress(label, "No se encontró botón Buscar con locator, intentando query_selector...")
+        el = page.query_selector("[id*='btnBuscar'], [id*='Buscar'][type='button'], [id*='Buscar'][type='submit']")
+        if el:
+            box = el.bounding_box()
+            if box:
+                human_mouse_move(
+                    page,
+                    target_x=int(box["x"] + box["width"] / 2),
+                    target_y=int(box["y"] + box["height"] / 2),
+                )
+                random_delay(0.2, 0.5)
+            el.click()
+            progress(label, "Click en botón Buscar (query_selector)")
+            return True
+        progress(label, "ERROR: No se encontró botón Buscar")
+        return False
+
+    try:
+        box = buscar_el.bounding_box()
+        if box:
+            human_mouse_move(
+                page,
+                target_x=int(box["x"] + box["width"] / 2),
+                target_y=int(box["y"] + box["height"] / 2),
+            )
+            random_delay(0.2, 0.5)
+        buscar_el.click()
+        progress(label, "Click en botón Buscar realizado")
+        return True
+    except Exception as e:
+        progress(label, f"Error al hacer click en Buscar: {e}")
+        return False
 
 
 def wait_for_search_results(page: Page, tipo: str, label: str) -> bool:
@@ -823,17 +593,16 @@ def search_with_captcha(
     voucher_type: dict,
     year: int,
     month: int,
-    api_key: str | None,
     tipo: str,
     day: int = 0,
 ) -> bool:
     """
-    Search strategy:
-      0. If no captcha on page, click Buscar button directly
-      1. Try auto-pass via stealth + human behavior (free, fast)
-      2. If auto-pass gives token, use it with rcBuscar
-      3. If auto-pass fails, fall back to 2Captcha (paid, slow)
-      4. If all captcha attempts fail, try direct button click as last resort
+    Search strategy — human simulation only:
+      1. Set filters
+      2. Simulate human presence (mouse, scroll, timing)
+      3. Real Playwright click on Buscar button → invisible reCAPTCHA fires via onclick (rcBuscar)
+      4. Wait for AJAX results
+      5. Retry up to 3 times reloading page between attempts
     """
     label = voucher_type["label"]
     day_str = f", día={day}" if day > 0 else ""
@@ -843,96 +612,17 @@ def search_with_captcha(
     )
     set_filters(page, voucher_type, year, month, day, tipo)
 
-    # ── Diagnose page: captcha present? ──
-    diag = page.evaluate("""() => {
-        const hasRcBuscar = typeof rcBuscar === 'function';
-        const hasGrecaptcha = typeof grecaptcha !== 'undefined';
-        const hasRecaptchaEl = !!document.getElementById('g-recaptcha-response');
-        const hasSitekey = !!document.querySelector('[data-sitekey], .g-recaptcha');
-        return { hasRcBuscar, hasGrecaptcha, hasRecaptchaEl, hasSitekey };
-    }""")
-
-    progress(
-        label,
-        f"Diagnóstico: rcBuscar={diag['hasRcBuscar']}, grecaptcha={diag['hasGrecaptcha']}, "
-        f"sitekey={diag['hasSitekey']}",
-    )
-
-    # ── No captcha on page → search directly ──
-    if not diag["hasRcBuscar"] and not diag["hasSitekey"]:
-        progress(label, "Sin captcha en la página, buscando directamente...")
-        clicked = click_buscar_button(page)
-        if clicked:
-            progress(label, "Botón Buscar clickeado")
-            return wait_for_search_results(page, tipo, label)
-        else:
-            progress(label, "ERROR: No se encontró botón de búsqueda")
-            return False
-
-    sitekey = extract_sitekey(page)
-    if not sitekey:
-        progress(label, "No se encontró sitekey, intentando búsqueda directa...")
-        clicked = click_buscar_button(page)
-        if clicked:
-            return wait_for_search_results(page, tipo, label)
-        progress(label, "ERROR: Sin sitekey ni botón de búsqueda")
-        return False
-
-    progress(label, f"Sitekey extraído: {sitekey}")
-
     for attempt in range(1, 4):
         progress(label, f"═══ Intento {attempt}/3 ═══")
 
-        # ── Layer 1+2: Try auto-pass (stealth + human behavior) ──
-        token = try_auto_captcha(page, tipo)
+        # Simulate human presence — invisible reCAPTCHA scores based on browser behavior
+        simulate_human_presence(page, duration_s=random.uniform(5, 10))
 
-        if token:
-            progress(label, f"[LAYER 1+2] Token automático, inyectando en rcBuscar...")
-            try:
-                inject_token_and_search(page, token)
-            except Exception as e:
-                progress(label, f"Error al inyectar token auto: {e}")
-                token = None
+        # Real Playwright click — triggers onclick="rcBuscar()" which fires the captcha
+        if not _human_click_buscar(page, label):
+            progress(label, "ERROR: No se encontró botón Buscar")
+            return False
 
-        # ── Layer 3: 2Captcha fallback ──
-        if not token:
-            if not api_key:
-                progress(
-                    label,
-                    "[LAYER 3] Sin API key de 2Captcha, no hay fallback disponible",
-                )
-                if attempt < 3:
-                    progress(label, "Recargando para reintentar stealth...")
-                    navigate_to_comprobantes(page, tipo)
-                    set_filters(page, voucher_type, year, month, day, tipo)
-                continue
-
-            progress(
-                label, f"[LAYER 3] Usando 2Captcha como fallback (intento {attempt})..."
-            )
-            token = solve_captcha_2captcha(
-                api_key, sitekey, "https://srienlinea.sri.gob.ec"
-            )
-
-            if not token:
-                progress(label, f"2Captcha falló en intento {attempt}")
-                if attempt < 3:
-                    progress(label, "Recargando página para nuevo intento...")
-                    navigate_to_comprobantes(page, tipo)
-                    set_filters(page, voucher_type, year, month, day, tipo)
-                continue
-
-            progress(label, f"[LAYER 3] Token 2Captcha obtenido, inyectando...")
-            try:
-                inject_token_and_search(page, token)
-            except Exception as e:
-                progress(label, f"Error al inyectar token 2Captcha: {e}")
-                if attempt < 3:
-                    navigate_to_comprobantes(page, tipo)
-                    set_filters(page, voucher_type, year, month, day, tipo)
-                continue
-
-        # ── Check results ──
         if wait_for_search_results(page, tipo, label):
             progress(label, f"Búsqueda exitosa en intento {attempt}")
             return True
@@ -945,13 +635,6 @@ def search_with_captcha(
             progress(label, "Recargando página para nuevo intento...")
             navigate_to_comprobantes(page, tipo)
             set_filters(page, voucher_type, year, month, day, tipo)
-
-    # ── Last resort: try direct button click ──
-    progress(label, "Captcha falló 3 veces, intentando búsqueda directa como último recurso...")
-    clicked = click_buscar_button(page)
-    if clicked:
-        if wait_for_search_results(page, tipo, label):
-            return True
 
     progress(label, "Búsqueda falló después de todos los intentos")
     return False
@@ -966,7 +649,6 @@ def download_for_voucher_type(
     year: int,
     month: int,
     download_dir: Path,
-    api_key: str | None,
     tipo: str,
     day: int = 0,
     skip_claves: set | None = None,
@@ -975,9 +657,7 @@ def download_for_voucher_type(
     if tipo == "ventas":
         search_ok = search_direct(page, voucher_type, year, month, tipo, day)
     else:
-        search_ok = search_with_captcha(
-            page, voucher_type, year, month, api_key, tipo, day
-        )
+        search_ok = search_with_captcha(page, voucher_type, year, month, tipo, day)
 
     if not search_ok:
         return {"type": label, "status": "captcha_failed", "content": None, "xmls": []}
@@ -1172,7 +852,6 @@ def download_for_voucher_type_by_day(
     year: int,
     month: int,
     download_dir: Path,
-    api_key: str | None,
     tipo: str,
     max_days: int = 0,
     skip_claves: set | None = None,
@@ -1196,7 +875,7 @@ def download_for_voucher_type_by_day(
         progress(label, f"Día {day}/{days_in_month}...")
 
         result = download_for_voucher_type(
-            page, voucher_type, year, month, download_dir, api_key, tipo, day, skip_claves
+            page, voucher_type, year, month, download_dir, tipo, day, skip_claves
         )
 
         if result["status"] == "downloaded":
@@ -2024,13 +1703,10 @@ def scrape_table_data(page: Page, tipo: str) -> list[str]:
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="SRI Scraper (Python) — 3-Layer Strategy"
+        description="SRI Scraper (Python) — Stealth + Human Simulation"
     )
     parser.add_argument("--ruc", help="RUC del contribuyente")
     parser.add_argument("--password", help="Contraseña SRI")
-    parser.add_argument(
-        "--api-key", dest="api_key", help="API key de 2Captcha (opcional, fallback)"
-    )
     parser.add_argument(
         "--type", dest="tipo", default="compras", choices=["compras", "ventas"]
     )
@@ -2069,17 +1745,11 @@ def load_config() -> dict:
             file=sys.stderr,
         )
         print("   or: python test-scraper.py --ruc=... --password=...", file=sys.stderr)
-        print("", file=sys.stderr)
-        print(
-            "Nota: --api-key es opcional (fallback). Sin él, solo usa stealth.",
-            file=sys.stderr,
-        )
         sys.exit(1)
 
     return {
         "ruc": args.ruc,
         "password": args.password,
-        "apiKey": args.api_key,
         "type": args.tipo,
         "year": args.year,
         "month": args.month,
@@ -2099,7 +1769,6 @@ def main():
     year = config.get("year", 2026)
     month = config.get("month", 4)
     mode = config.get("mode", "txt_download")
-    api_key = config.get("apiKey") or config.get("captchaApiKey")
     download_dir = Path(config.get("downloadDir", "/tmp/sri-scrape-py"))
     headless = config.get("headless", True)
     user_data_dir = config.get("userDataDir")
@@ -2114,9 +1783,6 @@ def main():
         "init",
         f"Stealth: {'v' + str(STEALTH_VERSION) if STEALTH_VERSION else 'NO INSTALADO'}",
     )
-    progress("init", f"2Captcha fallback: {'SI' if api_key else 'NO (solo stealth)'}")
-    if not api_key:
-        progress("init", "Tip: usa --api-key para habilitar 2Captcha como fallback")
 
     if STEALTH_VERSION == 0:
         progress(
@@ -2144,9 +1810,10 @@ def main():
         "accept_downloads": True,
         "extra_http_headers": {
             "Accept-Language": "es-EC,es;q=0.9,en;q=0.8",
-            "sec-ch-ua": '"Chromium";v="147", "Google Chrome";v="147", "Not/A)Brand";v="99"',
+            "sec-ch-ua": '"Chromium";v="147", "Google Chrome";v="147", "Not=A?Brand";v="24"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"macOS"',
+            "sec-ch-ua-full-version-list": '"Chromium";v="147.0.7727.15", "Google Chrome";v="147.0.7727.15", "Not=A?Brand";v="24.0.0.0"',
         },
     }
 
@@ -2211,7 +1878,7 @@ def main():
 
                     try:
                         result = download_for_voucher_type(
-                            page, vt, year, month, download_dir, api_key, tipo
+                            page, vt, year, month, download_dir, tipo
                         )
                         files.append(result)
 
@@ -2249,9 +1916,7 @@ def main():
                         navigate_to_comprobantes(page, tipo)
 
                     try:
-                        search_ok = search_with_captcha(
-                            page, vt, year, month, api_key, tipo
-                        )
+                        search_ok = search_with_captcha(page, vt, year, month, tipo)
                         if search_ok:
                             claves = scrape_table_data(page, tipo)
                             all_claves.extend(claves)

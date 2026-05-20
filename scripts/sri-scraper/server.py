@@ -67,9 +67,10 @@ def start_browser(user_data_dir: str | None = None) -> None:
         "accept_downloads": True,
         "extra_http_headers": {
             "Accept-Language": "es-EC,es;q=0.9,en;q=0.8",
-            "sec-ch-ua": '"Chromium";v="147", "Google Chrome";v="147", "Not/A)Brand";v="99"',
+            "sec-ch-ua": '"Chromium";v="147", "Google Chrome";v="147", "Not=A?Brand";v="24"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"macOS"',
+            "sec-ch-ua-full-version-list": '"Chromium";v="147.0.7727.15", "Google Chrome";v="147.0.7727.15", "Not=A?Brand";v="24.0.0.0"',
         },
     }
 
@@ -88,13 +89,13 @@ def start_browser(user_data_dir: str | None = None) -> None:
         Path(user_data_dir).mkdir(parents=True, exist_ok=True)
         context = pw.chromium.launch_persistent_context(
             user_data_dir,
-            headless=True,
+            headless=False,
             args=launch_args,
             **context_opts,
         )
         page = context.pages[0] if context.pages else context.new_page()
     else:
-        browser = pw.chromium.launch(headless=True, args=launch_args)
+        browser = pw.chromium.launch(headless=False, args=launch_args)
         _browser_state["browser"] = browser
         context = browser.new_context(**context_opts)
         page = context.new_page()
@@ -162,7 +163,6 @@ def handle_scrape(config: dict) -> dict:
         }
 
     page = _browser_state["page"]
-    api_key = config.get("apiKey")
     tipo = config.get("type", "compras")
     year = config.get("year", 2026)
     month = config.get("month", 5)
@@ -192,15 +192,15 @@ def handle_scrape(config: dict) -> dict:
                 scraper.navigate_to_comprobantes(page, tipo)
             try:
                 if tipo == "ventas":
-                    # Emitidos: consultar día por día (TEST: solo 10 días)
+                    # Emitidos: consultar día por día
                     result = scraper.download_for_voucher_type_by_day(
-                        page, vt, year, month, download_dir, api_key, tipo,
+                        page, vt, year, month, download_dir, tipo,
                         skip_claves=skip_claves,
                     )
                 else:
                     # Recibidos: consultar todo el mes
                     result = scraper.download_for_voucher_type(
-                        page, vt, year, month, download_dir, api_key, tipo,
+                        page, vt, year, month, download_dir, tipo,
                         skip_claves=skip_claves,
                     )
                 files.append(result)
@@ -244,9 +244,7 @@ def handle_scrape(config: dict) -> dict:
             if i > 0:
                 scraper.navigate_to_comprobantes(page, tipo)
             try:
-                search_ok = scraper.search_with_captcha(
-                    page, vt, year, month, api_key, tipo
-                )
+                search_ok = scraper.search_with_captcha(page, vt, year, month, tipo)
                 if search_ok:
                     claves = scraper.scrape_table_data(page, tipo)
                     all_claves.extend(claves)

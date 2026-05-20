@@ -67,6 +67,10 @@ class TenantSetupService
                 'name' => 'CONSUMIDOR FINAL',
             ]);
 
+            IdentificationType::create([
+                'code_order' => '08', 'description' => 'IDENTIFICACIÓN DEL EXTERIOR',
+            ]);
+
             TaxSupport::insert([
                 ['code' => '01', 'description' => 'Crédito Tributario para declaración de IVA (servicios y bienes distintos de inventarios y activos fijos)'],
                 ['code' => '02', 'description' => 'Costo o Gasto para declaración de IR (servicios y bienes distintos de inventarios y activos fijos)'],
