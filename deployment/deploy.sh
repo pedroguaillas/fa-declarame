@@ -17,8 +17,8 @@ git pull origin main
 composer install --no-dev --optimize-autoloader --no-interaction
 
 # ── 3. Frontend ──────────────────────────────────────────────────────────────
-npm ci
-npm run build
+pnpm install --frozen-lockfile
+pnpm run build
 
 # ── 4. Migraciones ───────────────────────────────────────────────────────────
 $PHP artisan migrate --force
