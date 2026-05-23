@@ -58,19 +58,28 @@ _scrape_lock = Lock()
 # ─── Browser Lifecycle ──────────────────────────────────────────────────────
 
 
-def start_browser(user_data_dir: str | None = None) -> None:
-    """Launch the browser visible, ready to receive requests.
+def start_browser(user_data_dir: str | None = None, headless: bool = False) -> None:
+    """Launch the browser (headless or visible), ready to receive requests.
     Must be called from the scraper thread — Playwright is not thread-safe."""
 
     launch_args = [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-gpu",
         "--disable-blink-features=AutomationControlled",
         "--lang=es-EC,es",
         "--window-size=1366,768",
+        "--window-position=0,0",
     ]
+
+    if headless:
+        # Use Chrome's new headless mode — shares the same rendering engine as the
+        # visible browser, making it far harder to detect than the classic headless.
+        # Keeping GPU enabled preserves canvas/WebGL fingerprints that reCAPTCHA scores.
+        launch_args.append("--headless=new")
+    else:
+        # Classic visible mode — disable GPU acceleration (not needed, avoids crashes)
+        launch_args.append("--disable-gpu")
 
     context_opts = {
         "viewport": {"width": 1366, "height": 768},
@@ -97,21 +106,57 @@ def start_browser(user_data_dir: str | None = None) -> None:
     _browser_state["pw_cm"] = pw_cm
     _browser_state["pw"] = pw
 
+    # When using --headless=new we pass headless=False to Playwright so it does not
+    # add its own --headless flag (which would downgrade to the detectable old mode).
+    pw_headless = False if headless else False  # always False; new headless via arg above
+
     if user_data_dir:
         scraper.progress("server", f"Contexto persistente: {user_data_dir}")
         Path(user_data_dir).mkdir(parents=True, exist_ok=True)
         context = pw.chromium.launch_persistent_context(
             user_data_dir,
-            headless=False,
+            headless=pw_headless,
             args=launch_args,
             **context_opts,
         )
         page = context.pages[0] if context.pages else context.new_page()
     else:
-        browser = pw.chromium.launch(headless=False, args=launch_args)
+        browser = pw.chromium.launch(headless=pw_headless, args=launch_args)
         _browser_state["browser"] = browser
         context = browser.new_context(**context_opts)
         page = context.new_page()
+
+    # Belt-and-suspenders: patch remaining headless/automation indicators that
+    # reCAPTCHA v3 checks, regardless of what playwright-stealth already covers.
+    context.add_init_script("""
+        // Remove webdriver flag
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+        // Ensure window.chrome exists (missing in headless Chromium)
+        if (!window.chrome) {
+            window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
+        }
+
+        // Realistic plugin list
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => {
+                const p = [
+                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+                    { name: 'Native Client', filename: 'internal-nacl-plugin' },
+                ];
+                p.__proto__ = PluginArray.prototype;
+                return p;
+            }
+        });
+
+        // Permissions API — avoid the headless 'denied' default for notifications
+        const _origPermQuery = window.navigator.permissions.query.bind(navigator.permissions);
+        window.navigator.permissions.query = (params) =>
+            params.name === 'notifications'
+                ? Promise.resolve({ state: Notification.permission })
+                : _origPermQuery(params);
+    """)
 
     if scraper.STEALTH_VERSION == 1:
         scraper.stealth_sync(page)
@@ -126,11 +171,15 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
     """Login or re-login if needed. Handles switching between different RUCs."""
     page = _browser_state["page"]
 
-    # Different RUC than current session — need fresh login
+    # Different RUC than current session — clear cookies to force a clean login
     if _browser_state["logged_in_ruc"] and _browser_state["logged_in_ruc"] != ruc:
         scraper.progress(
-            "server", f"Cambiando de RUC {_browser_state['logged_in_ruc']} → {ruc}"
+            "server", f"Cambiando de RUC {_browser_state['logged_in_ruc']} → {ruc}, limpiando sesion..."
         )
+        try:
+            _browser_state["context"].clear_cookies()
+        except Exception as e:
+            scraper.progress("server", f"Advertencia al limpiar cookies: {e}")
         _browser_state["logged_in_ruc"] = None
 
     # Already logged in with this RUC — check if session is still valid
@@ -160,14 +209,14 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
 # ─── Scraper Thread ───────────────────────────────────────────────────────────
 
 
-def _scraper_thread_main(user_data_dir: str | None) -> None:
+def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> None:
     """Dedicated thread that owns the browser and processes all scrape work.
 
     Playwright's sync API uses greenlets and is NOT thread-safe — all browser
     operations must happen in this single thread. The HTTP handlers communicate
     via _work_queue using concurrent.futures.Future objects.
     """
-    start_browser(user_data_dir)
+    start_browser(user_data_dir, headless=headless)
     _browser_ready.set()  # Unblock the HTTP server startup
 
     while True:
@@ -431,17 +480,23 @@ def main():
         default=None,
         help="Directorio para persistir sesion del navegador",
     )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        default=False,
+        help="Ejecutar el navegador en modo headless (sin ventana)",
+    )
     args = parser.parse_args()
 
     scraper.progress(
         "server",
         f"Stealth: {'v' + str(scraper.STEALTH_VERSION) if scraper.STEALTH_VERSION else 'NO'}",
     )
-    scraper.progress("server", "Iniciando navegador visible...")
+    scraper.progress("server", f"Iniciando navegador {'headless' if args.headless else 'visible'}...")
 
     # Start the dedicated scraper thread — it owns the browser and all Playwright calls.
     scraper_thread = threading.Thread(
-        target=_scraper_thread_main, args=(args.user_data_dir,), daemon=True
+        target=_scraper_thread_main, args=(args.user_data_dir, args.headless), daemon=True
     )
     scraper_thread.start()
 
