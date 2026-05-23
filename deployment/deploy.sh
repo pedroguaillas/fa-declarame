@@ -17,7 +17,7 @@ git pull origin main
 composer install --no-dev --optimize-autoloader --no-interaction
 
 # ── 3. Frontend ──────────────────────────────────────────────────────────────
-pnpm install --frozen-lockfile --ignore-scripts
+pnpm install --frozen-lockfile
 pnpm run build
 
 # ── 4. Migraciones ───────────────────────────────────────────────────────────
