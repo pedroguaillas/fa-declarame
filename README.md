@@ -45,3 +45,7 @@ Probar script
 # Despliegue
 
 `bash /var/www/fa-declarame/deployment/deploy.sh`
+
+Desde local se puede actualizar el scrape
+
+`bash scripts/sri-scraper/deploy.sh --update-only`

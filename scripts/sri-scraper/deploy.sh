@@ -129,10 +129,14 @@ Type=simple
 User=$SERVICE_USER
 WorkingDirectory=$REMOTE_DIR
 Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+Environment=HOME=$REMOTE_DIR
+Environment=TMPDIR=/tmp
+NoNewPrivileges=false
 ExecStart=$REMOTE_DIR/.venv/bin/python $REMOTE_DIR/server.py \\
     --host=127.0.0.1 \\
     --port=8765 \\
-    --user-data-dir=$REMOTE_DIR/browser-session
+    --user-data-dir=$REMOTE_DIR/browser-session \\
+    --headless
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

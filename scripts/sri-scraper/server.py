@@ -72,14 +72,15 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
         "--window-position=0,0",
     ]
 
+    # Disable GPU acceleration in all modes — on headless Linux servers there is no
+    # real GPU, and without this Chrome crashes with SIGTRAP trying to init the GPU stack.
+    launch_args.append("--disable-gpu")
+    launch_args.append("--disable-software-rasterizer")
+
     if headless:
         # Use Chrome's new headless mode — shares the same rendering engine as the
         # visible browser, making it far harder to detect than the classic headless.
-        # Keeping GPU enabled preserves canvas/WebGL fingerprints that reCAPTCHA scores.
         launch_args.append("--headless=new")
-    else:
-        # Classic visible mode — disable GPU acceleration (not needed, avoids crashes)
-        launch_args.append("--disable-gpu")
 
     context_opts = {
         "viewport": {"width": 1366, "height": 768},
