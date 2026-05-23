@@ -20,6 +20,9 @@
         "vue-tsc": "^3.2.7",
         "ziggy-js": "^2.6.2"
     },
+    "pnpm": {
+        "onlyBuiltDependencies": ["vue-demi"]
+    },
     "dependencies": {
         "@inertiajs/vue3": "^3.0.3",
         "@internationalized/date": "^3.12.1",

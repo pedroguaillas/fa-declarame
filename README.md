@@ -41,3 +41,7 @@ Probar script
 # Seed faltante
 
 `./vendor/bin/sail php artisan tenant:seed-identification-types`
+
+# Despliegue
+
+`bash /var/www/fa-declarame/deployment/deploy.sh`
