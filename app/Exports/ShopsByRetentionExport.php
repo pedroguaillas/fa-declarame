@@ -3,12 +3,14 @@
 namespace App\Exports;
 
 use Maatwebsite\Excel\Concerns\FromArray;
+use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ShopsByRetentionExport implements FromArray, WithHeadings, WithStyles, WithTitle
+class ShopsByRetentionExport implements FromArray, WithColumnWidths, WithHeadings, WithStyles, WithTitle
 {
     /** @param array<int, array<string, mixed>> $rows */
     public function __construct(private readonly array $rows) {}
@@ -20,8 +22,8 @@ class ShopsByRetentionExport implements FromArray, WithHeadings, WithStyles, Wit
             $row['code'],
             $row['description'],
             ($row['percentage'] ?? 0).'%',
-            $row['base'] ?? 0,
-            $row['value'] ?? 0,
+            (float) ($row['base'] ?? 0),
+            (float) ($row['value'] ?? 0),
         ], $this->rows);
     }
 
@@ -36,9 +38,20 @@ class ShopsByRetentionExport implements FromArray, WithHeadings, WithStyles, Wit
         return 'Compras por Retenciones';
     }
 
+    /** @return array<string, int> */
+    public function columnWidths(): array
+    {
+        return ['B' => 30];
+    }
+
     /** @return array<int|string, mixed> */
     public function styles(Worksheet $sheet): array
     {
+        $centerH = ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]];
+
+        $sheet->getStyle('A')->applyFromArray($centerH);
+        $sheet->getStyle('C')->applyFromArray($centerH);
+
         return [
             1 => ['font' => ['bold' => true]],
         ];

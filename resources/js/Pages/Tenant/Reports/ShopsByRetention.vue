@@ -2,6 +2,7 @@
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Head, router } from "@inertiajs/vue3";
 import { computed, ref } from "vue";
+import { useDateRangeFilter } from "@/composables/useDateRangeFilter";
 import { Download } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 
@@ -16,6 +17,7 @@ interface Row {
 interface Filters {
     start_date: string | null;
     end_date: string | null;
+    only_authorized: boolean;
 }
 
 const props = defineProps<{
@@ -23,15 +25,17 @@ const props = defineProps<{
     filters: Filters;
 }>();
 
-const startDate = ref(props.filters.start_date ?? "");
-const endDate = ref(props.filters.end_date ?? "");
+const { startDate, endDate, minDate, maxDate, dateRangeError } = useDateRangeFilter(props.filters.start_date, props.filters.end_date);
+const onlyAuthorized = ref(props.filters.only_authorized ?? true);
 
 function applyFilters() {
+    if (dateRangeError.value) return;
     router.get(
         route("tenant.reports.shops-by-retention"),
         {
             start_date: startDate.value || undefined,
             end_date: endDate.value || undefined,
+            only_authorized: onlyAuthorized.value ? "1" : "0",
         },
         { preserveState: true },
     );
@@ -40,6 +44,7 @@ function applyFilters() {
 function clearFilters() {
     startDate.value = "";
     endDate.value = "";
+    onlyAuthorized.value = true;
     router.get(route("tenant.reports.shops-by-retention"), {}, { preserveState: true });
 }
 
@@ -47,6 +52,7 @@ function download() {
     const params = new URLSearchParams();
     if (props.filters.start_date) params.set("start_date", props.filters.start_date);
     if (props.filters.end_date) params.set("end_date", props.filters.end_date);
+    params.set("only_authorized", props.filters.only_authorized ? "1" : "0");
     window.location.href = route("tenant.reports.shops-by-retention.export") + "?" + params.toString();
 }
 
@@ -80,6 +86,8 @@ const totals = computed(() => ({
                 <input
                     v-model="startDate"
                     type="date"
+                    :min="minDate"
+                    :max="maxDate"
                     class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
             </div>
@@ -88,8 +96,14 @@ const totals = computed(() => ({
                 <input
                     v-model="endDate"
                     type="date"
+                    :min="minDate"
+                    :max="maxDate"
                     class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
+            </div>
+            <div class="flex items-center gap-2 self-center">
+                <input id="only-authorized-retention" v-model="onlyAuthorized" type="checkbox" class="border-border size-4 rounded" />
+                <label for="only-authorized-retention" class="text-muted-foreground cursor-pointer text-xs font-medium">Solo autorizados</label>
             </div>
             <button
                 type="button"
@@ -98,6 +112,7 @@ const totals = computed(() => ({
             >
                 Filtrar
             </button>
+            <span v-if="dateRangeError" class="text-destructive self-center text-xs">{{ dateRangeError }}</span>
             <button
                 v-if="filters.start_date || filters.end_date"
                 type="button"

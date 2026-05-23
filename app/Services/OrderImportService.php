@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant\Contact;
 use App\Models\Tenant\Order;
+use App\Models\Tenant\Scopes\CompanyScope;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
 
@@ -64,7 +65,7 @@ class OrderImportService
                 // Si el Comprobante no corresponde a los Tipos de Comprobantes permitidos debe pasar
                 || ! in_array(substr($claveAcceso, 8, 2), $validCodes)
                 // Si ya esta registrado debe pasar
-                || Order::where('autorization', $claveAcceso)->exists()
+                || Order::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)->where('autorization', $claveAcceso)->exists()
             ) {
                 $skipped++;
 
@@ -164,7 +165,7 @@ class OrderImportService
             strlen($claveAcceso) !== 49
             || substr($claveAcceso, 10, 13) !== $companyRuc
             || ! in_array(substr($claveAcceso, 8, 2), $validCodes)
-            || Order::where('autorization', $claveAcceso)->exists()
+            || Order::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)->where('autorization', $claveAcceso)->exists()
         ) {
             return ['imported' => 0, 'skipped' => 1];
         }

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Head, router } from "@inertiajs/vue3";
-import { computed, ref } from "vue";
+import { computed } from "vue";
+import { useDateRangeFilter } from "@/composables/useDateRangeFilter";
 import { Download } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 
@@ -26,10 +27,10 @@ const props = defineProps<{
     filters: Filters;
 }>();
 
-const startDate = ref(props.filters.start_date ?? "");
-const endDate = ref(props.filters.end_date ?? "");
+const { startDate, endDate, minDate, maxDate, dateRangeError } = useDateRangeFilter(props.filters.start_date, props.filters.end_date);
 
 function applyFilters() {
+    if (dateRangeError.value) return;
     router.get(
         route("tenant.reports.orders-by-voucher-type"),
         {
@@ -89,6 +90,8 @@ const totals = computed(() => ({
                 <input
                     v-model="startDate"
                     type="date"
+                    :min="minDate"
+                    :max="maxDate"
                     class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
             </div>
@@ -97,6 +100,8 @@ const totals = computed(() => ({
                 <input
                     v-model="endDate"
                     type="date"
+                    :min="minDate"
+                    :max="maxDate"
                     class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
             </div>
@@ -107,6 +112,7 @@ const totals = computed(() => ({
             >
                 Filtrar
             </button>
+            <span v-if="dateRangeError" class="text-destructive self-center text-xs">{{ dateRangeError }}</span>
             <button
                 v-if="filters.start_date || filters.end_date"
                 type="button"

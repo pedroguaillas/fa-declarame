@@ -18,11 +18,15 @@ Usage:
 
 import argparse
 import json
+import queue
+import threading
 import traceback
+import urllib.request
+from concurrent.futures import Future
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock
 
 # ─── Load test-scraper.py as module ──────────────────────────────────────────
 
@@ -40,6 +44,14 @@ _browser_state = {
     "page": None,
     "logged_in_ruc": None,  # RUC of currently logged-in session
 }
+
+# Queue for passing work to the scraper thread. Items: (config: dict, future: Future).
+_work_queue: queue.Queue = queue.Queue()
+
+# Signals that the browser is initialized and ready to accept work.
+_browser_ready = Event()
+
+# Prevents concurrent scrape requests.
 _scrape_lock = Lock()
 
 
@@ -47,7 +59,8 @@ _scrape_lock = Lock()
 
 
 def start_browser(user_data_dir: str | None = None) -> None:
-    """Launch the browser visible, ready to receive requests."""
+    """Launch the browser visible, ready to receive requests.
+    Must be called from the scraper thread — Playwright is not thread-safe."""
 
     launch_args = [
         "--no-sandbox",
@@ -123,7 +136,6 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
     # Already logged in with this RUC — check if session is still valid
     if _browser_state["logged_in_ruc"] == ruc:
         try:
-            current_url = page.url
             # Navigate to portal to verify session is actually alive
             page.goto(scraper.SRI_URLS["portal"], wait_until="networkidle", timeout=30000)
             current_url = page.url
@@ -145,11 +157,52 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
     return logged_in
 
 
+# ─── Scraper Thread ───────────────────────────────────────────────────────────
+
+
+def _scraper_thread_main(user_data_dir: str | None) -> None:
+    """Dedicated thread that owns the browser and processes all scrape work.
+
+    Playwright's sync API uses greenlets and is NOT thread-safe — all browser
+    operations must happen in this single thread. The HTTP handlers communicate
+    via _work_queue using concurrent.futures.Future objects.
+    """
+    start_browser(user_data_dir)
+    _browser_ready.set()  # Unblock the HTTP server startup
+
+    while True:
+        work = _work_queue.get()
+        if work is None:
+            break  # Shutdown signal
+        config, future = work
+        try:
+            result = handle_scrape(config)
+            future.set_result(result)
+        except Exception as e:
+            traceback.print_exc()
+            future.set_exception(e)
+
+
 # ─── Scrape Handler ──────────────────────────────────────────────────────────
 
 
+def _post_callback(url: str, body: dict) -> None:
+    """POST a JSON body to the callback URL. Silently ignores errors."""
+    try:
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=data,
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=60)
+    except Exception as e:
+        scraper.progress("callback", f"Error al enviar callback: {e}")
+
+
 def handle_scrape(config: dict) -> dict:
-    """Execute a scrape request using the open browser."""
+    """Execute a scrape request using the open browser.
+    Must only be called from the scraper thread."""
     ruc = config.get("ruc")
     password = config.get("password")
 
@@ -187,18 +240,29 @@ def handle_scrape(config: dict) -> dict:
         selected_values = set(config.get("voucherTypes") or ["1", "3", "4"])
         base_types = scraper.COMPRAS_VOUCHER_TYPES if tipo == "compras" else scraper.VOUCHER_TYPES
         voucher_types = [vt for vt in base_types if vt["value"] in selected_values]
+
+        # Determine strategy:
+        #   - ventas (emitidos): always day-by-day — portal only exposes one day at a
+        #     time and there are no XMLs, so data is read from the modal each day.
+        #   - compras (recibidos): full-month TXT + SOAP (XMLs available, efficient).
+        use_day_by_day = tipo == "ventas"
+
+        scraper.progress(
+            "server",
+            f"Estrategia: {'dia-por-dia' if use_day_by_day else 'mes-completo'} "
+            f"(tipo={tipo})",
+        )
+
         for i, vt in enumerate(voucher_types):
             if i > 0:
                 scraper.navigate_to_comprobantes(page, tipo)
             try:
-                if tipo == "ventas":
-                    # Emitidos: consultar día por día
+                if use_day_by_day:
                     result = scraper.download_for_voucher_type_by_day(
                         page, vt, year, month, download_dir, tipo,
                         skip_claves=skip_claves,
                     )
                 else:
-                    # Recibidos: consultar todo el mes
                     result = scraper.download_for_voucher_type(
                         page, vt, year, month, download_dir, tipo,
                         skip_claves=skip_claves,
@@ -299,12 +363,37 @@ class ScrapeRequestHandler(BaseHTTPRequestHandler):
             self._json_response(409, {"error": "Scrape en progreso. Intente de nuevo."})
             return
 
+        scraper.progress(
+            "server",
+            f"Peticion recibida: ruc={config.get('ruc')}, type={config.get('type')}, year={config.get('year')}, month={config.get('month')}",
+        )
+
+        callback_url = config.get("callbackUrl")
+        future: Future = Future()
+
+        if callback_url:
+            # Async mode: respond immediately; callback fires when the scraper thread
+            # resolves the Future (done callbacks run in the scraper thread — safe).
+            def _on_done(f: Future) -> None:
+                try:
+                    _post_callback(callback_url, f.result())
+                except Exception as e:
+                    _post_callback(callback_url, {
+                        "event": "error",
+                        "data": {"code": "SCRAPE_ERROR", "message": str(e)},
+                    })
+                finally:
+                    _scrape_lock.release()
+
+            future.add_done_callback(_on_done)
+            _work_queue.put((config, future))
+            self._json_response(200, {"status": "accepted"})
+            return
+
+        # Sync mode: block until the scraper thread finishes.
+        _work_queue.put((config, future))
         try:
-            scraper.progress(
-                "server",
-                f"Peticion recibida: ruc={config.get('ruc')}, type={config.get('type')}, year={config.get('year')}, month={config.get('month')}",
-            )
-            result = handle_scrape(config)
+            result = future.result(timeout=600)
             self._json_response(200, result)
         except Exception as e:
             traceback.print_exc()
@@ -350,7 +439,14 @@ def main():
     )
     scraper.progress("server", "Iniciando navegador visible...")
 
-    start_browser(user_data_dir=args.user_data_dir)
+    # Start the dedicated scraper thread — it owns the browser and all Playwright calls.
+    scraper_thread = threading.Thread(
+        target=_scraper_thread_main, args=(args.user_data_dir,), daemon=True
+    )
+    scraper_thread.start()
+
+    # Wait for the browser to be ready before accepting HTTP requests.
+    _browser_ready.wait()
 
     server = HTTPServer((args.host, args.port), ScrapeRequestHandler)
     scraper.progress("server", f"Servidor escuchando en http://{args.host}:{args.port}")
@@ -364,6 +460,7 @@ def main():
     except KeyboardInterrupt:
         scraper.progress("server", "Apagando servidor...")
         server.shutdown()
+        _work_queue.put(None)  # Signal scraper thread to stop
         _browser_state["context"].close()
         if _browser_state.get("browser"):
             _browser_state["browser"].close()

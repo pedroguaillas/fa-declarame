@@ -101,6 +101,8 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
             ]);
         Route::post('shops/{shop}/retention', [ShopController::class, 'storeRetention'])
             ->name('tenant.shops.retention.store');
+        Route::put('shops/{shop}/retention', [ShopController::class, 'updateRetention'])
+            ->name('tenant.shops.retention.update');
         Route::patch('shops/{shop}/account', [ShopController::class, 'updateAccount'])
             ->name('tenant.shops.account.update');
 

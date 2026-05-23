@@ -105,7 +105,7 @@ class ShopRetentionImportService
     /**
      * @return array{imported: int, skipped: int}
      */
-    private function processRetention(object $autorizacion, string $companyRuc): array
+    public function processRetention(object $autorizacion, string $companyRuc): array
     {
         $comprobanteXml = (string) $autorizacion->comprobante;
         $xml = new SimpleXMLElement($comprobanteXml, LIBXML_NONET);

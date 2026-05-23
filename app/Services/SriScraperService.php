@@ -7,6 +7,7 @@ use App\Models\Tenant\Contact;
 use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\Retention;
+use App\Models\Tenant\Scopes\CompanyScope;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\SriScrapeJob;
 use App\Models\Tenant\VoucherType;
@@ -39,7 +40,7 @@ class SriScraperService
      *
      * @return array{imported: int, skipped: int, errors: int}
      */
-    public function execute(SriScrapeJob $scrapeJob, Company $company): array
+    public function execute(SriScrapeJob $scrapeJob, Company $company, string $tenantId = ''): array
     {
         $scrapeJob->update([
             'status' => 'running',
@@ -67,18 +68,17 @@ class SriScraperService
                 $config['downloadDir'] = $downloadDir;
             }
 
-            // 2Captcha API key is optional (stealth may bypass captcha without it)
-            $captchaKey = config('sri.captcha.api_key');
-            if ($captchaKey) {
-                $config['apiKey'] = $captchaKey;
-            }
-
             // Skip claves already in the DB to avoid redundant SOAP calls / modal scrapes
             $config['skipClaves'] = $this->getExistingClavesForMonth($scrapeJob, $company);
 
             $result = $serverUrl
-                ? $this->runViaServer($serverUrl, $config, $scrapeJob)
+                ? $this->runViaServer($serverUrl, $config, $scrapeJob, $tenantId)
                 : $this->runNodeScript($config, $scrapeJob);
+
+            // Async mode: server accepted the job and will callback when done
+            if (($result['async'] ?? false) === true) {
+                return ['imported' => 0, 'skipped' => 0, 'errors' => 0];
+            }
 
             return $this->processResult($result, $scrapeJob, $company);
 
@@ -110,17 +110,27 @@ class SriScraperService
     }
 
     /**
-     * Send scrape request to the running Python server (--visible mode).
+     * Send scrape request to the running Python server.
+     *
+     * When a callbackUrl is provided the server responds immediately with
+     * {"status":"accepted"} and POSTs the result back asynchronously.
      */
-    private function runViaServer(string $serverUrl, array $config, SriScrapeJob $scrapeJob): array
+    private function runViaServer(string $serverUrl, array $config, SriScrapeJob $scrapeJob, string $tenantId = ''): array
     {
-        $timeout = config('sri.scraper.timeout', 300);
-
         $scrapeJob->update([
             'progress' => ['step' => 'server', 'message' => 'Enviando petición al servidor del scraper...'],
         ]);
 
-        $response = Http::timeout($timeout)
+        // Build a signed callback URL so the server can POST the result back
+        if ($tenantId) {
+            $token = hash_hmac('sha256', "{$scrapeJob->id}:{$tenantId}", config('app.key'));
+            $callbackBase = config('sri.scraper.callback_url', config('app.url'));
+            $config['callbackUrl'] = rtrim($callbackBase, '/')
+                ."/scrape-callback?job={$scrapeJob->id}&tenant={$tenantId}&token={$token}";
+        }
+
+        // Short timeout: only waits for the initial handshake ("accepted" or sync result)
+        $response = Http::timeout(30)
             ->post(rtrim($serverUrl, '/').'/scrape', $config);
 
         if ($response->failed()) {
@@ -130,6 +140,15 @@ class SriScraperService
         }
 
         $body = $response->json();
+
+        // Async mode confirmed: server will POST result to callbackUrl
+        if (($body['status'] ?? null) === 'accepted') {
+            $scrapeJob->update([
+                'progress' => ['step' => 'server', 'message' => 'Procesando en el servidor… recibiremos el resultado por callback.'],
+            ]);
+
+            return ['async' => true];
+        }
 
         if (($body['event'] ?? null) === 'error') {
             throw new \RuntimeException($body['data']['message'] ?? 'Error desconocido del scraper');
@@ -234,7 +253,7 @@ class SriScraperService
     /**
      * @return array{imported: int, skipped: int, errors: int}
      */
-    private function processResult(array $result, SriScrapeJob $scrapeJob, Company $company): array
+    public function processResult(array $result, SriScrapeJob $scrapeJob, Company $company): array
     {
         $mode = $result['mode'] ?? $scrapeJob->mode;
 
@@ -305,8 +324,26 @@ class SriScraperService
                     $stats['errors'] += $retStats['errors'];
                 }
 
-                // SOAP import for claves ≤30 days
+                // SOAP import for claves ≤30 days — skip any already processed via XML or modal
                 if (! empty($content)) {
+                    $processedClaves = array_flip(array_filter(array_merge(
+                        array_column($xmls, 'clave'),
+                        array_map(fn ($e) => $e['clave_acceso'] ?? $e['clave'] ?? '', $modalEntries),
+                    )));
+
+                    if (! empty($processedClaves)) {
+                        $txtLines = preg_split('/\r?\n/', $content);
+                        $header = array_shift($txtLines);
+                        $txtLines = array_filter($txtLines, function (string $line) use ($processedClaves): bool {
+                            if (preg_match('/\d{49}/', $line, $m)) {
+                                return ! isset($processedClaves[$m[0]]);
+                            }
+
+                            return true;
+                        });
+                        $content = $header."\n".implode("\n", $txtLines);
+                    }
+
                     $soapStats = $this->importContent($content, $type, $scrapeJob->type, $company);
                     $stats['imported'] += $soapStats['imported'];
                     $stats['skipped'] += $soapStats['skipped'];
@@ -366,8 +403,32 @@ class SriScraperService
 
             try {
                 if ($voucherType === 'Retencion') {
-                    // Retention XMLs are not yet handled via direct download
-                    $skipped++;
+                    try {
+                        $authXml = new \SimpleXMLElement($xmlContent, LIBXML_NONET);
+                        $authEl = $authXml->getName() === 'autorizacion' ? $authXml : ($authXml->autorizacion ?? null);
+
+                        if ($authEl === null || ! isset($authEl->comprobante)) {
+                            $skipped++;
+
+                            continue;
+                        }
+
+                        $autorizacion = (object) [
+                            'comprobante' => (string) $authEl->comprobante,
+                            'numeroAutorizacion' => (string) ($authEl->numeroAutorizacion ?? ''),
+                            'fechaAutorizacion' => (string) ($authEl->fechaAutorizacion ?? now()->toIso8601String()),
+                        ];
+                    } catch (\Throwable) {
+                        $skipped++;
+
+                        continue;
+                    }
+
+                    $retStats = $scrapeType === 'compras'
+                        ? $this->orderRetentionImportService->processRetention($autorizacion, $company->ruc)
+                        : $this->shopRetentionImportService->processRetention($autorizacion, $company->ruc);
+                    $imported += $retStats['imported'];
+                    $skipped += $retStats['skipped'];
 
                     continue;
                 }
@@ -410,6 +471,7 @@ class SriScraperService
         $imported = 0;
         $skipped = 0;
         $errors = 0;
+        $voucherTypeCache = [];
 
         foreach ($entries as $entry) {
             // Prefer the modal's clave_acceso; fall back to the row's clave key
@@ -421,7 +483,7 @@ class SriScraperService
                 continue;
             }
 
-            if (Order::where('autorization', $claveAcceso)->exists()) {
+            if (Order::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)->where('autorization', $claveAcceso)->exists()) {
                 $skipped++;
 
                 continue;
@@ -512,7 +574,8 @@ class SriScraperService
                     }
                 }
 
-                $voucherTypeId = VoucherType::where('code', substr($claveAcceso, 8, 2))->value('id');
+                $voucherCode = substr($claveAcceso, 8, 2);
+                $voucherTypeId = $voucherTypeCache[$voucherCode] ??= VoucherType::where('code', $voucherCode)->value('id');
 
                 Order::create([
                     'company_id' => $company->id,
@@ -595,6 +658,8 @@ class SriScraperService
         $imported = 0;
         $skipped = 0;
         $errors = 0;
+        $contactIdCache = [];
+        $retentionCache = [];
 
         foreach ($entries as $entry) {
             $claveAcceso = $entry['clave'] ?? $entry['clave_acceso'] ?? '';
@@ -637,24 +702,46 @@ class SriScraperService
                 // Format num_doc_sustento as shop serie: NNN-NNN-NNNNNNNNN
                 $serie = substr($numDoc, 0, 3).'-'.substr($numDoc, 3, 3).'-'.substr($numDoc, 6);
 
-                // Parse fecha_doc_sustento from first item
+                // Parse fecha_doc_sustento from first item — date is mandatory for an unambiguous match
                 $fechaDocRaw = trim($items[0]['fecha_doc_sustento'] ?? '');
-                $emisionDoc = null;
-                if ($fechaDocRaw) {
-                    try {
-                        // Modal returns formats like "2026-04-07 00:00:00.0" or "2026-04-07"
-                        $emisionDoc = Carbon::parse($fechaDocRaw)->format('Y-m-d');
-                    } catch (\Throwable) {
-                        // ignore, search without date
-                    }
+                try {
+                    // Modal returns formats like "2026-04-07 00:00:00.0" or "2026-04-07"
+                    $emisionDoc = Carbon::parse($fechaDocRaw)->format('Y-m-d');
+                } catch (\Throwable) {
+                    $skipped++;
+
+                    continue;
                 }
 
-                $shop = $emisionDoc
-                    ? Shop::where('serie', $serie)->whereDate('emision', $emisionDoc)->first()
-                    : Shop::where('serie', $serie)->first();
+                // Resolve supplier contact — same serie+date can exist from different providers
+                $idSujeto = trim($entry['id_sujeto'] ?? '');
+                $contactId = $contactIdCache[$idSujeto] ??= Contact::where('identification', $idSujeto)->value('id');
+                $shopQuery = Shop::withoutGlobalScopes()
+                    ->where('company_id', $scrapeJob->company_id)
+                    ->where('serie', $serie)
+                    ->whereDate('emision', $emisionDoc);
+
+                if ($contactId) {
+                    $shopQuery->where('contact_id', $contactId);
+                } else {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $shop = $shopQuery->first();
 
                 if (! $shop) {
                     $skipped++;
+
+                    Log::warning('SRI scrape: NO hay la compra', [
+                        'ruc' => $entry['id_sujeto'],
+                        'contact_id' => $contactId,
+                        'emision' => $emisionDoc,
+                        'serie' => $serie,
+                        'num_doc_sustento' => $numDoc,
+                        'company_id' => $scrapeJob->company_id,
+                    ]);
 
                     continue;
                 }
@@ -666,7 +753,8 @@ class SriScraperService
                     $base = (float) ($item['base_imponible'] ?? 0);
                     $valor = (float) ($item['valor_retenido'] ?? 0);
 
-                    $retention = Retention::where('type', $tipoImpuesto)
+                    $retentionCacheKey = $tipoImpuesto.':'.$porcentaje;
+                    $retention = $retentionCache[$retentionCacheKey] ??= Retention::where('type', $tipoImpuesto)
                         ->where('percentage', $porcentaje)
                         ->first();
 
@@ -763,14 +851,16 @@ class SriScraperService
         $month = $scrapeJob->month;
 
         if ($scrapeJob->type === 'ventas') {
-            $orderClaves = Order::where('company_id', $company->id)
+            $orderClaves = Order::withoutGlobalScope(CompanyScope::class)
+                ->where('company_id', $company->id)
                 ->whereYear('emision', $year)
                 ->whereMonth('emision', $month)
                 ->whereNotNull('autorization')
                 ->pluck('autorization')
                 ->all();
 
-            $retentionClaves = Shop::where('company_id', $company->id)
+            $retentionClaves = Shop::withoutGlobalScope(CompanyScope::class)
+                ->where('company_id', $company->id)
                 ->whereYear('date_retention', $year)
                 ->whereMonth('date_retention', $month)
                 ->whereNotNull('autorization_retention')
@@ -781,14 +871,16 @@ class SriScraperService
         }
 
         // compras: facturas/NC/ND recibidas (Shop) + retenciones recibidas (Order)
-        $shopClaves = Shop::where('company_id', $company->id)
+        $shopClaves = Shop::withoutGlobalScope(CompanyScope::class)
+            ->where('company_id', $company->id)
             ->whereYear('emision', $year)
             ->whereMonth('emision', $month)
             ->whereNotNull('autorization')
             ->pluck('autorization')
             ->all();
 
-        $orderRetentionClaves = Order::where('company_id', $company->id)
+        $orderRetentionClaves = Order::withoutGlobalScope(CompanyScope::class)
+            ->where('company_id', $company->id)
             ->whereYear('emision', $year)
             ->whereMonth('emision', $month)
             ->whereNotNull('autorization_retention')

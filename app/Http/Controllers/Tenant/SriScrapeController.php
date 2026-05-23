@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Jobs\ScrapeFromSriJob;
 use App\Models\Tenant\SriScrapeJob;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,7 +20,7 @@ class SriScrapeController extends Controller
         $jobs = SriScrapeJob::where('company_id', $company->id)
             ->where('created_at', '>=', now()->subDays(7))
             ->orderByDesc('created_at')
-            ->get(['id', 'type', 'year', 'month', 'mode', 'status', 'progress', 'result', 'error_message', 'created_at', 'completed_at']);
+            ->get(['id', 'type', 'year', 'month', 'mode', 'voucher_types', 'status', 'progress', 'result', 'error_message', 'created_at', 'completed_at']);
 
         return Inertia::render('Tenant/SriScrape/Index', [
             'jobs' => $jobs,
@@ -56,10 +55,11 @@ class SriScrapeController extends Controller
             return back()->with('error', 'Ya existe una descarga en progreso para este tipo.');
         }
 
-        // Determine mode based on date
-        $requestedDate = Carbon::create($validated['year'], $validated['month'], 1);
-        $previousMonth = now()->subMonth()->startOfMonth();
-        $mode = $requestedDate->gte($previousMonth) ? 'txt_download' : 'table_scrape';
+        // Always use txt_download: the Python scraper handles the 30-day split internally.
+        // For recent claves (≤30 days) it uses SOAP; for older ones it downloads XMLs directly
+        // from the SRI table. The legacy table_scrape mode only extracted claves and then
+        // attempted SOAP authorization, which fails for documents older than 30 days.
+        $mode = 'txt_download';
 
         $scrapeJob = SriScrapeJob::create([
             'company_id' => $company->id,
@@ -71,7 +71,7 @@ class SriScrapeController extends Controller
             'status' => 'pending',
         ]);
 
-        ScrapeFromSriJob::dispatch($scrapeJob->id, $company->id);
+        ScrapeFromSriJob::dispatch($scrapeJob->id, $company->id, tenancy()->tenant->getTenantKey());
 
         return back()->with('success', 'Descarga del SRI iniciada. Se actualizará el estado automáticamente.');
     }
@@ -84,7 +84,7 @@ class SriScrapeController extends Controller
             ->where('created_at', '>=', now()->subDays(7))
             ->orderByDesc('created_at')
             ->limit(10)
-            ->get(['id', 'type', 'year', 'month', 'mode', 'status', 'progress', 'result', 'error_message', 'created_at', 'completed_at']);
+            ->get(['id', 'type', 'year', 'month', 'mode', 'voucher_types', 'status', 'progress', 'result', 'error_message', 'created_at', 'completed_at']);
 
         return response()->json(['jobs' => $jobs]);
     }

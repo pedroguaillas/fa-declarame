@@ -182,7 +182,6 @@ def human_type(page: Page, selector: str, text: str) -> None:
 
 def simulate_human_presence(page: Page, duration_s: float = 8.0) -> None:
     """Simulate a human browsing the page for a while before taking action."""
-    progress("stealth", f"Simulando presencia humana ({duration_s:.0f}s)...")
     start = time.time()
 
     while time.time() - start < duration_s:
@@ -1032,13 +1031,6 @@ def scrape_modals_from_table(
 
     # Close any stale dialogs left open from previous iterations or runs
     _close_modal(page)
-    stale_count = page.evaluate("""() =>
-        document.querySelectorAll('.ui-dialog:not([style*="display: none"])').length
-    """)
-    if stale_count:
-        progress("modal-scrape", f"Advertencia: {stale_count} diálogos aún visibles tras limpieza")
-    else:
-        progress("modal-scrape", "Diálogos limpios, iniciando extracción...")
 
     while remaining:
         progress("modal-scrape", f"Página {page_num}, pendientes: {len(remaining)}...")
@@ -1449,7 +1441,6 @@ def _click_and_scrape_modal(
         total = modal_data.get("importe_total", 0)
         progress("modal-scrape", f"Datos extraídos: clave={clave[:20]}... comprador={comprador} total={total}")
 
-    progress("modal-scrape", "Cerrando modal...")
     _close_modal(page)
     return modal_data
 
@@ -1501,59 +1492,69 @@ def download_xmls_from_table(
     page: Page, tipo: str, old_claves: set[str]
 ) -> list[dict]:
     """
-    Iterate the results table (already loaded after txt download) and for each
-    row whose clave_acceso is in old_claves, click the Documento button
-    (column 10, index 9) to download the XML directly.
+    Iterate the results table and for each row that has an XML download button,
+    click it with a real Playwright click and capture the XML response.
+
+    Detection strategy: querySelectorAll('a[id$=":lnkXml"]') finds all XML buttons
+    directly — no column-index guessing, no data-ri construction, no getElementById.
+    Clave is extracted from the closest <tr> by scanning <a> text for 49 digits.
     """
     if not old_claves:
         return []
 
-    table_id = get_table_id(tipo)
     results = []
-    remaining = set(old_claves)
     page_num = 1
 
     progress(
         "xml-tabla",
-        f"Descargando XMLs de tabla para {len(remaining)} comprobantes...",
+        f"Descargando XMLs de tabla para {len(old_claves)} comprobantes...",
     )
 
-    while remaining:
-        progress("xml-tabla", f"Página {page_num}, pendientes: {len(remaining)}...")
+    while True:
+        progress("xml-tabla", f"Página {page_num}...")
 
-        rows_info = page.evaluate(
-            """(tblId) => {
-            const tbody = document.getElementById(tblId);
-            if (!tbody) return [];
-            const rows = tbody.querySelectorAll('tr');
-            return Array.from(rows).map((row, i) => {
-                const cells = row.querySelectorAll('td');
+        # Collect all XML button IDs and associated claves visible on this page.
+        # Done in a single evaluate so we can iterate safely before any clicks.
+        items = page.evaluate("""() => {
+            const result = [];
+            const xmlLinks = document.querySelectorAll('a[id$=":lnkXml"]');
+            for (const link of xmlLinks) {
+                const row = link.closest('tr');
                 let clave = null;
-                for (const cell of cells) {
-                    const text = cell.textContent?.trim();
-                    if (text && /^\\d{49}$/.test(text)) { clave = text; break; }
+                if (row) {
+                    // Scan every <a> in the row whose text is exactly 49 digits
+                    for (const a of row.querySelectorAll('a')) {
+                        const t = (a.textContent ?? '').trim();
+                        if (/^\\d{49}$/.test(t)) { clave = t; break; }
+                    }
+                    // Fallback: hidden inputs
+                    if (!clave) {
+                        for (const inp of row.querySelectorAll('input[type="hidden"]')) {
+                            const v = (inp.value ?? '').trim();
+                            if (/^\\d{49}$/.test(v)) { clave = v; break; }
+                        }
+                    }
                 }
-                const docCell = cells[9] ?? null;
-                const hasBtn = docCell
-                    ? !!docCell.querySelector('a, button, span[class*="ui-icon"], .ui-button')
-                    : false;
-                return { rowIndex: i, clave, hasBtn };
-            });
-        }""",
-            table_id,
-        )
+                result.push({ linkId: link.id, clave });
+            }
+            return result;
+        }""")
 
-        for row_info in rows_info:
-            clave = row_info.get("clave")
-            if not clave or clave not in remaining:
-                continue
-            if not row_info.get("hasBtn"):
-                progress("xml-tabla", f"Sin botón Documento para ...{clave[-10:]}")
-                remaining.discard(clave)
+        progress("xml-tabla", f"Página {page_num}: {len(items)} botones XML encontrados")
+
+        for item in items:
+            link_id = item.get("linkId", "")
+            clave = item.get("clave")
+
+            if not link_id:
                 continue
 
-            progress("xml-tabla", f"Descargando XML ...{clave[-10:]}...")
-            xml_content = _capture_xml_from_row(page, table_id, row_info["rowIndex"])
+            if not clave:
+                progress("xml-tabla", f"Sin clave en fila de {link_id}, omitiendo")
+                continue
+
+            progress("xml-tabla", f"Click en {link_id} (clave ...{clave[-10:]})...")
+            xml_content = _capture_xml_by_link_id(page, link_id)
 
             if xml_content:
                 results.append({"clave": clave, "xml": xml_content})
@@ -1561,7 +1562,6 @@ def download_xmls_from_table(
             else:
                 progress("xml-tabla", f"No se pudo capturar XML para ...{clave[-10:]}")
 
-            remaining.discard(clave)
             random_delay(0.5, 1.5)
 
         has_next = page.evaluate(
@@ -1581,8 +1581,15 @@ def download_xmls_from_table(
     return results
 
 
-def _capture_xml_from_row(page: Page, table_id: str, row_index: int) -> str | None:
-    """Click the Documento button (col 10, index 9) of a table row and capture XML."""
+def _capture_xml_by_link_id(page: Page, xml_link_id: str) -> str | None:
+    """Click an XML download link using a real Playwright click and capture the response.
+
+    The onclick calls mojarra.jsfcljs (JSF form POST). A JS .click() via page.evaluate
+    does NOT reliably trigger JSF form submissions in Playwright — a real browser-level
+    click via page.locator().click() is required to fire the onclick handler properly.
+
+    Selector uses [id='...'] attribute form to avoid CSS colon-escaping issues.
+    """
     captured = {"content": None}
 
     def on_xml_response(response):
@@ -1600,27 +1607,18 @@ def _capture_xml_from_row(page: Page, table_id: str, row_index: int) -> str | No
             except Exception:
                 pass
 
-    click_js = """({tblId, rowIndex}) => {
-        const tbody = document.getElementById(tblId);
-        if (!tbody) return false;
-        const rows = tbody.querySelectorAll('tr');
-        const row = rows[rowIndex];
-        if (!row) return false;
-        const cells = row.querySelectorAll('td');
-        const docCell = cells[9];
-        if (!docCell) return false;
-        const btn = docCell.querySelector('a, button, span[class*="ui-icon"], .ui-button');
-        if (!btn) return false;
-        btn.click();
-        return true;
-    }"""
+    # [id='...'] attribute selector avoids CSS colon-escaping for IDs like
+    # "frmPrincipal:tablaCompRecibidos:250:lnkXml"
+    selector = f"[id='{xml_link_id}']"
+    locator = page.locator(selector).first
 
     page.on("response", on_xml_response)
     try:
-        # Try Playwright download event first
+        # Attempt 1: real Playwright click + expect_download (JSF sends file as attachment)
         try:
             with page.expect_download(timeout=15000) as dl_info:
-                page.evaluate(click_js, {"tblId": table_id, "rowIndex": row_index})
+                # force=True bypasses actionability checks (visibility, overlap, etc.)
+                locator.click(timeout=5000, force=True)
             dl = dl_info.value
             tmp_path = Path(dl.path()) if dl.path() else None
             if tmp_path and tmp_path.exists():
@@ -1629,13 +1627,16 @@ def _capture_xml_from_row(page: Page, table_id: str, row_index: int) -> str | No
                     return raw.decode("utf-8")
                 except UnicodeDecodeError:
                     return raw.decode("latin-1")
-        except Exception:
-            pass  # fall through to response interceptor
+        except Exception as e:
+            progress("xml-tabla", f"expect_download falló ({e}), intentando interceptor...")
 
-        # Fallback: response interceptor (inline XML responses)
+        # Attempt 2: response interceptor — JSF may stream XML inline (no download dialog)
         if not captured["content"]:
-            page.evaluate(click_js, {"tblId": table_id, "rowIndex": row_index})
-            for _ in range(10):
+            try:
+                locator.click(timeout=5000, force=True)
+            except Exception as e:
+                progress("xml-tabla", f"Click falló: {e}")
+            for _ in range(20):
                 time.sleep(0.5)
                 if captured["content"]:
                     break

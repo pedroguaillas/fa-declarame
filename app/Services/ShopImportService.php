@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Tenant\Contact;
 use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Product;
+use App\Models\Tenant\Scopes\CompanyScope;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\VoucherType;
@@ -83,7 +84,7 @@ class ShopImportService
             if (
                 strlen($claveAcceso) !== 49
                 || ! in_array(substr($claveAcceso, 8, 2), $validCodes)
-                || Shop::where('autorization', $claveAcceso)->exists()
+                || Shop::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)->where('autorization', $claveAcceso)->exists()
             ) {
                 $skipped++;
 
@@ -222,7 +223,7 @@ class ShopImportService
             return false;
         }
 
-        if (Shop::where('autorization', $claveAcceso)->exists()) {
+        if (Shop::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)->where('autorization', $claveAcceso)->exists()) {
             return false;
         }
 

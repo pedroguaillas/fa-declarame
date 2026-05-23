@@ -7,12 +7,16 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SriScrapeCallbackController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+// Scraper callback — central route, no tenant middleware, token-authenticated
+Route::post('/scrape-callback', [SriScrapeCallbackController::class, 'handle'])
+    ->name('scrape.callback');
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [

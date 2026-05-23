@@ -259,12 +259,26 @@ function visibleActions(item: T): ActionDef<T>[] {
                                 {{ badgeDisplayValue(item, col) }}
                             </Badge>
                             <!-- Texto plano -->
-                            <span
-                                v-else
-                                class="text-foreground truncate text-xs"
-                            >
-                                {{ cellValue(item, col) }}
-                            </span>
+                            <template v-else>
+                                <span class="text-foreground truncate text-xs">
+                                    {{ cellValue(item, col) }}
+                                </span>
+                                <div
+                                    v-if="col.chips?.(item[col.key], item).length"
+                                    class="mt-1 flex flex-wrap gap-1"
+                                >
+                                    <span
+                                        v-for="(chip, ci) in col.chips(item[col.key], item)"
+                                        :key="ci"
+                                        :class="[
+                                            'inline-flex items-center rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none tracking-wide',
+                                            chip.class ?? 'bg-muted text-muted-foreground',
+                                        ]"
+                                    >
+                                        {{ chip.label }}
+                                    </span>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>

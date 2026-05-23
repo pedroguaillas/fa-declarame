@@ -18,6 +18,7 @@ export interface ColumnDef<T> {
     avatar?: AvatarDef<T>;
     format?: (value: any, item: T) => string;
     labelDescription?: (value: any, item: T) => string;
+    chips?: (value: any, item: T) => Array<{ label: string; class?: string }>;
 }
 
 export interface ActionDef<T> {

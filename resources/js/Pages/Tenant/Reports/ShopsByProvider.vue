@@ -2,6 +2,7 @@
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Head, router } from "@inertiajs/vue3";
 import { computed, ref } from "vue";
+import { useDateRangeFilter } from "@/composables/useDateRangeFilter";
 import { Download } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 
@@ -18,6 +19,7 @@ interface Row {
 interface Filters {
     start_date: string | null;
     end_date: string | null;
+    only_authorized: boolean;
 }
 
 const props = defineProps<{
@@ -25,15 +27,17 @@ const props = defineProps<{
     filters: Filters;
 }>();
 
-const startDate = ref(props.filters.start_date ?? "");
-const endDate = ref(props.filters.end_date ?? "");
+const { startDate, endDate, minDate, maxDate, dateRangeError } = useDateRangeFilter(props.filters.start_date, props.filters.end_date);
+const onlyAuthorized = ref(props.filters.only_authorized ?? true);
 
 function applyFilters() {
+    if (dateRangeError.value) return;
     router.get(
         route("tenant.reports.shops-by-provider"),
         {
             start_date: startDate.value || undefined,
             end_date: endDate.value || undefined,
+            only_authorized: onlyAuthorized.value ? "1" : "0",
         },
         { preserveState: true },
     );
@@ -42,6 +46,7 @@ function applyFilters() {
 function clearFilters() {
     startDate.value = "";
     endDate.value = "";
+    onlyAuthorized.value = true;
     router.get(route("tenant.reports.shops-by-provider"), {}, { preserveState: true });
 }
 
@@ -49,6 +54,7 @@ function download() {
     const params = new URLSearchParams();
     if (props.filters.start_date) params.set("start_date", props.filters.start_date);
     if (props.filters.end_date) params.set("end_date", props.filters.end_date);
+    params.set("only_authorized", props.filters.only_authorized ? "1" : "0");
     window.location.href = route("tenant.reports.shops-by-provider.export") + "?" + params.toString();
 }
 
@@ -85,6 +91,8 @@ const totals = computed(() => ({
                 <input
                     v-model="startDate"
                     type="date"
+                    :min="minDate"
+                    :max="maxDate"
                     class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
             </div>
@@ -93,8 +101,14 @@ const totals = computed(() => ({
                 <input
                     v-model="endDate"
                     type="date"
+                    :min="minDate"
+                    :max="maxDate"
                     class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
+            </div>
+            <div class="flex items-center gap-2 self-center">
+                <input id="only-authorized-provider" v-model="onlyAuthorized" type="checkbox" class="border-border size-4 rounded" />
+                <label for="only-authorized-provider" class="text-muted-foreground cursor-pointer text-xs font-medium">Solo autorizados</label>
             </div>
             <button
                 type="button"
@@ -103,6 +117,7 @@ const totals = computed(() => ({
             >
                 Filtrar
             </button>
+            <span v-if="dateRangeError" class="text-destructive self-center text-xs">{{ dateRangeError }}</span>
             <button
                 v-if="filters.start_date || filters.end_date"
                 type="button"
@@ -122,36 +137,12 @@ const totals = computed(() => ({
             <table v-else class="divide-border min-w-full divide-y">
                 <thead class="bg-muted">
                     <tr>
-                        <th
-                            class="text-muted-foreground px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                        >
-                            Proveedor
-                        </th>
-                        <th
-                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
-                        >
-                            Subtotal
-                        </th>
-                        <th
-                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
-                        >
-                            IVA
-                        </th>
-                        <th
-                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
-                        >
-                            Total
-                        </th>
-                        <th
-                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
-                        >
-                            Retenciones
-                        </th>
-                        <th
-                            class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
-                        >
-                            A Pagar
-                        </th>
+                        <th class="text-muted-foreground px-4 py-3 text-left text-xs font-medium tracking-wider uppercase">Proveedor</th>
+                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Subtotal</th>
+                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">IVA</th>
+                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Total</th>
+                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Retenciones</th>
+                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">A Pagar</th>
                     </tr>
                 </thead>
                 <tbody class="divide-border bg-card divide-y">
@@ -160,47 +151,31 @@ const totals = computed(() => ({
                             <p class="text-foreground font-medium">{{ row.name }}</p>
                             <p class="text-muted-foreground font-mono text-xs">{{ row.identification }}</p>
                         </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">
-                            {{ fmt(row.subtotal) }}
-                        </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">
-                            {{ fmt(row.iva) }}
-                        </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">
-                            {{ fmt(row.total) }}
-                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.subtotal) }}</td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.iva) }}</td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.total) }}</td>
                         <td
                             class="px-4 py-3 text-right font-mono text-sm tabular-nums"
                             :class="row.retentions > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'"
                         >
                             {{ fmt(row.retentions) }}
                         </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
-                            {{ fmt(row.a_pagar) }}
-                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(row.a_pagar) }}</td>
                     </tr>
                 </tbody>
                 <tfoot class="bg-muted border-border border-t-2">
                     <tr>
                         <td class="text-foreground px-4 py-3 text-sm font-semibold">Total general</td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
-                            {{ fmt(totals.subtotal) }}
-                        </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
-                            {{ fmt(totals.iva) }}
-                        </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
-                            {{ fmt(totals.total) }}
-                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.subtotal) }}</td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.iva) }}</td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.total) }}</td>
                         <td
                             class="px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums"
                             :class="totals.retentions > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'"
                         >
                             {{ fmt(totals.retentions) }}
                         </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-bold tabular-nums">
-                            {{ fmt(totals.a_pagar) }}
-                        </td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-bold tabular-nums">{{ fmt(totals.a_pagar) }}</td>
                     </tr>
                 </tfoot>
             </table>

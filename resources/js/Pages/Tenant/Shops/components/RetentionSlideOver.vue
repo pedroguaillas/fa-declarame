@@ -11,11 +11,11 @@ import type { RetentionItem, RetentionOption, Shop, ShopItem } from "@/types/ten
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
-const today = new Date().toISOString().slice(0, 10);
 const panelOpen = ref(false);
 const selectedShop = ref<Shop | null>(null);
 const shopItems = ref<ShopItem[]>([]);
 const shopItemsLoading = ref(false);
+const isEditing = ref(false);
 
 interface ItemSearch {
     query: string;
@@ -67,6 +67,7 @@ async function open(shop: Shop) {
     shopItems.value = [];
     shopItemsLoading.value = true;
     panelOpen.value = true;
+    isEditing.value = false;
 
     // Inicializar sincrónicamente para que el template no encuentre itemSearches[idx] undefined
     if (!shop.serie_retention) {
@@ -100,6 +101,37 @@ function close() {
     panelOpen.value = false;
     selectedShop.value = null;
     shopItems.value = [];
+    isEditing.value = false;
+}
+
+function startEditing() {
+    const shop = selectedShop.value;
+    if (!shop) return;
+
+    retentionForm.serie_retention = shop.serie_retention ?? "";
+    retentionForm.date_retention = toInputDate(shop.date_retention);
+    retentionForm.autorization_retention = shop.autorization_retention ?? "";
+
+    const existingItems = shop.retention_items ?? [];
+    if (existingItems.length > 0) {
+        retentionForm.items = existingItems.map((item) => ({
+            retention_id: item.retention_id ?? null,
+            base: Number(item.base),
+            percentage: String(item.percentage),
+            value: String(item.value),
+        }));
+        itemSearches.value = existingItems.map((item) => ({
+            query: item.retention ? `${item.retention.code} – ${item.retention.description}` : "",
+            open: false,
+            rect: null,
+        }));
+    } else {
+        retentionForm.items = [emptyItem(shop.sub_total ?? 0)];
+        itemSearches.value = [emptySearch()];
+    }
+
+    fetchRetentions("");
+    isEditing.value = true;
 }
 
 defineExpose({ open, close });
@@ -159,10 +191,50 @@ function recalcValue(idx: number) {
 
 function submitRetention() {
     if (!selectedShop.value) return;
-    retentionForm.post(
-        route("tenant.shops.retention.store", { shop: selectedShop.value.id }),
-        { onSuccess: () => close() },
-    );
+
+    if (isEditing.value) {
+        retentionForm.put(
+            route("tenant.shops.retention.update", { shop: selectedShop.value.id }),
+            { onSuccess: () => close() },
+        );
+    } else {
+        retentionForm.post(
+            route("tenant.shops.retention.store", { shop: selectedShop.value.id }),
+            { onSuccess: () => close() },
+        );
+    }
+}
+
+/** Convierte DD-MM-YYYY → YYYY-MM-DD. Retorna vacío si el formato no coincide. */
+function toInputDate(raw: string | null | undefined): string {
+    if (!raw) return "";
+    if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) {
+        const [d, m, y] = raw.split("-");
+        return `${y}-${m}-${d}`;
+    }
+    return raw;
+}
+
+function retentionMinDate(): string {
+    return toInputDate(selectedShop.value?.emision);
+}
+
+function retentionMaxDate(): string {
+    const dateRetention = selectedShop.value?.date_retention;
+    if (!isEditing.value || !dateRetention) return "";
+    const iso = toInputDate(dateRetention);
+    if (!iso) return "";
+    const d = new Date(iso);
+    d.setDate(d.getDate() + 4);
+    return d.toISOString().slice(0, 10);
+}
+
+function cancelForm() {
+    if (isEditing.value) {
+        isEditing.value = false;
+    } else {
+        close();
+    }
 }
 
 function openSearch(idx: number, event: FocusEvent) {
@@ -244,7 +316,10 @@ function closeItemSearchDelayed(idx: number) {
                     </div>
 
                     <!-- Registered view -->
-                    <div v-if="selectedShop.serie_retention" class="min-w-0 flex-1 overflow-y-auto p-6">
+                    <div v-if="selectedShop.serie_retention && !isEditing" class="min-w-0 flex-1 overflow-y-auto p-6">
+                        <div class="mb-4 flex justify-end">
+                            <Button variant="outline" size="sm" type="button" @click="startEditing">Editar</Button>
+                        </div>
                         <div class="mb-6 grid grid-cols-2 gap-4">
                             <div>
                                 <p class="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">
@@ -358,8 +433,8 @@ function closeItemSearchDelayed(idx: number) {
                         </div>
                     </div>
 
-                    <!-- Registration form -->
-                    <form v-else class="flex flex-1 flex-col overflow-hidden" @submit.prevent="submitRetention">
+                    <!-- Registration / Edit form -->
+                    <form v-if="!selectedShop.serie_retention || isEditing" class="flex flex-1 flex-col overflow-hidden" @submit.prevent="submitRetention">
                         <div class="flex-1 space-y-5 overflow-y-auto p-6">
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="flex flex-col gap-1.5">
@@ -385,8 +460,8 @@ function closeItemSearchDelayed(idx: number) {
                                     <input
                                         v-model="retentionForm.date_retention"
                                         type="date"
-                                        min="2015-01-01"
-                                        :max="today"
+                                        :min="retentionMinDate()"
+                                        :max="retentionMaxDate() || undefined"
                                         class="border-border bg-background text-foreground focus:ring-ring/30 h-9 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
                                     />
                                     <p v-if="retentionForm.errors.date_retention" class="text-destructive text-xs">
@@ -540,9 +615,11 @@ function closeItemSearchDelayed(idx: number) {
                             </div>
                         </div>
                         <div class="border-border flex items-center justify-end gap-3 border-t px-6 py-4">
-                            <Button variant="outline" type="button" @click="close">Cancelar</Button>
+                            <Button variant="outline" type="button" @click="cancelForm">
+                                Cancelar
+                            </Button>
                             <Button type="submit" :disabled="retentionForm.processing">
-                                {{ retentionForm.processing ? "Guardando…" : "Guardar retención" }}
+                                {{ retentionForm.processing ? "Guardando…" : isEditing ? "Actualizar retención" : "Guardar retención" }}
                             </Button>
                         </div>
                     </form>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
     AlertDialog,
-    AlertDialogAction,
     AlertDialogCancel,
     AlertDialogContent,
     AlertDialogDescription,
@@ -9,6 +8,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-vue-next";
 import { computed } from "vue";
 
@@ -66,15 +66,16 @@ const variantClasses = computed(() => {
                     {{ cancelLabel }}
                 </AlertDialogCancel>
 
-                <AlertDialogAction
+                <Button
+                    type="button"
                     class="cursor-pointer"
-                    @click.prevent="emit('confirm')"
                     :class="variantClasses"
                     :disabled="loading"
+                    @click="emit('confirm')"
                 >
                     <Loader2 v-if="loading" class="size-4 animate-spin" />
                     {{ confirmLabel }}
-                </AlertDialogAction>
+                </Button>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>

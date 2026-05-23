@@ -7,6 +7,7 @@ use App\Models\Tenant\Contact;
 use App\Models\Tenant\IdentificationType;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\Retention;
+use App\Models\Tenant\Scopes\CompanyScope;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
 use Constants;
@@ -86,7 +87,7 @@ class OrderRetentionImportService
     /**
      * @return array{imported: int, skipped: int}
      */
-    private function processRetention(object $autorizacion, string $companyRuc): array
+    public function processRetention(object $autorizacion, string $companyRuc): array
     {
         $comprobanteXml = (string) $autorizacion->comprobante;
         $xml = new SimpleXMLElement($comprobanteXml, LIBXML_NONET);
@@ -112,13 +113,15 @@ class OrderRetentionImportService
             $autorizacionRetention = (string) $xml->infoTributaria->claveAcceso;
         }
 
+        $company = Company::where('ruc', $companyRuc)->firstOrFail();
+
         $version = (string) ($xml->attributes()['version'] ?? '2.0.0');
 
         if ($version === '1.0.0') {
-            return $this->processV1($xml, $autorizacion, $companyRuc, $serieRetention, $dateRetention, $autorizacionRetention);
+            return $this->processV1($xml, $autorizacion, $company, $serieRetention, $dateRetention, $autorizacionRetention);
         }
 
-        return $this->processV2($xml, $autorizacion, $companyRuc, $serieRetention, $dateRetention, $autorizacionRetention);
+        return $this->processV2($xml, $autorizacion, $company, $serieRetention, $dateRetention, $autorizacionRetention);
     }
 
     /**
@@ -130,7 +133,7 @@ class OrderRetentionImportService
     private function processV1(
         SimpleXMLElement $xml,
         object $autorizacion,
-        string $companyRuc,
+        Company $company,
         string $serieRetention,
         string $dateRetention,
         string $autorizacionRetention,
@@ -158,7 +161,9 @@ class OrderRetentionImportService
 
             // V1 no trae autorización del documento sustento → buscar por serie + fecha
             // para evitar colisiones con comprobantes físicos de otra época.
-            $order = Order::where('serie', $serie)
+            $order = Order::withoutGlobalScope(CompanyScope::class)
+                ->where('company_id', $company->id)
+                ->where('serie', $serie)
                 ->whereDate('emision', $emisionDoc)
                 ->first();
 
@@ -169,7 +174,7 @@ class OrderRetentionImportService
                 ])->first();
 
                 if ($voucherType) {
-                    $order = $this->storeOrderV1($xml, $group, $serie, $companyRuc, $voucherType);
+                    $order = $this->storeOrderV1($xml, $group, $serie, $company, $voucherType);
                 } else {
                     $skipped++;
 
@@ -228,7 +233,7 @@ class OrderRetentionImportService
     private function processV2(
         SimpleXMLElement $xml,
         object $autorizacion,
-        string $companyRuc,
+        Company $company,
         string $serieRetention,
         string $dateRetention,
         string $autorizacionRetention,
@@ -246,10 +251,13 @@ class OrderRetentionImportService
 
             // Clave de acceso electrónica (49 dígitos): globalmente única → buscar solo por autorización.
             // Autorización física (< 49 dígitos): puede repetirse entre períodos → buscar por serie + fecha.
+            $orderQuery = Order::withoutGlobalScope(CompanyScope::class)
+                ->where('company_id', $company->id);
+
             if (strlen($numAutDocSustento) === 49) {
-                $order = Order::where('autorization', $numAutDocSustento)->first();
+                $order = $orderQuery->where('autorization', $numAutDocSustento)->first();
             } else {
-                $order = Order::where('serie', $serie)
+                $order = $orderQuery->where('serie', $serie)
                     ->whereDate('emision', $emisionDoc)
                     ->first();
             }
@@ -261,7 +269,7 @@ class OrderRetentionImportService
                 ])->first();
 
                 if ($voucherType) {
-                    $order = $this->storeOrderV2($xml, $docSustento, $companyRuc, $voucherType);
+                    $order = $this->storeOrderV2($xml, $docSustento, $company, $voucherType);
                 } else {
                     $skipped++;
 
@@ -323,11 +331,9 @@ class OrderRetentionImportService
         SimpleXMLElement $retentionXml,
         array $group,
         string $serie,
-        string $companyRuc,
+        Company $company,
         VoucherType $voucherType,
     ): Order {
-        $company = Company::where('ruc', $companyRuc)->firstOrFail();
-
         $retainerRuc = (string) $retentionXml->infoTributaria->ruc;
         $retainerName = (string) $retentionXml->infoTributaria->razonSocial;
 
@@ -361,11 +367,9 @@ class OrderRetentionImportService
     private function storeOrderV2(
         SimpleXMLElement $retentionXml,
         SimpleXMLElement $docSustento,
-        string $companyRuc,
+        Company $company,
         VoucherType $voucherType,
     ): Order {
-        $company = Company::where('ruc', $companyRuc)->firstOrFail();
-
         $retainerRuc = (string) $retentionXml->infoTributaria->ruc;
         $retainerName = (string) $retentionXml->infoTributaria->razonSocial;
         $identificationTypeId = IdentificationType::where('code_shop', Constants::RUC_COMPRA)->value('id');

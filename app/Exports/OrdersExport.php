@@ -6,17 +6,27 @@ use App\Models\Tenant\Order;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class OrdersExport implements FromCollection, WithHeadings, WithMapping, WithStyles
+class OrdersExport extends DefaultValueBinder implements FromCollection, WithColumnFormatting, WithColumnWidths, WithCustomValueBinder, WithHeadings, WithMapping, WithStyles
 {
     /** @var array<int, string> */
     private array $columns;
 
     private Builder $query;
+
+    private ?string $identificationColumn = null;
 
     /** @var array<string, string> */
     public static array $availableColumns = [
@@ -26,6 +36,7 @@ class OrdersExport implements FromCollection, WithHeadings, WithMapping, WithSty
         'contact_identification' => 'RUC / Cédula',
         'contact_name' => 'Cliente',
         'autorization' => 'Autorización',
+        'exempt' => 'Excenta',
         'sub_total' => 'Sub Total',
         'no_iva' => 'No IVA',
         'base0' => 'Base 0%',
@@ -50,6 +61,11 @@ class OrdersExport implements FromCollection, WithHeadings, WithMapping, WithSty
     {
         $this->query = $query;
         $this->columns = $columns;
+
+        $index = array_search('contact_identification', $columns);
+        if ($index !== false) {
+            $this->identificationColumn = Coordinate::stringFromColumnIndex((int) $index + 1);
+        }
     }
 
     public function collection(): Collection
@@ -72,9 +88,55 @@ class OrdersExport implements FromCollection, WithHeadings, WithMapping, WithSty
 
     /** @var array<int, string> */
     private const NUMERIC_COLUMNS = [
-        'sub_total', 'no_iva', 'base0', 'base5', 'base12', 'base15',
+        'exempt', 'sub_total', 'no_iva', 'base0', 'base5', 'base12', 'base15',
         'iva5', 'iva12', 'iva15', 'discount', 'ice', 'total',
     ];
+
+    /** @var array<string, int> */
+    private const COLUMN_WIDTHS = [
+        'emision' => 10,
+        'serie' => 18,
+        'contact_identification' => 14,
+        'contact_name' => 30,
+    ];
+
+    /** @return array<string, int> */
+    public function columnWidths(): array
+    {
+        $widths = [];
+        foreach ($this->columns as $index => $key) {
+            $letter = Coordinate::stringFromColumnIndex($index + 1);
+            $widths[$letter] = self::COLUMN_WIDTHS[$key] ?? 8;
+        }
+
+        return $widths;
+    }
+
+    /** @return array<string, string> */
+    public function columnFormats(): array
+    {
+        $formats = [];
+
+        foreach ($this->columns as $index => $key) {
+            $letter = Coordinate::stringFromColumnIndex($index + 1);
+            if ($key === 'contact_identification') {
+                $formats[$letter] = NumberFormat::FORMAT_TEXT;
+            }
+        }
+
+        return $formats;
+    }
+
+    public function bindValue(Cell $cell, mixed $value): bool
+    {
+        if ($this->identificationColumn !== null && $cell->getColumn() === $this->identificationColumn && $cell->getRow() > 1) {
+            $cell->setValueExplicit((string) $value, DataType::TYPE_STRING);
+
+            return true;
+        }
+
+        return parent::bindValue($cell, $value);
+    }
 
     /** @return array<int, mixed> */
     public function map($order): array
@@ -91,7 +153,7 @@ class OrdersExport implements FromCollection, WithHeadings, WithMapping, WithSty
                 'contact_identification' => $order->contact?->identification ?? '',
                 'contact_name' => $order->contact?->name ?? '',
                 default => in_array($col, self::NUMERIC_COLUMNS)
-                    ? ($order->{$col} ?? 0)
+                    ? (float) ($order->{$col} ?? 0)
                     : ($order->{$col} ?? ''),
             };
         }

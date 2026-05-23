@@ -9,6 +9,7 @@ interface Filters {
     period: string;
     retention: string;
     voucher_type: string;
+    sort: string;
 }
 
 const props = defineProps<{
@@ -41,6 +42,7 @@ function clearFilters() {
     local.period = "";
     local.retention = "";
     local.voucher_type = "";
+    local.sort = "";
     emit("change", { ...local });
 }
 
@@ -112,6 +114,18 @@ watch(
             <option value="">Todas las retenciones</option>
             <option value="with">Con retención</option>
             <option value="without">Sin retención</option>
+        </select>
+
+        <!-- Sort -->
+        <select
+            v-model="local.sort"
+            class="border-border bg-background text-foreground focus:ring-ring/30 h-9 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
+            @change="onFilterChange"
+        >
+            <option value="">Fecha reciente</option>
+            <option value="emision_asc">Fecha antigua</option>
+            <option value="contact_asc">Proveedor A → Z</option>
+            <option value="contact_desc">Proveedor Z → A</option>
         </select>
 
         <!-- Clear -->

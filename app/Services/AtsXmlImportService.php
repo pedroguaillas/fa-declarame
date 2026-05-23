@@ -30,8 +30,6 @@ class AtsXmlImportService
     /** @var array<string, int|null> */
     private array $retentionCache = [];
 
-    private const IVA_REFORM_DATE = '2024-04-01';
-
     /**
      * @return array{imported: int, skipped: int, errors: int}
      *
@@ -300,7 +298,7 @@ class AtsXmlImportService
      */
     private function detectIvaBucket(float $base, float $iva, ?Carbon $emisionDate): array
     {
-        $beforeReform = $emisionDate === null || $emisionDate->lt(Carbon::parse(self::IVA_REFORM_DATE));
+        $beforeReform = $emisionDate === null || $emisionDate->lt(Carbon::parse(Constants::IVA_NEW_RATES_START));
 
         if ($beforeReform) {
             return ['base12', 'iva12'];

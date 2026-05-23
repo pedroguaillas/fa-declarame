@@ -6,12 +6,14 @@ use App\Exports\ShopsExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreShopRequest;
 use App\Http\Requests\Tenant\UpdateShopRequest;
+use App\Models\Tenant\Contact;
 use App\Models\Tenant\Retention;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\VoucherType;
 use App\Services\ShopImportService;
 use App\Services\ShopRetentionImportService;
+use Carbon\Carbon;
 use Constants;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -26,7 +28,7 @@ class ShopController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only(['search', 'period', 'retention', 'voucher_type']);
+        $filters = $request->only(['search', 'period', 'retention', 'voucher_type', 'sort']);
 
         if (empty($filters['period'])) {
             $lastEmision = Shop::max('emision');
@@ -35,14 +37,31 @@ class ShopController extends Controller
                 : now()->format('Y-m');
         }
 
-        $shops = $this->filteredShopsQuery($filters)
+        [$sortField, $sortDirection] = match ($filters['sort'] ?? '') {
+            'emision_asc' => ['emision', 'asc'],
+            'contact_asc' => ['contact', 'asc'],
+            'contact_desc' => ['contact', 'desc'],
+            default => ['emision', 'desc'],
+        };
+
+        $query = $this->filteredShopsQuery($filters)
             ->selectRaw('shops.id, shops.account_id, contact_id, serie, emision, vt.code AS voucher_type_code, total, shops.state, serie_retention, SUM(value) AS retention_amount, shops.data_additional')
-            ->with(['contact:id,name'])
+            ->with(['contact:id,name', 'retentionItems.retention:id,code,type'])
             ->leftJoin('shop_retention_items', 'shop_id', 'shops.id')
-            ->orderByDesc('emision')
-            ->groupBy('shops.id', 'vt.code')
-            ->paginate(25)
-            ->withQueryString();
+            ->groupBy('shops.id', 'vt.code');
+
+        if ($sortField === 'contact') {
+            $query->orderBy(
+                Contact::select('name')
+                    ->whereColumn('contacts.id', 'shops.contact_id')
+                    ->limit(1),
+                $sortDirection
+            );
+        } else {
+            $query->orderBy('emision', $sortDirection);
+        }
+
+        $shops = $query->paginate(25)->withQueryString();
 
         $company = company();
         $isRetentionAgent = (bool) $company?->retention_agent;
@@ -320,7 +339,7 @@ class ShopController extends Controller
     {
         $validated = $request->validate([
             'serie_retention' => ['required', 'string', 'max:17'],
-            'date_retention' => ['required', 'date'],
+            'date_retention' => ['required', 'date', 'after_or_equal:'.$shop->emision],
             'autorization_retention' => ['required', 'string', 'max:49'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.retention_id' => ['required', 'integer', 'exists:retentions,id'],
@@ -342,5 +361,36 @@ class ShopController extends Controller
 
         return redirect()->route('tenant.shops.index')
             ->with('success', 'Retención registrada correctamente.');
+    }
+
+    public function updateRetention(Request $request, Shop $shop): RedirectResponse
+    {
+        $maxDate = $shop->date_retention
+            ? Carbon::parse($shop->date_retention)->addDays(4)->format('Y-m-d')
+            : now()->format('Y-m-d');
+
+        $validated = $request->validate([
+            'serie_retention' => ['required', 'string', 'max:17'],
+            'date_retention' => ['required', 'date', 'after_or_equal:'.$shop->emision, 'before_or_equal:'.$maxDate],
+            'autorization_retention' => ['required', 'string', 'max:49'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.retention_id' => ['required', 'integer', 'exists:retentions,id'],
+            'items.*.base' => ['required', 'numeric', 'min:0'],
+            'items.*.percentage' => ['required', 'numeric', 'min:0'],
+            'items.*.value' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $shop->update([
+            'serie_retention' => $validated['serie_retention'],
+            'date_retention' => $validated['date_retention'],
+            'autorization_retention' => $validated['autorization_retention'],
+            'state_retention' => 'AUTORIZADO',
+        ]);
+
+        $shop->retentionItems()->delete();
+        $shop->retentionItems()->createMany($validated['items']);
+
+        return redirect()->route('tenant.shops.index')
+            ->with('success', 'Retención actualizada correctamente.');
     }
 }

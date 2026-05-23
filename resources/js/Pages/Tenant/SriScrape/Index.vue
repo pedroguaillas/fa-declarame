@@ -38,6 +38,7 @@ interface ScrapeJob {
     year: number;
     month: number;
     mode: string;
+    voucher_types: string[] | null;
     status: string;
     progress: { step: string; message: string } | null;
     result: { imported: number; skipped: number; errors: number } | null;
@@ -109,7 +110,7 @@ function toggleVoucherType(value: string) {
 
 // Al cambiar tipo, resetear selección por defecto
 watch(() => form.type, () => {
-    selectedVoucherTypes.value = ["1", "3", "4"];
+    selectedVoucherTypes.value = ["1"];
 });
 
 // ─── Years & Months ─────────────────────────────────────────────────────────
@@ -160,6 +161,40 @@ const statusConfig: Record<
 };
 
 const monthName = (m: number) => months.find((mo) => mo.value === m)?.label ?? m;
+
+function isRetentionOnly(job: ScrapeJob): boolean {
+    return job.voucher_types?.length === 1 && job.voucher_types[0] === '6';
+}
+
+function jobDisplayLabel(job: ScrapeJob): string {
+    if (isRetentionOnly(job)) {
+        return job.type === 'compras' ? 'Retenciones Recibidas' : 'Retenciones Emitidas';
+    }
+    return job.type === 'compras' ? 'Compras' : 'Ventas';
+}
+
+function jobNavigationRoute(job: ScrapeJob): string {
+    if (isRetentionOnly(job)) {
+        // Retenciones recibidas (compras) → se importan en Ventas
+        // Retenciones emitidas (ventas) → se importan en Compras
+        return job.type === 'compras' ? 'tenant.orders.index' : 'tenant.shops.index';
+    }
+    return job.type === 'compras' ? 'tenant.shops.index' : 'tenant.orders.index';
+}
+
+function jobNavigationLabel(job: ScrapeJob): string {
+    if (isRetentionOnly(job)) {
+        return job.type === 'compras' ? 'Ver Ventas' : 'Ver Compras';
+    }
+    return job.type === 'compras' ? 'Ver Compras' : 'Ver Ventas';
+}
+
+function jobNavigationIsCompras(job: ScrapeJob): boolean {
+    if (isRetentionOnly(job)) {
+        return job.type === 'ventas'; // Retenciones emitidas → van a Compras
+    }
+    return job.type === 'compras';
+}
 
 const hasActiveJobs = computed(() =>
     jobsList.value.some((j) => j.status === "pending" || j.status === "running")
@@ -365,7 +400,7 @@ defineOptions({ layout: TenantLayout });
                         <div class="flex flex-col gap-1">
                             <div class="flex items-center gap-2">
                                 <span class="text-sm font-semibold uppercase">
-                                    {{ job.type }}
+                                    {{ jobDisplayLabel(job) }}
                                 </span>
                                 <span class="text-muted-foreground text-sm">
                                     {{ monthName(job.month) }} {{ job.year }}
@@ -411,12 +446,12 @@ defineOptions({ layout: TenantLayout });
                             <!-- Quick access buttons for completed jobs -->
                             <div v-if="job.status === 'completed'" class="flex gap-2">
                                 <Link
-                                    :href="route(job.type === 'compras' ? 'tenant.shops.index' : 'tenant.orders.index')"
+                                    :href="route(jobNavigationRoute(job))"
                                     class="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
                                 >
-                                    <ShoppingCart v-if="job.type === 'compras'" class="size-3" />
+                                    <ShoppingCart v-if="jobNavigationIsCompras(job)" class="size-3" />
                                     <ReceiptIndianRupee v-else class="size-3" />
-                                    {{ job.type === 'compras' ? 'Ver Compras' : 'Ver Ventas' }}
+                                    {{ jobNavigationLabel(job) }}
                                     <ArrowRight class="size-3 opacity-60" />
                                 </Link>
                                 <Link

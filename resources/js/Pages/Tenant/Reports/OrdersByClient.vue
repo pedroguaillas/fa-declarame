@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Head, router } from "@inertiajs/vue3";
-import { computed, ref } from "vue";
+import { computed } from "vue";
+import { useDateRangeFilter } from "@/composables/useDateRangeFilter";
 import { Download } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 
@@ -25,10 +26,10 @@ const props = defineProps<{
     filters: Filters;
 }>();
 
-const startDate = ref(props.filters.start_date ?? "");
-const endDate = ref(props.filters.end_date ?? "");
+const { startDate, endDate, minDate, maxDate, dateRangeError } = useDateRangeFilter(props.filters.start_date, props.filters.end_date);
 
 function applyFilters() {
+    if (dateRangeError.value) return;
     router.get(
         route("tenant.reports.orders-by-client"),
         {
@@ -87,6 +88,8 @@ const totals = computed(() => ({
                 <input
                     v-model="startDate"
                     type="date"
+                    :min="minDate"
+                    :max="maxDate"
                     class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
             </div>
@@ -95,6 +98,8 @@ const totals = computed(() => ({
                 <input
                     v-model="endDate"
                     type="date"
+                    :min="minDate"
+                    :max="maxDate"
                     class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
             </div>
@@ -105,6 +110,7 @@ const totals = computed(() => ({
             >
                 Filtrar
             </button>
+            <span v-if="dateRangeError" class="text-destructive self-center text-xs">{{ dateRangeError }}</span>
             <button
                 v-if="filters.start_date || filters.end_date"
                 type="button"
@@ -124,24 +130,12 @@ const totals = computed(() => ({
             <table v-else class="divide-border min-w-full divide-y">
                 <thead class="bg-muted">
                     <tr>
-                        <th class="text-muted-foreground px-4 py-3 text-left text-xs font-medium tracking-wider uppercase">
-                            Cliente
-                        </th>
-                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">
-                            Subtotal
-                        </th>
-                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">
-                            IVA
-                        </th>
-                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">
-                            Total
-                        </th>
-                        <th v-if="hasRetentions" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">
-                            Retenciones
-                        </th>
-                        <th v-if="hasRetentions" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">
-                            A Cobrar
-                        </th>
+                        <th class="text-muted-foreground px-4 py-3 text-left text-xs font-medium tracking-wider uppercase">Cliente</th>
+                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Subtotal</th>
+                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">IVA</th>
+                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Total</th>
+                        <th v-if="hasRetentions" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Retenciones</th>
+                        <th v-if="hasRetentions" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">A Cobrar</th>
                     </tr>
                 </thead>
                 <tbody class="divide-border bg-card divide-y">
@@ -160,9 +154,7 @@ const totals = computed(() => ({
                         >
                             {{ fmt(row.retentions) }}
                         </td>
-                        <td v-if="hasRetentions" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">
-                            {{ fmt(row.a_cobrar) }}
-                        </td>
+                        <td v-if="hasRetentions" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(row.a_cobrar) }}</td>
                     </tr>
                 </tbody>
                 <tfoot class="bg-muted border-border border-t-2">
@@ -178,9 +170,7 @@ const totals = computed(() => ({
                         >
                             {{ fmt(totals.retentions) }}
                         </td>
-                        <td v-if="hasRetentions" class="text-foreground px-4 py-3 text-right font-mono text-sm font-bold tabular-nums">
-                            {{ fmt(totals.a_cobrar) }}
-                        </td>
+                        <td v-if="hasRetentions" class="text-foreground px-4 py-3 text-right font-mono text-sm font-bold tabular-nums">{{ fmt(totals.a_cobrar) }}</td>
                     </tr>
                 </tfoot>
             </table>

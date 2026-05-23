@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import {
     Dialog,
     DialogContent,
@@ -8,6 +8,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { IVA_NEW_RATES_START_MONTH } from "@/constants/ecuador";
 
 interface OrderFilters {
     search?: string;
@@ -19,13 +20,18 @@ const props = defineProps<{ filters: OrderFilters }>();
 
 const open = ref(false);
 
-const availableColumns: { key: string; label: string }[] = [
+const NEW_RATES_START = IVA_NEW_RATES_START_MONTH;
+const OLD_RATE_COLUMNS = ["base12", "iva12"];
+const NEW_RATE_COLUMNS = ["base5", "iva5", "base15", "iva15"];
+
+const allColumns: { key: string; label: string }[] = [
     { key: "emision", label: "Emisión" },
     { key: "voucher_type", label: "Tipo Comprobante" },
     { key: "serie", label: "Serie" },
     { key: "contact_identification", label: "RUC / Cédula" },
     { key: "contact_name", label: "Cliente" },
     { key: "autorization", label: "Autorización" },
+    { key: "exempt", label: "Excenta" },
     { key: "sub_total", label: "Sub Total" },
     { key: "no_iva", label: "No IVA" },
     { key: "base0", label: "Base 0%" },
@@ -39,19 +45,22 @@ const availableColumns: { key: string; label: string }[] = [
     { key: "ice", label: "ICE" },
     { key: "total", label: "Total" },
     { key: "state", label: "Estado" },
-    { key: "serie_retention", label: "Serie Retención" },
-    { key: "date_retention", label: "Fecha Retención" },
-    { key: "state_retention", label: "Estado Retención" },
-    { key: "autorization_retention", label: "Autorización Retención" },
 ];
 
-const selectedColumns = ref<string[]>(availableColumns.map((c) => c.key));
+const availableColumns = computed(() => {
+    const period = props.filters.period;
+    if (!period) return allColumns;
+    if (period < NEW_RATES_START) return allColumns.filter((c) => !NEW_RATE_COLUMNS.includes(c.key));
+    return allColumns.filter((c) => !OLD_RATE_COLUMNS.includes(c.key));
+});
+
+const selectedColumns = ref<string[]>(availableColumns.value.map((c) => c.key));
 
 function toggleAll(checked: boolean) {
-    selectedColumns.value = checked ? availableColumns.map((c) => c.key) : [];
+    selectedColumns.value = checked ? availableColumns.value.map((c) => c.key) : [];
 }
 
-const allSelected = () => selectedColumns.value.length === availableColumns.length;
+const allSelected = () => selectedColumns.value.length === availableColumns.value.length;
 
 function download() {
     const params = new URLSearchParams();

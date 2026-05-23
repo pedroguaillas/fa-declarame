@@ -13,6 +13,7 @@ import { Loader2 } from "lucide-vue-next";
 
 import { today, getLocalTimeZone } from "@internationalized/date";
 
+import { IVA_NEW_RATES_START } from "@/constants/ecuador";
 import type { VoucherType } from "@/types/tenant";
 import type { InertiaForm } from "@inertiajs/vue3";
 
@@ -140,7 +141,7 @@ function handleSubmit() {
 // CALCULOS
 const n = (v: number | string) => parseFloat(String(v)) || 0;
 
-const IVA15_START = new Date("2024-04-01");
+const IVA15_START = new Date(IVA_NEW_RATES_START);
 
 const useIva15 = computed(() => {
     if (!props.form.emision) return true;

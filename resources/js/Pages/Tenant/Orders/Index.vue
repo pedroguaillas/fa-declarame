@@ -140,9 +140,10 @@ function handlePageChange(page: number) {
 }
 
 function confirmDelete() {
-    if (!deleteTarget.value) return;
+    const orderId = deleteTarget.value?.id;
+    if (!orderId) return;
     deleteLoading.value = true;
-    router.delete(route("tenant.orders.destroy", { order: deleteTarget.value.id }), {
+    router.delete(route("tenant.orders.destroy", { order: orderId }), {
         preserveScroll: true,
         onFinish: () => {
             deleteLoading.value = false;
@@ -305,11 +306,6 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
             title="¿Eliminar venta?"
             :description="`Se eliminará la venta ${deleteTarget?.serie}. Esta acción no se puede deshacer.`"
             :loading="deleteLoading"
-            @update:open="
-                (v) => {
-                    if (!v) deleteTarget = null;
-                }
-            "
             @confirm="confirmDelete"
             @cancel="deleteTarget = null"
         />

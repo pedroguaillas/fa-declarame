@@ -18,7 +18,7 @@ import ShopExportModal from "./components/ShopExportModal.vue";
 import type { ActionDef, ActionPayload, ColumnDef } from "@/types/shared";
 import { Paginator } from "@/types";
 import { Shop } from "@/types/tenant";
-import { Download, FileText, Pencil, Receipt, Trash2, ClipboardList } from "lucide-vue-next";
+import { Download, FileText, Pencil, Receipt, Trash2, ClipboardList, Upload } from "lucide-vue-next";
 
 // ─── Props ─────────────────────────────────────────────────────────────────
 
@@ -27,6 +27,7 @@ interface ShopFilters {
     period: string;
     retention: string;
     voucher_type: string;
+    sort: string;
 }
 
 const props = defineProps<{
@@ -74,17 +75,25 @@ const columns: ColumnDef<Shop>[] = [
         key: "serie",
         label: "Serie",
         format: (_, item) => item.serie,
-        labelDescription: (_, item) => {
-            const parts: string[] = [];
-            if (item.state === "NO_DECLARA") parts.push("No declara");
-            if (item.data_additional?.with_cedula) parts.push("Cédula");
-            if (item.serie_retention) parts.push(`Ret. ${item.serie_retention}`);
-            return parts.join(" · ");
+        chips: (_, item) => {
+            if (!item.retention_items?.length) return [];
+            return item.retention_items
+                .filter((ri) => ri.retention?.type?.toLowerCase() === "renta")
+                .map((ri) => ({
+                    label: ri.retention!.code,
+                    class: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                }));
         },
     },
     {
         key: "contact",
         label: "Proveedor",
+        labelDescription: (_, item) => {
+            const parts: string[] = [];
+            if (item.state === "NO_DECLARA") parts.push("No declara");
+            if (item.data_additional?.with_cedula) parts.push("Cédula");
+            return parts.join(" · ");
+        },
         format: (_, item) => item.contact?.name ?? "—",
     },
     {
@@ -314,7 +323,7 @@ watch(
                     </Button>
                     <Button variant="outline" size="sm" @click="shopExportModal?.open()">
                         <Download class="size-4" />
-                        Descargar
+                        Exportar Excel
                     </Button>
                     <Button
                         v-if="isActiveRetention"
@@ -324,6 +333,7 @@ watch(
                         :disabled="importRetentionsForm.processing"
                         @click="importRetentionsFileInput?.click()"
                     >
+                        <Upload class="size-4" />
                         {{ importRetentionsForm.processing ? "Importando…" : "Importar retenciones" }}
                     </Button>
                 </template>
@@ -333,7 +343,13 @@ watch(
             <FilterBar :filters="filters" :show-retention="isActiveRetention" @change="applyFilters" />
 
             <!-- Hidden file inputs -->
-            <input ref="importFileInput" type="file" accept=".txt,.xml,.zip" class="hidden" @change="handleFileSelected" />
+            <input
+                ref="importFileInput"
+                type="file"
+                accept=".txt,.xml,.zip"
+                class="hidden"
+                @change="handleFileSelected"
+            />
             <input
                 ref="importRetentionsFileInput"
                 type="file"

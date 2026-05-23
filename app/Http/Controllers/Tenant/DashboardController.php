@@ -66,6 +66,7 @@ class DashboardController extends Controller
             ->first();
 
         $purchases = Shop::where('shops.company_id', $companyId)
+            ->where('shops.state', 'AUTORIZADO')
             ->whereBetween('shops.emision', [$from->toDateString(), $to->toDateString()])
             ->join('voucher_types as vt', 'vt.id', '=', 'shops.voucher_type_id')
             ->selectRaw("COUNT(*) as count, {$totalExpr} as total, {$ivaExpr} as iva")
@@ -102,6 +103,7 @@ class DashboardController extends Controller
             ->pluck('total', 'month');
 
         $purchases = Shop::where('shops.company_id', $companyId)
+            ->where('shops.state', 'AUTORIZADO')
             ->where('shops.emision', '>=', $from)
             ->join('voucher_types as vt', 'vt.id', '=', 'shops.voucher_type_id')
             ->selectRaw("TO_CHAR(shops.emision, 'YYYY-MM') as month, {$totalExpr} as total")
@@ -131,6 +133,7 @@ class DashboardController extends Controller
         $totalExpr = $this->signedSum('sub_total');
 
         return Shop::where('shops.company_id', $companyId)
+            ->where('shops.state', 'AUTORIZADO')
             ->whereBetween('shops.emision', [$from->toDateString(), $to->toDateString()])
             ->join('voucher_types as vt', 'vt.id', '=', 'shops.voucher_type_id')
             ->with('contact:id,name,identification')

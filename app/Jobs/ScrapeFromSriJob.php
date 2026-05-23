@@ -12,13 +12,14 @@ class ScrapeFromSriJob implements ShouldQueue
 {
     use Queueable;
 
-    public int $timeout = 600;
+    public int $timeout = 60;
 
     public int $tries = 1;
 
     public function __construct(
         public readonly int $scrapeJobId,
         public readonly int $companyId,
+        public readonly string $tenantId,
     ) {}
 
     public function handle(SriScraperService $scraperService): void
@@ -26,7 +27,7 @@ class ScrapeFromSriJob implements ShouldQueue
         $scrapeJob = SriScrapeJob::findOrFail($this->scrapeJobId);
         $company = Company::findOrFail($this->companyId);
 
-        $scraperService->execute($scrapeJob, $company);
+        $scraperService->execute($scrapeJob, $company, $this->tenantId);
     }
 
     public function failed(?\Throwable $exception): void
