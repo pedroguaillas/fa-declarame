@@ -4,7 +4,7 @@
 set -euo pipefail
 
 APP_DIR="/var/www/fa-declarame"
-PHP="php8.3"
+PHP="php8.4"
 
 echo "── Desplegando fa-declarame ──────────────"
 
@@ -38,7 +38,7 @@ chown -R www-data:www-data storage bootstrap/cache
 chmod -R 775 storage bootstrap/cache
 
 # ── 8. Reiniciar servicios ───────────────────────────────────────────────────
-systemctl reload php8.3-fpm
+systemctl reload php8.4-fpm
 supervisorctl restart fa-declarame-worker:*
 
 echo "── Despliegue completado ✓ ──────────────"
