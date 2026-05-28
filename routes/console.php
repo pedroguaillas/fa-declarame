@@ -9,7 +9,6 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('sri:daily-scrape')
-    ->dailyAt('00:10')
+    ->dailyAt('00:37')
     ->timezone('America/Guayaquil')
-    ->withoutOverlapping()
-    ->onOneServer();
+    ->withoutOverlapping();
