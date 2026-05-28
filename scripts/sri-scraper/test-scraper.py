@@ -781,17 +781,21 @@ def download_for_voucher_type(
 
     # ── Classify claves: recent (≤30d → SOAP) vs old (>30d → direct extract) ──
     claves = extract_claves_from_txt(final_content)
-    recent_claves, old_claves = classify_claves(claves)
+    today = datetime.now()
+    recent_claves, old_claves = classify_claves(claves, today=today)
+    progress(
+        label,
+        f"Claves: {len(claves)} total → {len(old_claves)} >30d (XML) + {len(recent_claves)} ≤30d (SOAP)  [hoy={today.strftime('%d/%m/%Y')}]",
+    )
 
-    # ── Skip claves already in the DB ────────────────────────────────────────
+    # ── Skip claves already in the DB ────────────────────────
     if skip_claves:
-        before_old = len(old_claves)
-        before_recent = len(recent_claves)
+        before = len(old_claves) + len(recent_claves)
         old_claves = [c for c in old_claves if c not in skip_claves]
         recent_claves = [c for c in recent_claves if c not in skip_claves]
-        skipped_count = (before_old - len(old_claves)) + (before_recent - len(recent_claves))
+        skipped_count = before - len(old_claves) - len(recent_claves)
         if skipped_count:
-            progress(label, f"Saltando {skipped_count} claves ya importadas ({before_old + before_recent} → {len(old_claves) + len(recent_claves)})")
+            progress(label, f"Saltando {skipped_count} ya importadas → {len(old_claves)} old + {len(recent_claves)} recent pendientes")
 
     # Build clave → txt line lookup for old claves (needed by PHP for ventas modal entries)
     clave_to_line: dict[str, str] = {}
@@ -952,14 +956,15 @@ def parse_date_from_clave(clave: str) -> datetime | None:
 
 
 def classify_claves(
-    claves: list[str], threshold_days: int = 30
+    claves: list[str], threshold_days: int = 30, today: datetime | None = None
 ) -> tuple[list[str], list[str]]:
     """
     Split claves into:
     - recent (≤threshold_days old): use SOAP to fetch XML
     - old (>threshold_days old): download XML directly from table
     """
-    today = datetime.now()
+    if today is None:
+        today = datetime.now()
     recent = []
     old = []
     for clave in claves:
@@ -1553,6 +1558,10 @@ def download_xmls_from_table(
                 progress("xml-tabla", f"Sin clave en fila de {link_id}, omitiendo")
                 continue
 
+            if clave not in old_claves:
+                progress("xml-tabla", f"Clave ≤30d, saltando XML ...{clave[-10:]}")
+                continue
+
             progress("xml-tabla", f"Click en {link_id} (clave ...{clave[-10:]})...")
             xml_content = _capture_xml_by_link_id(page, link_id)
 
@@ -1709,7 +1718,7 @@ def parse_args():
     parser.add_argument("--ruc", help="RUC del contribuyente")
     parser.add_argument("--password", help="Contraseña SRI")
     parser.add_argument(
-        "--type", dest="tipo", default="compras", choices=["compras", "ventas"]
+        "--type", dest="tipo", default="compras", choices=["compras", "ventas", "ambos"]
     )
     parser.add_argument("--year", type=int, default=2026)
     parser.add_argument("--month", type=int, default=4)
@@ -1769,10 +1778,12 @@ def main():
     tipo = config.get("type", "compras")
     year = config.get("year", 2026)
     month = config.get("month", 4)
+    day = config.get("day", 0) or 0
     mode = config.get("mode", "txt_download")
     download_dir = Path(config.get("downloadDir", "/tmp/sri-scrape-py"))
     headless = config.get("headless", True)
     user_data_dir = config.get("userDataDir")
+    skip_claves_set = set(config.get("skipClaves") or [])
 
     # Tipos de comprobante seleccionados por el usuario (valores: "1", "3", "4")
     selected_voucher_values = set(config.get("voucherTypes") or ["1", "3", "4"])
@@ -1861,70 +1872,85 @@ def main():
                     browser.close()
                 sys.exit(1)
 
-            # Step 2: Navigate
-            navigate_to_comprobantes(page, tipo)
+            # Step 2: Navigate (for 'ambos' we navigate per section inside the mode handler)
+            if tipo != "ambos":
+                navigate_to_comprobantes(page, tipo)
 
             # Step 3: Process
             if mode == "txt_download":
                 files = []
 
-                base_types = COMPRAS_VOUCHER_TYPES if tipo == "compras" else VOUCHER_TYPES
-                active_voucher_types = [vt for vt in base_types if vt["value"] in selected_voucher_values]
+                sections = ["compras", "ventas"] if tipo == "ambos" else [tipo]
 
-                for i, vt in enumerate(active_voucher_types):
-                    # Para compras, no es necesario recargar entre tipos — set_filters cambia el dropdown.
-                    # Para ventas, sí se recarga para resetear el formulario.
-                    if i > 0 and tipo == "ventas":
-                        navigate_to_comprobantes(page, tipo)
+                for section in sections:
+                    if tipo == "ambos":
+                        navigate_to_comprobantes(page, section)
 
-                    try:
-                        result = download_for_voucher_type(
-                            page, vt, year, month, download_dir, tipo
-                        )
-                        files.append(result)
+                    base_types = COMPRAS_VOUCHER_TYPES if section == "compras" else VOUCHER_TYPES
+                    active_voucher_types = [vt for vt in base_types if vt["value"] in selected_voucher_values]
+                    skip_set = skip_claves_set or None
 
-                        if result["status"] == "downloaded":
-                            progress(
-                                "summary",
-                                f"{vt['label']}: {result['rows']} registros descargados",
+                    for i, vt in enumerate(active_voucher_types):
+                        # Para ventas, recargar entre tipos de comprobante para resetear el formulario.
+                        if i > 0 and section == "ventas":
+                            navigate_to_comprobantes(page, section)
+
+                        try:
+                            result = download_for_voucher_type(
+                                page, vt, year, month, download_dir, section, day, skip_set
                             )
-                        else:
-                            progress("summary", f"{vt['label']}: {result['status']}")
+                            result["section"] = section
+                            files.append(result)
 
-                    except Exception as e:
-                        progress(vt["label"], f"Error: {e}")
-                        files.append(
-                            {
-                                "type": vt["label"],
-                                "status": "error",
-                                "content": None,
-                                "error": str(e),
-                            }
-                        )
+                            if result["status"] == "downloaded":
+                                progress(
+                                    "summary",
+                                    f"[{section}] {vt['label']}: {result['rows']} registros descargados",
+                                )
+                            else:
+                                progress("summary", f"[{section}] {vt['label']}: {result['status']}")
 
-                    random_delay(1, 3)
+                        except Exception as e:
+                            progress(vt["label"], f"[{section}] Error: {e}")
+                            files.append(
+                                {
+                                    "type": vt["label"],
+                                    "section": section,
+                                    "status": "error",
+                                    "content": None,
+                                    "error": str(e),
+                                }
+                            )
+
+                        random_delay(1, 3)
 
                 emit("result", {"mode": "txt_download", "files": files})
 
             elif mode == "table_scrape":
                 all_claves = []
 
-                base_types = COMPRAS_VOUCHER_TYPES if tipo == "compras" else VOUCHER_TYPES
-                active_voucher_types = [vt for vt in base_types if vt["value"] in selected_voucher_values]
+                sections = ["compras", "ventas"] if tipo == "ambos" else [tipo]
 
-                for i, vt in enumerate(active_voucher_types):
-                    if i > 0 and tipo == "ventas":
-                        navigate_to_comprobantes(page, tipo)
+                for section in sections:
+                    if tipo == "ambos":
+                        navigate_to_comprobantes(page, section)
 
-                    try:
-                        search_ok = search_with_captcha(page, vt, year, month, tipo)
-                        if search_ok:
-                            claves = scrape_table_data(page, tipo)
-                            all_claves.extend(claves)
-                    except Exception as e:
-                        progress(vt["label"], f"Error: {e}")
+                    base_types = COMPRAS_VOUCHER_TYPES if section == "compras" else VOUCHER_TYPES
+                    active_voucher_types = [vt for vt in base_types if vt["value"] in selected_voucher_values]
 
-                    random_delay(1, 3)
+                    for i, vt in enumerate(active_voucher_types):
+                        if i > 0 and section == "ventas":
+                            navigate_to_comprobantes(page, section)
+
+                        try:
+                            search_ok = search_with_captcha(page, vt, year, month, section)
+                            if search_ok:
+                                claves = scrape_table_data(page, section)
+                                all_claves.extend(claves)
+                        except Exception as e:
+                            progress(vt["label"], f"Error: {e}")
+
+                        random_delay(1, 3)
 
                 unique_claves = list(dict.fromkeys(all_claves))
                 emit("result", {"mode": "table_scrape", "clavesAcceso": unique_claves})

@@ -269,6 +269,7 @@ def handle_scrape(config: dict) -> dict:
     tipo = config.get("type", "compras")
     year = config.get("year", 2026)
     month = config.get("month", 5)
+    day = config.get("day") or 0  # 0 = todos los días, 1-31 = día específico
     mode = config.get("mode", "txt_download")
     download_dir = Path(config.get("downloadDir", "/tmp/sri-scrape-py"))
     skip_claves = set(config.get("skipClaves") or [])
@@ -283,57 +284,66 @@ def handle_scrape(config: dict) -> dict:
             },
         }
 
-    scraper.navigate_to_comprobantes(page, tipo)
+    # 'ambos' navigates per section inside the mode handlers below
+    if tipo != "ambos":
+        scraper.navigate_to_comprobantes(page, tipo)
 
     if mode == "txt_download":
         files = []
         selected_values = set(config.get("voucherTypes") or ["1", "3", "4"])
-        base_types = scraper.COMPRAS_VOUCHER_TYPES if tipo == "compras" else scraper.VOUCHER_TYPES
-        voucher_types = [vt for vt in base_types if vt["value"] in selected_values]
+        sections = ["compras", "ventas"] if tipo == "ambos" else [tipo]
 
-        # Determine strategy:
-        #   - ventas (emitidos): always day-by-day — portal only exposes one day at a
-        #     time and there are no XMLs, so data is read from the modal each day.
-        #   - compras (recibidos): full-month TXT + SOAP (XMLs available, efficient).
-        use_day_by_day = tipo == "ventas"
+        for section in sections:
+            if tipo == "ambos":
+                scraper.navigate_to_comprobantes(page, section)
 
-        scraper.progress(
-            "server",
-            f"Estrategia: {'dia-por-dia' if use_day_by_day else 'mes-completo'} "
-            f"(tipo={tipo})",
-        )
+            base_types = scraper.COMPRAS_VOUCHER_TYPES if section == "compras" else scraper.VOUCHER_TYPES
+            voucher_types = [vt for vt in base_types if vt["value"] in selected_values]
 
-        for i, vt in enumerate(voucher_types):
-            if i > 0:
-                scraper.navigate_to_comprobantes(page, tipo)
-            try:
-                if use_day_by_day:
-                    result = scraper.download_for_voucher_type_by_day(
-                        page, vt, year, month, download_dir, tipo,
-                        skip_claves=skip_claves,
+            # ventas mes completo: día-por-día (el portal solo expone un día a la vez)
+            use_day_by_day = (day == 0 and section == "ventas")
+
+            day_str = f"día {day}" if day > 0 else "mes completo"
+            scraper.progress(
+                "server",
+                f"[{section}] Estrategia: {'dia-por-dia' if use_day_by_day else day_str} "
+                f"(año={year}, mes={month})",
+            )
+
+            for i, vt in enumerate(voucher_types):
+                if i > 0:
+                    scraper.navigate_to_comprobantes(page, section)
+                try:
+                    if use_day_by_day:
+                        result = scraper.download_for_voucher_type_by_day(
+                            page, vt, year, month, download_dir, section,
+                            skip_claves=skip_claves,
+                        )
+                    else:
+                        result = scraper.download_for_voucher_type(
+                            page, vt, year, month, download_dir, section,
+                            day=day,
+                            skip_claves=skip_claves,
+                        )
+                    result["section"] = section
+                    files.append(result)
+                    content_len = len(result.get("content") or "")
+                    scraper.progress(
+                        "summary",
+                        f"[{section}] {vt['label']}: status={result['status']}, content={content_len} bytes, rows={result.get('rows', 0)}",
                     )
-                else:
-                    result = scraper.download_for_voucher_type(
-                        page, vt, year, month, download_dir, tipo,
-                        skip_claves=skip_claves,
+                except Exception as e:
+                    scraper.progress(vt["label"], f"[{section}] Error: {e}")
+                    files.append(
+                        {
+                            "type": vt["label"],
+                            "section": section,
+                            "status": "error",
+                            "content": None,
+                            "error": str(e),
+                        }
                     )
-                files.append(result)
-                content_len = len(result.get("content") or "")
-                scraper.progress(
-                    "summary",
-                    f"{vt['label']}: status={result['status']}, content={content_len} bytes, rows={result.get('rows', 0)}",
-                )
-            except Exception as e:
-                scraper.progress(vt["label"], f"Error: {e}")
-                files.append(
-                    {
-                        "type": vt["label"],
-                        "status": "error",
-                        "content": None,
-                        "error": str(e),
-                    }
-                )
-            scraper.random_delay(1, 3)
+                scraper.random_delay(1, 3)
 
         # Log resumen antes de enviar a Laravel
         scraper.progress("response", f"Enviando {len(files)} archivos a Laravel")
@@ -344,7 +354,9 @@ def handle_scrape(config: dict) -> dict:
             ret_modal_count = len(f.get("retention_modal_entries") or [])
             scraper.progress(
                 "response",
-                f"  {f.get('type')}: status={f['status']}, contenido={has_content}, bytes={len(f.get('content') or '')}, xmls={xml_count}, modales={modal_count}, ret_modales={ret_modal_count}",
+                f"  [{f.get('section', '?')}] {f.get('type')}: status={f['status']}, "
+                f"contenido={has_content}, bytes={len(f.get('content') or '')}, "
+                f"xmls={xml_count}, modales={modal_count}, ret_modales={ret_modal_count}",
             )
 
         return {"event": "result", "data": {"mode": "txt_download", "files": files}}
@@ -352,19 +364,26 @@ def handle_scrape(config: dict) -> dict:
     elif mode == "table_scrape":
         all_claves = []
         selected_values = set(config.get("voucherTypes") or ["1", "3", "4"])
-        base_types = scraper.COMPRAS_VOUCHER_TYPES if tipo == "compras" else scraper.VOUCHER_TYPES
-        active_voucher_types = [vt for vt in base_types if vt["value"] in selected_values]
-        for i, vt in enumerate(active_voucher_types):
-            if i > 0:
-                scraper.navigate_to_comprobantes(page, tipo)
-            try:
-                search_ok = scraper.search_with_captcha(page, vt, year, month, tipo)
-                if search_ok:
-                    claves = scraper.scrape_table_data(page, tipo)
-                    all_claves.extend(claves)
-            except Exception as e:
-                scraper.progress(vt["label"], f"Error: {e}")
-            scraper.random_delay(1, 3)
+        sections = ["compras", "ventas"] if tipo == "ambos" else [tipo]
+
+        for section in sections:
+            if tipo == "ambos":
+                scraper.navigate_to_comprobantes(page, section)
+
+            base_types = scraper.COMPRAS_VOUCHER_TYPES if section == "compras" else scraper.VOUCHER_TYPES
+            active_voucher_types = [vt for vt in base_types if vt["value"] in selected_values]
+
+            for i, vt in enumerate(active_voucher_types):
+                if i > 0:
+                    scraper.navigate_to_comprobantes(page, section)
+                try:
+                    search_ok = scraper.search_with_captcha(page, vt, year, month, section)
+                    if search_ok:
+                        claves = scraper.scrape_table_data(page, section)
+                        all_claves.extend(claves)
+                except Exception as e:
+                    scraper.progress(vt["label"], f"Error: {e}")
+                scraper.random_delay(1, 3)
 
         unique_claves = list(dict.fromkeys(all_claves))
         return {
@@ -408,22 +427,18 @@ class ScrapeRequestHandler(BaseHTTPRequestHandler):
             self._json_response(400, {"error": "Invalid JSON"})
             return
 
-        acquired = _scrape_lock.acquire(blocking=False)
-        if not acquired:
-            self._json_response(409, {"error": "Scrape en progreso. Intente de nuevo."})
-            return
-
         scraper.progress(
             "server",
-            f"Peticion recibida: ruc={config.get('ruc')}, type={config.get('type')}, year={config.get('year')}, month={config.get('month')}",
+            f"Peticion recibida: ruc={config.get('ruc')}, type={config.get('type')}, "
+            f"year={config.get('year')}, month={config.get('month')}, day={config.get('day') or 'todos'}",
         )
 
         callback_url = config.get("callbackUrl")
         future: Future = Future()
 
         if callback_url:
-            # Async mode: respond immediately; callback fires when the scraper thread
-            # resolves the Future (done callbacks run in the scraper thread — safe).
+            # Async mode: always queue — the single scraper thread serializes execution
+            # naturally. Never reject with 409; multiple companies can queue up safely.
             def _on_done(f: Future) -> None:
                 try:
                     _post_callback(callback_url, f.result())
@@ -432,15 +447,19 @@ class ScrapeRequestHandler(BaseHTTPRequestHandler):
                         "event": "error",
                         "data": {"code": "SCRAPE_ERROR", "message": str(e)},
                     })
-                finally:
-                    _scrape_lock.release()
 
             future.add_done_callback(_on_done)
             _work_queue.put((config, future))
             self._json_response(200, {"status": "accepted"})
             return
 
-        # Sync mode: block until the scraper thread finishes.
+        # Sync mode (no callbackUrl): reject if already busy to avoid blocking
+        # the HTTP handler indefinitely while the queue drains.
+        acquired = _scrape_lock.acquire(blocking=False)
+        if not acquired:
+            self._json_response(409, {"error": "Scrape en progreso. Intente de nuevo."})
+            return
+
         _work_queue.put((config, future))
         try:
             result = future.result(timeout=600)

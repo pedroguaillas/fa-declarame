@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\ProcessSoapClaveJob;
 use App\Models\Tenant\Company;
 use App\Models\Tenant\Contact;
 use App\Models\Tenant\IdentificationType;
@@ -63,13 +64,17 @@ class SriScraperService
                 'headless' => config('sri.scraper.headless', true),
             ];
 
+            if ($scrapeJob->day !== null) {
+                $config['day'] = $scrapeJob->day;
+            }
+
             // Only pass downloadDir when running locally (not via external server)
             if (! $serverUrl) {
                 $config['downloadDir'] = $downloadDir;
             }
 
             // Skip claves already in the DB to avoid redundant SOAP calls / modal scrapes
-            $config['skipClaves'] = $this->getExistingClavesForMonth($scrapeJob, $company);
+            $config['skipClaves'] = $this->getExistingClavesForPeriod($scrapeJob, $company);
 
             $result = $serverUrl
                 ? $this->runViaServer($serverUrl, $config, $scrapeJob, $tenantId)
@@ -284,6 +289,11 @@ class SriScraperService
             $modalEntries = $file['modal_entries'] ?? [];
             $retentionModalEntries = $file['retention_modal_entries'] ?? [];
 
+            // In 'ambos' mode the scraper tags each file with its section; otherwise use job type
+            $effectiveSection = $scrapeJob->type === 'ambos'
+                ? ($file['section'] ?? 'compras')
+                : $scrapeJob->type;
+
             if ($file['status'] !== 'downloaded' || (empty($content) && empty($xmls) && empty($modalEntries) && empty($retentionModalEntries))) {
                 $fileResults[$type] = $file['status'] ?? 'no_content';
 
@@ -293,7 +303,7 @@ class SriScraperService
             $scrapeJob->update([
                 'progress' => [
                     'step' => 'import',
-                    'message' => "Importando {$type}...",
+                    'message' => "Importando {$type} ({$effectiveSection})...",
                 ],
             ]);
 
@@ -302,7 +312,7 @@ class SriScraperService
 
                 // Direct XML import for claves >30 days (compras / ventas modal with XML)
                 if (! empty($xmls)) {
-                    $xmlStats = $this->importXmlsDirectly($xmls, $type, $scrapeJob->type, $company);
+                    $xmlStats = $this->importXmlsDirectly($xmls, $type, $effectiveSection, $company);
                     $stats['imported'] += $xmlStats['imported'];
                     $stats['skipped'] += $xmlStats['skipped'];
                     $stats['errors'] += $xmlStats['errors'];
@@ -324,30 +334,16 @@ class SriScraperService
                     $stats['errors'] += $retStats['errors'];
                 }
 
-                // SOAP import for claves ≤30 days — skip any already processed via XML or modal
+                // SOAP import for claves ≤30 days — queue jobs with throttling to avoid
+                // saturating the SRI server, even for day-specific queries.
                 if (! empty($content)) {
                     $processedClaves = array_flip(array_filter(array_merge(
                         array_column($xmls, 'clave'),
                         array_map(fn ($e) => $e['clave_acceso'] ?? $e['clave'] ?? '', $modalEntries),
                     )));
 
-                    if (! empty($processedClaves)) {
-                        $txtLines = preg_split('/\r?\n/', $content);
-                        $header = array_shift($txtLines);
-                        $txtLines = array_filter($txtLines, function (string $line) use ($processedClaves): bool {
-                            if (preg_match('/\d{49}/', $line, $m)) {
-                                return ! isset($processedClaves[$m[0]]);
-                            }
-
-                            return true;
-                        });
-                        $content = $header."\n".implode("\n", $txtLines);
-                    }
-
-                    $soapStats = $this->importContent($content, $type, $scrapeJob->type, $company);
-                    $stats['imported'] += $soapStats['imported'];
-                    $stats['skipped'] += $soapStats['skipped'];
-                    $stats['errors'] += $soapStats['errors'] ?? 0;
+                    $dispatched = $this->dispatchSoapJobs($content, $effectiveSection, $company, $processedClaves, $scrapeJob->id);
+                    $stats['soap_dispatched'] = ($stats['soap_dispatched'] ?? 0) + $dispatched;
                 }
 
                 $totalImported += $stats['imported'];
@@ -364,10 +360,14 @@ class SriScraperService
             }
         }
 
+        // ProcessSoapClaveJob instances increment result.imported / skipped / errors
+        // atomically in the DB as they run. Re-read to capture any that already completed.
+        $freshResult = $scrapeJob->fresh()->result ?? [];
+
         $stats = [
-            'imported' => $totalImported,
-            'skipped' => $totalSkipped,
-            'errors' => $totalErrors,
+            'imported' => $totalImported + ($freshResult['imported'] ?? 0),
+            'skipped' => $totalSkipped + ($freshResult['skipped'] ?? 0),
+            'errors' => $totalErrors + ($freshResult['errors'] ?? 0),
             'details' => $fileResults,
         ];
 
@@ -619,6 +619,40 @@ class SriScraperService
      *
      * @return array{imported: int, skipped: int, errors: int}
      */
+    /**
+     * Parse claves from a TXT content string and dispatch one ProcessSoapClaveJob per valid clave.
+     *
+     * @param  array<string, bool>  $processedClaves  Claves already imported via XML/modal (skip them)
+     */
+    private function dispatchSoapJobs(string $content, string $scrapeType, Company $company, array $processedClaves = [], ?int $scrapeJobId = null): int
+    {
+        $lines = preg_split('/\r?\n/', $content);
+        array_shift($lines); // skip header
+
+        $dispatched = 0;
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+
+            if (empty($line) || ! preg_match('/(\d{49})/', $line, $m)) {
+                continue;
+            }
+
+            $claveAcceso = $m[1];
+
+            if (isset($processedClaves[$claveAcceso])) {
+                continue;
+            }
+
+            ProcessSoapClaveJob::dispatch($claveAcceso, $company->id, $scrapeType, $scrapeJobId)
+                ->onQueue('soap');
+
+            $dispatched++;
+        }
+
+        return $dispatched;
+    }
+
     private function importContent(string $content, string $voucherType, string $scrapeType, Company $company): array
     {
         // Retenciones recibidas van a ventas (OrderRetention), retenciones emitidas van a compras (ShopRetention)
@@ -838,56 +872,80 @@ class SriScraperService
 
     /**
      * Return all access keys (claves de acceso) already stored in the DB for the
-     * given job's month/year so the Python scraper can skip redundant processing.
+     * given job's period so the Python scraper can skip redundant processing.
      *
      * ventas: Orders (Facturas/NC/ND emitidas) + Shop.autorization_retention (Retenciones emitidas)
-     * compras: Shops (Facturas/NC/ND recibidas)
+     * compras: Shops (Facturas/NC/ND recibidas) + Order.autorization_retention (Retenciones recibidas)
+     * ambos: union of both
      *
      * @return array<int, string>
      */
-    private function getExistingClavesForMonth(SriScrapeJob $scrapeJob, Company $company): array
+    private function getExistingClavesForPeriod(SriScrapeJob $scrapeJob, Company $company): array
     {
+        $types = $scrapeJob->type === 'ambos' ? ['ventas', 'compras'] : [$scrapeJob->type];
         $year = $scrapeJob->year;
         $month = $scrapeJob->month;
+        $day = $scrapeJob->day;
+        $claves = [];
 
-        if ($scrapeJob->type === 'ventas') {
-            $orderClaves = Order::withoutGlobalScope(CompanyScope::class)
-                ->where('company_id', $company->id)
-                ->whereYear('emision', $year)
-                ->whereMonth('emision', $month)
-                ->whereNotNull('autorization')
-                ->pluck('autorization')
-                ->all();
+        foreach ($types as $type) {
+            if ($type === 'ventas') {
+                $orderQuery = Order::withoutGlobalScope(CompanyScope::class)
+                    ->where('company_id', $company->id)
+                    ->whereYear('emision', $year)
+                    ->whereMonth('emision', $month)
+                    ->whereNotNull('autorization');
 
-            $retentionClaves = Shop::withoutGlobalScope(CompanyScope::class)
-                ->where('company_id', $company->id)
-                ->whereYear('date_retention', $year)
-                ->whereMonth('date_retention', $month)
-                ->whereNotNull('autorization_retention')
-                ->pluck('autorization_retention')
-                ->all();
+                if ($day !== null) {
+                    $orderQuery->whereDay('emision', $day);
+                }
 
-            return array_values(array_unique(array_merge($orderClaves, $retentionClaves)));
+                $retentionQuery = Shop::withoutGlobalScope(CompanyScope::class)
+                    ->where('company_id', $company->id)
+                    ->whereYear('date_retention', $year)
+                    ->whereMonth('date_retention', $month)
+                    ->whereNotNull('autorization_retention');
+
+                if ($day !== null) {
+                    $retentionQuery->whereDay('date_retention', $day);
+                }
+
+                $claves = array_merge(
+                    $claves,
+                    $orderQuery->pluck('autorization')->all(),
+                    $retentionQuery->pluck('autorization_retention')->all(),
+                );
+            } else {
+                // compras: facturas/NC/ND recibidas (Shop) + retenciones recibidas (Order)
+                $shopQuery = Shop::withoutGlobalScope(CompanyScope::class)
+                    ->where('company_id', $company->id)
+                    ->whereYear('emision', $year)
+                    ->whereMonth('emision', $month)
+                    ->whereNotNull('autorization');
+
+                if ($day !== null) {
+                    $shopQuery->whereDay('emision', $day);
+                }
+
+                $orderRetentionQuery = Order::withoutGlobalScope(CompanyScope::class)
+                    ->where('company_id', $company->id)
+                    ->whereYear('emision', $year)
+                    ->whereMonth('emision', $month)
+                    ->whereNotNull('autorization_retention');
+
+                if ($day !== null) {
+                    $orderRetentionQuery->whereDay('emision', $day);
+                }
+
+                $claves = array_merge(
+                    $claves,
+                    $shopQuery->pluck('autorization')->all(),
+                    $orderRetentionQuery->pluck('autorization_retention')->all(),
+                );
+            }
         }
 
-        // compras: facturas/NC/ND recibidas (Shop) + retenciones recibidas (Order)
-        $shopClaves = Shop::withoutGlobalScope(CompanyScope::class)
-            ->where('company_id', $company->id)
-            ->whereYear('emision', $year)
-            ->whereMonth('emision', $month)
-            ->whereNotNull('autorization')
-            ->pluck('autorization')
-            ->all();
-
-        $orderRetentionClaves = Order::withoutGlobalScope(CompanyScope::class)
-            ->where('company_id', $company->id)
-            ->whereYear('emision', $year)
-            ->whereMonth('emision', $month)
-            ->whereNotNull('autorization_retention')
-            ->pluck('autorization_retention')
-            ->all();
-
-        return array_values(array_unique(array_merge($shopClaves, $orderRetentionClaves)));
+        return array_values(array_unique($claves));
     }
 
     /**

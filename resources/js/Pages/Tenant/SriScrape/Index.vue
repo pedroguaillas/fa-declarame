@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Head, useForm, usePage, Link } from "@inertiajs/vue3";
+import { Head, useForm, usePage, Link, router } from "@inertiajs/vue3";
 import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import HeaderList from "@/components/Shared/HeaderList.vue";
+import Pagination from "@/components/Shared/Pagination.vue";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +29,9 @@ import {
     ReceiptIndianRupee,
     Sheet,
     ArrowRight,
+    Bot,
 } from "lucide-vue-next";
+import { Paginator } from "@/types";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -37,7 +40,9 @@ interface ScrapeJob {
     type: string;
     year: number;
     month: number;
+    day: number | null;
     mode: string;
+    source: string;
     voucher_types: string[] | null;
     status: string;
     progress: { step: string; message: string } | null;
@@ -50,7 +55,7 @@ interface ScrapeJob {
 // ─── Props ──────────────────────────────────────────────────────────────────
 
 const props = defineProps<{
-    jobs: ScrapeJob[];
+    jobs: Paginator<ScrapeJob>;
     hasPassword: boolean;
     hasCaptchaKey: boolean;
 }>();
@@ -58,7 +63,7 @@ const props = defineProps<{
 // ─── State ──────────────────────────────────────────────────────────────────
 
 const currentYear = new Date().getFullYear();
-const currentMonth = new Date().getMonth(); // 0-indexed, so previous month
+const currentMonth = new Date().getMonth(); // 0-indexed
 const previousMonth = currentMonth === 0 ? 12 : currentMonth;
 const previousYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
@@ -66,13 +71,21 @@ const form = useForm({
     type: "compras",
     year: previousYear,
     month: previousMonth,
+    day: null as number | null,
     voucher_types: ["1", "3", "4"] as string[],
 });
 
 const selectedVoucherTypes = ref<string[]>(["1"]);
 
-const jobsList = ref<ScrapeJob[]>(props.jobs);
+const jobsList = ref<ScrapeJob[]>(props.jobs.data);
+const jobsMeta = ref(props.jobs);
 let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+// Sync when Inertia updates props (page navigation)
+watch(() => props.jobs, (newJobs) => {
+    jobsList.value = newJobs.data;
+    jobsMeta.value = newJobs;
+});
 
 const page = usePage();
 const flash = computed(() => page.props.flash as { success?: string; error?: string });
@@ -100,20 +113,17 @@ function toggleVoucherType(value: string) {
     if (selectedVoucherTypes.value.includes(value)) {
         selectedVoucherTypes.value = selectedVoucherTypes.value.filter((v) => v !== value);
     } else if (value === "6") {
-        // Retenciones es un proceso exclusivo: deseleccionar todo lo demás
         selectedVoucherTypes.value = ["6"];
     } else {
-        // Al seleccionar otro tipo, quitar retenciones si estaba activa
         selectedVoucherTypes.value = [...selectedVoucherTypes.value.filter((v) => v !== "6"), value];
     }
 }
 
-// Al cambiar tipo, resetear selección por defecto
 watch(() => form.type, () => {
     selectedVoucherTypes.value = ["1"];
 });
 
-// ─── Years & Months ─────────────────────────────────────────────────────────
+// ─── Years, Months & Days ───────────────────────────────────────────────────
 
 const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
@@ -131,6 +141,21 @@ const months = [
     { value: 11, label: "Noviembre" },
     { value: 12, label: "Diciembre" },
 ];
+
+const daysInMonth = computed(() => {
+    return new Date(form.year, form.month, 0).getDate();
+});
+
+const days = computed(() =>
+    Array.from({ length: daysInMonth.value }, (_, i) => i + 1)
+);
+
+// Reset day when month/year changes if current day is out of range
+watch([() => form.year, () => form.month], () => {
+    if (form.day !== null && form.day > daysInMonth.value) {
+        form.day = null;
+    }
+});
 
 // ─── Status helpers ─────────────────────────────────────────────────────────
 
@@ -162,11 +187,19 @@ const statusConfig: Record<
 
 const monthName = (m: number) => months.find((mo) => mo.value === m)?.label ?? m;
 
+function jobDateLabel(job: ScrapeJob): string {
+    if (job.day !== null) {
+        return `${job.day} de ${monthName(job.month)} ${job.year}`;
+    }
+    return `${monthName(job.month)} ${job.year}`;
+}
+
 function isRetentionOnly(job: ScrapeJob): boolean {
     return job.voucher_types?.length === 1 && job.voucher_types[0] === '6';
 }
 
 function jobDisplayLabel(job: ScrapeJob): string {
+    if (job.type === 'ambos') return 'Compras + Ventas';
     if (isRetentionOnly(job)) {
         return job.type === 'compras' ? 'Retenciones Recibidas' : 'Retenciones Emitidas';
     }
@@ -175,8 +208,6 @@ function jobDisplayLabel(job: ScrapeJob): string {
 
 function jobNavigationRoute(job: ScrapeJob): string {
     if (isRetentionOnly(job)) {
-        // Retenciones recibidas (compras) → se importan en Ventas
-        // Retenciones emitidas (ventas) → se importan en Compras
         return job.type === 'compras' ? 'tenant.orders.index' : 'tenant.shops.index';
     }
     return job.type === 'compras' ? 'tenant.shops.index' : 'tenant.orders.index';
@@ -191,7 +222,7 @@ function jobNavigationLabel(job: ScrapeJob): string {
 
 function jobNavigationIsCompras(job: ScrapeJob): boolean {
     if (isRetentionOnly(job)) {
-        return job.type === 'ventas'; // Retenciones emitidas → van a Compras
+        return job.type === 'ventas';
     }
     return job.type === 'compras';
 }
@@ -208,7 +239,13 @@ async function pollStatus() {
     try {
         const response = await fetch(route("tenant.sri-scrape.status"));
         const data = await response.json();
-        jobsList.value = data.jobs;
+        // Update only visible jobs by ID to preserve pagination
+        (data.jobs as ScrapeJob[]).forEach((freshJob) => {
+            const idx = jobsList.value.findIndex((j) => j.id === freshJob.id);
+            if (idx !== -1) {
+                jobsList.value[idx] = freshJob;
+            }
+        });
     } catch {
         // Ignore polling errors
     }
@@ -243,6 +280,16 @@ watch(hasActiveJobs, (active) => {
         stopPolling();
     }
 });
+
+// ─── Pagination ──────────────────────────────────────────────────────────────
+
+function handlePageChange(page: number) {
+    router.get(route("tenant.sri-scrape.index"), { page }, {
+        preserveState: true,
+        preserveScroll: true,
+        only: ["jobs"],
+    });
+}
 
 // ─── Submit ─────────────────────────────────────────────────────────────────
 
@@ -290,7 +337,7 @@ defineOptions({ layout: TenantLayout });
             </CardHeader>
             <CardContent>
                 <form @submit.prevent="submit" class="space-y-4">
-                    <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
+                    <div class="flex flex-wrap gap-4 sm:items-end">
                         <div class="flex flex-col gap-1.5">
                             <label class="text-sm font-medium">Tipo</label>
                             <Select v-model="form.type">
@@ -335,6 +382,28 @@ defineOptions({ layout: TenantLayout });
                                         :value="m.value"
                                     >
                                         {{ m.label }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-sm font-medium">Día</label>
+                            <Select
+                                :model-value="form.day !== null ? String(form.day) : 'all'"
+                                @update:model-value="(v) => form.day = v === 'all' ? null : Number(v)"
+                            >
+                                <SelectTrigger class="w-[140px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos los días</SelectItem>
+                                    <SelectItem
+                                        v-for="d in days"
+                                        :key="d"
+                                        :value="String(d)"
+                                    >
+                                        {{ d }}
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
@@ -386,7 +455,7 @@ defineOptions({ layout: TenantLayout });
             <CardHeader>
                 <CardTitle class="text-lg">Descargas recientes</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent class="space-y-4">
                 <div v-if="jobsList.length === 0" class="text-muted-foreground py-8 text-center text-sm">
                     No hay descargas recientes.
                 </div>
@@ -398,15 +467,19 @@ defineOptions({ layout: TenantLayout });
                         class="flex flex-col gap-2 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
                     >
                         <div class="flex flex-col gap-1">
-                            <div class="flex items-center gap-2">
+                            <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-sm font-semibold uppercase">
                                     {{ jobDisplayLabel(job) }}
                                 </span>
                                 <span class="text-muted-foreground text-sm">
-                                    {{ monthName(job.month) }} {{ job.year }}
+                                    {{ jobDateLabel(job) }}
                                 </span>
                                 <Badge :class="statusConfig[job.status]?.class">
                                     {{ statusConfig[job.status]?.label ?? job.status }}
+                                </Badge>
+                                <Badge v-if="job.source === 'automatic'" class="gap-1 border-0 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                                    <Bot class="size-3" />
+                                    Auto
                                 </Badge>
                             </div>
 
@@ -444,16 +517,38 @@ defineOptions({ layout: TenantLayout });
                             </span>
 
                             <!-- Quick access buttons for completed jobs -->
-                            <div v-if="job.status === 'completed'" class="flex gap-2">
-                                <Link
-                                    :href="route(jobNavigationRoute(job))"
-                                    class="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-                                >
-                                    <ShoppingCart v-if="jobNavigationIsCompras(job)" class="size-3" />
-                                    <ReceiptIndianRupee v-else class="size-3" />
-                                    {{ jobNavigationLabel(job) }}
-                                    <ArrowRight class="size-3 opacity-60" />
-                                </Link>
+                            <div v-if="job.status === 'completed'" class="flex flex-wrap gap-2">
+                                <!-- ambos: two separate navigation links -->
+                                <template v-if="job.type === 'ambos'">
+                                    <Link
+                                        :href="route('tenant.shops.index')"
+                                        class="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                                    >
+                                        <ShoppingCart class="size-3" />
+                                        Ver Compras
+                                        <ArrowRight class="size-3 opacity-60" />
+                                    </Link>
+                                    <Link
+                                        :href="route('tenant.orders.index')"
+                                        class="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                                    >
+                                        <ReceiptIndianRupee class="size-3" />
+                                        Ver Ventas
+                                        <ArrowRight class="size-3 opacity-60" />
+                                    </Link>
+                                </template>
+                                <!-- single type: one navigation link -->
+                                <template v-else>
+                                    <Link
+                                        :href="route(jobNavigationRoute(job))"
+                                        class="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                                    >
+                                        <ShoppingCart v-if="jobNavigationIsCompras(job)" class="size-3" />
+                                        <ReceiptIndianRupee v-else class="size-3" />
+                                        {{ jobNavigationLabel(job) }}
+                                        <ArrowRight class="size-3 opacity-60" />
+                                    </Link>
+                                </template>
                                 <Link
                                     :href="route('tenant.reports.index')"
                                     class="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -466,6 +561,12 @@ defineOptions({ layout: TenantLayout });
                         </div>
                     </div>
                 </div>
+
+                <Pagination
+                    v-if="jobsMeta.last_page > 1"
+                    :paginator="jobsMeta"
+                    @change-page="handlePageChange"
+                />
             </CardContent>
         </Card>
     </div>

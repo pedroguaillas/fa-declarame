@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\Shop;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -88,16 +87,8 @@ class DeclarationController extends Controller
             return [(int) $request->input('year'), (int) $request->input('month')];
         }
 
-        $lastShop = Shop::max('emision');
-        $lastOrder = Order::max('emision');
+        $previousMonth = now('America/Guayaquil')->subMonth();
 
-        $ref = match (true) {
-            $lastShop !== null && $lastOrder !== null => Carbon::parse(max($lastShop, $lastOrder)),
-            $lastShop !== null => Carbon::parse($lastShop),
-            $lastOrder !== null => Carbon::parse($lastOrder),
-            default => now()->subMonth(),
-        };
-
-        return [$ref->year, $ref->month];
+        return [$previousMonth->year, $previousMonth->month];
     }
 }

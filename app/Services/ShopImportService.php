@@ -130,13 +130,24 @@ class ShopImportService
             return ['imported' => 0, 'skipped' => 1];
         }
 
+        return $this->processFromAutorizacion($autorizacion, (string) $autorizacion->numeroAutorizacion, $companyId, $companyRuc);
+    }
+
+    /**
+     * Process an already-fetched SOAP/XML authorization object (skip re-parsing).
+     * Used by ProcessSoapClaveJob to avoid re-fetching from SOAP.
+     *
+     * @return array{imported: int, skipped: int}
+     */
+    public function processFromAutorizacion(object $autorizacion, string $claveAcceso, int $companyId, string $companyRuc): array
+    {
         $sriData = $this->xmlParser->parse($autorizacion);
 
         if ($sriData === null) {
             return ['imported' => 0, 'skipped' => 1];
         }
 
-        if ($this->createShopFromSriData($sriData, (string) $autorizacion->numeroAutorizacion, $companyId, $companyRuc)) {
+        if ($this->createShopFromSriData($sriData, $claveAcceso, $companyId, $companyRuc)) {
             return ['imported' => 1, 'skipped' => 0];
         }
 

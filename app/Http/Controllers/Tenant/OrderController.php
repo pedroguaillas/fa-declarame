@@ -26,10 +26,15 @@ class OrderController extends Controller
         $filters = $request->only(['search', 'period', 'voucher_type']);
 
         if (empty($filters['period'])) {
-            $lastEmision = Order::max('emision');
-            $filters['period'] = $lastEmision
-                ? substr($lastEmision, 0, 7)
-                : now()->format('Y-m');
+            $previousMonth = now('America/Guayaquil')->subMonth();
+            $hasPreviousMonth = Order::whereYear('emision', $previousMonth->year)
+                ->whereMonth('emision', $previousMonth->month)
+                ->exists();
+
+            $lastEmision = $hasPreviousMonth ? null : Order::max('emision');
+            $filters['period'] = $hasPreviousMonth
+                ? $previousMonth->format('Y-m')
+                : ($lastEmision ? substr($lastEmision, 0, 7) : now()->format('Y-m'));
         }
 
         $orders = Order::selectRaw('orders.id, contact_id, serie, emision, autorization, total, state, serie_retention, state_retention, vt.code')

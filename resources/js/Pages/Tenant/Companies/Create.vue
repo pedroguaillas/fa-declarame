@@ -26,7 +26,7 @@ const typeDeclarationOptions = [
 const form = useForm({
     ruc: "",
     name: "",
-    matrix_address: "",
+    matrix_address: "SIN DIRECCION",
     contributor_type_id: "",
     special_contribution: "",
     accounting: false,
@@ -123,18 +123,6 @@ function submit() {
                         maxlength="300"
                     />
 
-                    <!-- Dirección -->
-                    <div class="sm:col-span-2">
-                        <FormField
-                            id="matrix_address"
-                            label="Dirección Matriz"
-                            v-model="form.matrix_address"
-                            :error="form.errors.matrix_address"
-                            required
-                            maxlength="300"
-                        />
-                    </div>
-
                     <!-- Teléfono -->
                     <FormField
                         id="phone"
@@ -174,17 +162,6 @@ function submit() {
                         required
                     />
 
-                    <!-- Contribuyente especial -->
-                    <FormField
-                        id="special_contribution"
-                        label="Contribuyente Especial N°"
-                        v-model="form.special_contribution"
-                        :error="form.errors.special_contribution"
-                        type="number"
-                        min="0"
-                        placeholder="Número de resolución (opcional)"
-                    />
-
                     <!-- Agente de retención -->
                     <FormField
                         id="retention_agent"
@@ -212,16 +189,6 @@ function submit() {
                     <h2 class="text-foreground text-sm font-medium">Características</h2>
                     <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         <FormSwitch label="Contabilidad" description="Lleva contabilidad" v-model="form.accounting" />
-                        <FormSwitch
-                            label="Contribuyente fantasma"
-                            description="Contribuyente fantasma"
-                            v-model="form.phantom_taxpayer"
-                        />
-                        <FormSwitch
-                            label="Sin transacciones"
-                            description="Sin transacciones"
-                            v-model="form.no_transactions"
-                        />
                     </div>
                 </div>
 

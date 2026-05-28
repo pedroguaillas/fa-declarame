@@ -13,19 +13,25 @@ use Inertia\Response;
 
 class SriScrapeController extends Controller
 {
+    private const SELECT_COLUMNS = [
+        'id', 'type', 'year', 'month', 'day', 'mode', 'source',
+        'voucher_types', 'status', 'progress', 'result', 'error_message',
+        'created_at', 'completed_at',
+    ];
+
     public function index(): Response
     {
         $company = company();
 
         $jobs = SriScrapeJob::where('company_id', $company->id)
-            ->where('created_at', '>=', now()->subDays(7))
             ->orderByDesc('created_at')
-            ->get(['id', 'type', 'year', 'month', 'mode', 'voucher_types', 'status', 'progress', 'result', 'error_message', 'created_at', 'completed_at']);
+            ->select(self::SELECT_COLUMNS)
+            ->paginate(15);
 
         return Inertia::render('Tenant/SriScrape/Index', [
             'jobs' => $jobs,
             'hasPassword' => ! empty($company->pass_sri),
-            'hasCaptchaKey' => true, // No longer required — stealth bypasses captcha
+            'hasCaptchaKey' => true,
         ]);
     }
 
@@ -35,6 +41,7 @@ class SriScrapeController extends Controller
             'type' => ['required', 'in:compras,ventas'],
             'year' => ['required', 'integer', 'min:2022', 'max:'.now()->year],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'day' => ['nullable', 'integer', 'min:1', 'max:31'],
             'voucher_types' => ['required', 'array', 'min:1'],
             'voucher_types.*' => ['in:1,3,4,6'],
         ]);
@@ -45,7 +52,6 @@ class SriScrapeController extends Controller
             return back()->with('error', 'Configure la clave SRI de la empresa primero.');
         }
 
-        // Prevent duplicate running jobs
         $existing = SriScrapeJob::where('company_id', $company->id)
             ->where('type', $validated['type'])
             ->whereIn('status', ['pending', 'running'])
@@ -55,18 +61,14 @@ class SriScrapeController extends Controller
             return back()->with('error', 'Ya existe una descarga en progreso para este tipo.');
         }
 
-        // Always use txt_download: the Python scraper handles the 30-day split internally.
-        // For recent claves (≤30 days) it uses SOAP; for older ones it downloads XMLs directly
-        // from the SRI table. The legacy table_scrape mode only extracted claves and then
-        // attempted SOAP authorization, which fails for documents older than 30 days.
-        $mode = 'txt_download';
-
         $scrapeJob = SriScrapeJob::create([
             'company_id' => $company->id,
             'type' => $validated['type'],
             'year' => $validated['year'],
             'month' => $validated['month'],
-            'mode' => $mode,
+            'day' => $validated['day'] ?? null,
+            'mode' => 'txt_download',
+            'source' => 'manual',
             'voucher_types' => $validated['voucher_types'],
             'status' => 'pending',
         ]);
@@ -81,10 +83,9 @@ class SriScrapeController extends Controller
         $company = company();
 
         $jobs = SriScrapeJob::where('company_id', $company->id)
-            ->where('created_at', '>=', now()->subDays(7))
             ->orderByDesc('created_at')
-            ->limit(10)
-            ->get(['id', 'type', 'year', 'month', 'mode', 'voucher_types', 'status', 'progress', 'result', 'error_message', 'created_at', 'completed_at']);
+            ->limit(20)
+            ->get(self::SELECT_COLUMNS);
 
         return response()->json(['jobs' => $jobs]);
     }

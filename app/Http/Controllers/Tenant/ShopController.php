@@ -31,10 +31,15 @@ class ShopController extends Controller
         $filters = $request->only(['search', 'period', 'retention', 'voucher_type', 'sort']);
 
         if (empty($filters['period'])) {
-            $lastEmision = Shop::max('emision');
-            $filters['period'] = $lastEmision
-                ? substr($lastEmision, 0, 7)
-                : now()->format('Y-m');
+            $previousMonth = now('America/Guayaquil')->subMonth();
+            $hasPreviousMonth = Shop::whereYear('emision', $previousMonth->year)
+                ->whereMonth('emision', $previousMonth->month)
+                ->exists();
+
+            $lastEmision = $hasPreviousMonth ? null : Shop::max('emision');
+            $filters['period'] = $hasPreviousMonth
+                ? $previousMonth->format('Y-m')
+                : ($lastEmision ? substr($lastEmision, 0, 7) : now()->format('Y-m'));
         }
 
         [$sortField, $sortDirection] = match ($filters['sort'] ?? '') {
