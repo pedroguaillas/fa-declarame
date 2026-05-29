@@ -18,8 +18,10 @@ Usage:
 
 import argparse
 import json
+import os
 import queue
 import threading
+import time
 import traceback
 import urllib.request
 from concurrent.futures import Future
@@ -231,6 +233,12 @@ def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> N
         except Exception as e:
             traceback.print_exc()
             future.set_exception(e)
+        finally:
+            # Cooldown between consecutive jobs to avoid SRI captcha on rapid logins
+            if not _work_queue.empty():
+                cooldown = int(os.environ.get("SRI_JOB_COOLDOWN", "120"))
+                scraper.progress("server", f"Cooldown {cooldown}s antes del siguiente job...")
+                time.sleep(cooldown)
 
 
 # ─── Scrape Handler ──────────────────────────────────────────────────────────

@@ -38,6 +38,10 @@ Probar script
   
 `python server.py`
 
+# Probar el job automatico
+
+`./vendor/bin/sail artisan sri:daily-scrape`
+
 # Seed faltante
 
 `./vendor/bin/sail php artisan tenant:seed-identification-types`
@@ -49,3 +53,8 @@ Probar script
 Desde local se puede actualizar el scrape
 
 `bash scripts/sri-scraper/deploy.sh --update-only`
+
+
+# Change setting scrape
+
+ExecStart=/opt/sri-scraper/.venv/bin/python /opt/sri-scraper/server.py     --host=127.0.0.1     --port=8765     --user-data-dir=/opt/sri-scraper/browser-session     --headless

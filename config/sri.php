@@ -19,6 +19,7 @@ return [
         'chrome_path' => env('SRI_SCRAPER_CHROME_PATH'),
         'headless' => (bool) env('SRI_SCRAPER_HEADLESS', true),
         'user_data_dir' => env('SRI_SCRAPER_USER_DATA_DIR', storage_path('app/private/sri-browser-session')),
+        'daily_dispatch_interval' => (int) env('SRI_DAILY_DISPATCH_INTERVAL', 90),
     ],
 
     'urls' => [
