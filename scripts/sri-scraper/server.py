@@ -56,6 +56,10 @@ _browser_ready = Event()
 # Prevents concurrent scrape requests.
 _scrape_lock = Lock()
 
+# Tracks how many jobs have completed to apply incremental cooldowns.
+_job_counter = 0
+_JOB_COOLDOWN_INTERVAL = 5  # Apply extended cooldown every N jobs.
+
 
 # ─── Browser Lifecycle ──────────────────────────────────────────────────────
 
@@ -234,10 +238,22 @@ def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> N
             traceback.print_exc()
             future.set_exception(e)
         finally:
-            # Cooldown between consecutive jobs to avoid SRI captcha on rapid logins
+            global _job_counter
+            _job_counter += 1
+
+            # Cooldown between consecutive jobs to avoid SRI captcha on rapid logins.
+            # Every SRI_JOB_COOLDOWN_INTERVAL jobs apply a 5× extended cooldown.
             if not _work_queue.empty():
-                cooldown = int(os.environ.get("SRI_JOB_COOLDOWN", "120"))
-                scraper.progress("server", f"Cooldown {cooldown}s antes del siguiente job...")
+                base_cooldown = int(os.environ.get("SRI_JOB_COOLDOWN", "120"))
+                if _job_counter % _JOB_COOLDOWN_INTERVAL == 0:
+                    cooldown = base_cooldown * 5
+                    scraper.progress(
+                        "server",
+                        f"Cooldown extendido {cooldown}s (job #{_job_counter}, cada {_JOB_COOLDOWN_INTERVAL} jobs se aplica 5×)...",
+                    )
+                else:
+                    cooldown = base_cooldown
+                    scraper.progress("server", f"Cooldown {cooldown}s antes del siguiente job (job #{_job_counter})...")
                 time.sleep(cooldown)
 
 
