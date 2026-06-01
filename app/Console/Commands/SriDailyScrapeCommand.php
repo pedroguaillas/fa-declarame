@@ -24,15 +24,10 @@ class SriDailyScrapeCommand extends Command
 
         $year = (int) $date->year;
         $month = (int) $date->month;
-        $isLastDayOfMonth = $date->isLastOfMonth();
-        $day = $isLastDayOfMonth ? 0 : (int) $date->day;
-        $voucherTypes = $isLastDayOfMonth ? ['1', '3', '4'] : ['1'];
+        $day = (int) $date->day;
+        $voucherTypes = ['1', '3', '4'];
 
-        $label = $isLastDayOfMonth
-            ? 'último día del mes — todos los días, facturas + NC + ND'
-            : "día {$date->day} — solo facturas";
-
-        $this->info("Iniciando scrape automático para {$date->toDateString()} ({$label})...");
+        $this->info("Iniciando scrape automático para {$date->toDateString()} (día {$day} — facturas + NC + ND)...");
 
         $tenants = Tenant::all();
         $totalDispatched = 0;

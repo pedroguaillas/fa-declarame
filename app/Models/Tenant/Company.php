@@ -2,10 +2,24 @@
 
 namespace App\Models\Tenant;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Model;
 
 class Company extends Model
 {
+    /**
+     * If an encrypted attribute was stored with a different APP_KEY, treat it as
+     * dirty so it gets re-encrypted with the current key on the next save.
+     */
+    public function originalIsEquivalent($key): bool
+    {
+        try {
+            return parent::originalIsEquivalent($key);
+        } catch (DecryptException) {
+            return false;
+        }
+    }
+
     protected $hidden = [
         'pass_sri',
     ];

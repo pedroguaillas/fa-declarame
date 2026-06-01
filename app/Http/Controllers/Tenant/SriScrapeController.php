@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Jobs\ScrapeFromSriJob;
 use App\Models\Tenant\SriScrapeJob;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,9 +29,15 @@ class SriScrapeController extends Controller
             ->select(self::SELECT_COLUMNS)
             ->paginate(15);
 
+        try {
+            $hasPassword = ! empty($company->pass_sri);
+        } catch (DecryptException) {
+            $hasPassword = false;
+        }
+
         return Inertia::render('Tenant/SriScrape/Index', [
             'jobs' => $jobs,
-            'hasPassword' => ! empty($company->pass_sri),
+            'hasPassword' => $hasPassword,
             'hasCaptchaKey' => true,
         ]);
     }
@@ -48,7 +55,13 @@ class SriScrapeController extends Controller
 
         $company = company();
 
-        if (empty($company->pass_sri)) {
+        try {
+            $passSri = $company->pass_sri;
+        } catch (DecryptException) {
+            $passSri = null;
+        }
+
+        if (empty($passSri)) {
             return back()->with('error', 'Configure la clave SRI de la empresa primero.');
         }
 

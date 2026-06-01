@@ -505,14 +505,25 @@ def _human_click_buscar(page: Page, label: str) -> bool:
     (not JavaScript .click()). The invisible reCAPTCHA fires automatically via
     the button's onclick handler (rcBuscar) — no token injection needed.
     """
-    # PrimeFaces IDs use colons which CSS requires escaping — try multiple selectors
+    # PrimeFaces IDs use colons which CSS requires escaping — try multiple selectors.
+    # Priority: onclick handler (most reliable), then ID patterns, then text.
     selectors = [
+        "[onclick*='rcBuscar']",
+        "[onclick*='rcConsultar']",
+        "[onclick*='Buscar']",
+        "[onclick*='Consultar']",
         "[id*='btnBuscar']",
+        "[id*='btnConsultar']",
         "[id*='Buscar']",
+        "[id*='Consultar']",
         "button:text('Buscar')",
+        "button:text('Consultar')",
         "input[type='submit'][value*='Buscar']",
+        "input[type='submit'][value*='Consultar']",
         "a.ui-commandlink:text('Buscar')",
+        "a.ui-commandlink:text('Consultar')",
         ".ui-button:text('Buscar')",
+        ".ui-button:text('Consultar')",
     ]
 
     buscar_el = None
@@ -521,13 +532,20 @@ def _human_click_buscar(page: Page, label: str) -> bool:
             loc = page.locator(selector).first
             if loc.count() > 0:
                 buscar_el = loc
+                progress(label, f"Botón encontrado con selector: {selector}")
                 break
         except Exception:
             continue
 
     if buscar_el is None:
-        progress(label, "No se encontró botón Buscar con locator, intentando query_selector...")
-        el = page.query_selector("[id*='btnBuscar'], [id*='Buscar'][type='button'], [id*='Buscar'][type='submit']")
+        progress(label, "No se encontró botón con locator, intentando query_selector...")
+        el = page.query_selector(
+            "[onclick*='rcBuscar'], [onclick*='rcConsultar'], "
+            "[onclick*='Buscar'], [onclick*='Consultar'], "
+            "[id*='btnBuscar'], [id*='btnConsultar'], "
+            "[id*='Buscar'][type='button'], [id*='Buscar'][type='submit'], "
+            "[id*='Consultar'][type='button'], [id*='Consultar'][type='submit']"
+        )
         if el:
             box = el.bounding_box()
             if box:
@@ -538,9 +556,20 @@ def _human_click_buscar(page: Page, label: str) -> bool:
                 )
                 random_delay(0.2, 0.5)
             el.click()
-            progress(label, "Click en botón Buscar (query_selector)")
+            progress(label, "Click en botón Consultar/Buscar (query_selector)")
             return True
-        progress(label, "ERROR: No se encontró botón Buscar")
+        # Log buttons on page to help debug
+        try:
+            buttons = page.evaluate("""() => {
+                const els = document.querySelectorAll('button, input[type=submit], input[type=button], a.ui-commandlink');
+                return Array.from(els).slice(0, 20).map(e => ({
+                    tag: e.tagName, id: e.id, text: e.textContent?.trim().substring(0, 30), onclick: e.getAttribute('onclick')
+                }));
+            }""")
+            progress(label, f"Botones en página (debug): {buttons}")
+        except Exception:
+            pass
+        progress(label, "ERROR: No se encontró botón Buscar/Consultar")
         return False
 
     try:
@@ -619,8 +648,12 @@ def search_with_captcha(
 
         # Real Playwright click — triggers onclick="rcBuscar()" which fires the captcha
         if not _human_click_buscar(page, label):
-            progress(label, "ERROR: No se encontró botón Buscar")
-            return False
+            progress(label, f"No se encontró botón Buscar en intento {attempt}")
+            if attempt < 3:
+                progress(label, "Recargando página para reintentar...")
+                navigate_to_comprobantes(page, tipo)
+                set_filters(page, voucher_type, year, month, day, tipo)
+            continue
 
         if wait_for_search_results(page, tipo, label):
             progress(label, f"Búsqueda exitosa en intento {attempt}")

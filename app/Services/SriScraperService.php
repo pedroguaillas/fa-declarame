@@ -371,6 +371,23 @@ class SriScraperService
             'details' => $fileResults,
         ];
 
+        // If every file returned captcha_failed and nothing was imported, mark as failed
+        // so the user knows to retry instead of silently treating it as completed.
+        $allCaptchaFailed = ! empty($files) && collect($files)->every(
+            fn ($f) => ($f['status'] ?? '') === 'captcha_failed'
+        );
+
+        if ($allCaptchaFailed) {
+            $scrapeJob->update([
+                'status' => 'failed',
+                'error_message' => 'Captcha rechazado por el SRI. Intente de nuevo más tarde.',
+                'result' => $stats,
+                'completed_at' => now(),
+            ]);
+
+            return $stats;
+        }
+
         $scrapeJob->update([
             'status' => 'completed',
             'result' => $stats,
