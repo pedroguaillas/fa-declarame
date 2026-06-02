@@ -8,6 +8,7 @@ interface Filters {
     search: string;
     period: string;
     voucher_type: string;
+    sort: string;
 }
 
 const props = defineProps<{
@@ -36,6 +37,7 @@ function clearFilters() {
     local.search = "";
     local.period = "";
     local.voucher_type = "";
+    local.sort = "";
     emit("change", { ...local });
 }
 
@@ -86,12 +88,26 @@ watch(
         <select
             v-model="local.voucher_type"
             class="border-border bg-background text-foreground focus:ring-ring/30 h-9 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
+            :class="local.voucher_type ? 'ring-2 ring-blue-500/40' : ''"
             @change="onFilterChange"
         >
             <option value="">Todos los tipos</option>
             <option value="01">Factura</option>
             <option value="04">Nota de Crédito</option>
             <option value="05">Nota de Débito</option>
+        </select>
+
+        <!-- Sort -->
+        <select
+            v-model="local.sort"
+            class="border-border bg-background text-foreground focus:ring-ring/30 h-9 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
+            :class="local.sort ? 'ring-2 ring-blue-500/40' : ''"
+            @change="onFilterChange"
+        >
+            <option value="">Fecha reciente</option>
+            <option value="emision_asc">Fecha antigua</option>
+            <option value="contact_asc">Cliente A → Z</option>
+            <option value="contact_desc">Cliente Z → A</option>
         </select>
 
         <!-- Clear -->

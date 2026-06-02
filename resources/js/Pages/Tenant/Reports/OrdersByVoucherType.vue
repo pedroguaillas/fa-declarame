@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Head, router } from "@inertiajs/vue3";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useDateRangeFilter } from "@/composables/useDateRangeFilter";
 import { Download } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ interface Row {
 interface Filters {
     start_date: string | null;
     end_date: string | null;
+    only_authorized: boolean;
 }
 
 const props = defineProps<{
@@ -29,6 +30,8 @@ const props = defineProps<{
 
 const { startDate, endDate, minDate, maxDate, dateRangeError } = useDateRangeFilter(props.filters.start_date, props.filters.end_date);
 
+const onlyAuthorized = ref(props.filters.only_authorized ?? true);
+
 function applyFilters() {
     if (dateRangeError.value) return;
     router.get(
@@ -36,6 +39,7 @@ function applyFilters() {
         {
             start_date: startDate.value || undefined,
             end_date: endDate.value || undefined,
+            only_authorized: onlyAuthorized.value ? "1" : "0",
         },
         { preserveState: true },
     );
@@ -44,6 +48,7 @@ function applyFilters() {
 function clearFilters() {
     startDate.value = "";
     endDate.value = "";
+    onlyAuthorized.value = true;
     router.get(route("tenant.reports.orders-by-voucher-type"), {}, { preserveState: true });
 }
 
@@ -51,6 +56,7 @@ function download() {
     const params = new URLSearchParams();
     if (props.filters.start_date) params.set("start_date", props.filters.start_date);
     if (props.filters.end_date) params.set("end_date", props.filters.end_date);
+    params.set("only_authorized", props.filters.only_authorized ? "1" : "0");
     window.location.href = route("tenant.reports.orders-by-voucher-type.export") + "?" + params.toString();
 }
 
@@ -105,6 +111,10 @@ const totals = computed(() => ({
                     class="border-border bg-background text-foreground focus:ring-ring/30 h-8 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
             </div>
+            <label class="flex cursor-pointer items-center gap-2 self-end pb-1 text-sm">
+                <input id="only-authorized-vt" v-model="onlyAuthorized" type="checkbox" class="border-border size-4 rounded" />
+                <span class="text-foreground">Solo autorizados</span>
+            </label>
             <button
                 type="button"
                 class="bg-primary text-primary-foreground hover:bg-primary/90 h-8 rounded-md px-4 text-sm font-medium"

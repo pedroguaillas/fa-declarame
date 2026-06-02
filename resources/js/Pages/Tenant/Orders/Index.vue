@@ -25,6 +25,7 @@ interface OrderFilters {
     search: string;
     period: string;
     voucher_type: string;
+    sort: string;
 }
 
 const props = defineProps<{

@@ -284,6 +284,17 @@ watchEffect(() => {
                     @blur="formatSerie"
                 />
 
+                <FormSelect
+                    label="Estado"
+                    v-model="form.state"
+                    :options="[
+                        { id: 'AUTORIZADO', label: 'Autorizado' },
+                        { id: 'ANULADO', label: 'Anulado' },
+                    ]"
+                    :error="form.errors.state"
+                    required
+                />
+
                 <FormDatePicker
                     id="emision"
                     label="Fecha emisión"

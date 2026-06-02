@@ -6,6 +6,7 @@ use App\Exports\OrdersExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\StoreOrderRequest;
 use App\Http\Requests\Tenant\UpdateOrderRequest;
+use App\Models\Tenant\Contact;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\VoucherType;
 use App\Services\OrderImportService;
@@ -23,7 +24,7 @@ class OrderController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only(['search', 'period', 'voucher_type']);
+        $filters = $request->only(['search', 'period', 'voucher_type', 'sort']);
 
         if (empty($filters['period'])) {
             $previousMonth = now('America/Guayaquil')->subMonth();
@@ -37,36 +38,29 @@ class OrderController extends Controller
                 : ($lastEmision ? substr($lastEmision, 0, 7) : now()->format('Y-m'));
         }
 
-        $orders = Order::selectRaw('orders.id, contact_id, serie, emision, autorization, total, state, serie_retention, state_retention, vt.code')
-            ->with(['contact:id,name'])
-            ->join('voucher_types AS vt', 'vt.id', 'voucher_type_id')
-            ->when($filters['search'] ?? null, function ($q, $s) {
-                $hasLetters = (bool) preg_match('/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/u', $s);
-                $isOnlyDigits = ctype_digit($s);
-                $len = strlen($s);
+        [$sortField, $sortDirection] = match ($filters['sort'] ?? '') {
+            'emision_asc' => ['emision', 'asc'],
+            'contact_asc' => ['contact', 'asc'],
+            'contact_desc' => ['contact', 'desc'],
+            default => ['emision', 'desc'],
+        };
 
-                if ($hasLetters) {
-                    $q->join('contacts AS sc', 'sc.id', '=', 'orders.contact_id')
-                        ->where('sc.name', 'ilike', "%{$s}%");
-                } elseif ($isOnlyDigits && $len === 49) {
-                    $q->where('orders.autorization', $s);
-                } elseif ($isOnlyDigits && $len >= 5) {
-                    $q->where(function ($q) use ($s) {
-                        $q->where('orders.serie', 'ilike', "%{$s}%")
-                            ->orWhere('orders.autorization', 'ilike', "%{$s}%");
-                    });
-                } else {
-                    $q->where('orders.serie', 'ilike', "%{$s}%");
-                }
-            })
-            ->when($filters['period'] ?? null, function ($q, $p) {
-                $q->whereYear('emision', substr($p, 0, 4))
-                    ->whereMonth('emision', substr($p, 5, 2));
-            })
-            ->when($filters['voucher_type'] ?? null, fn ($q, $v) => $q->where('vt.code', $v))
-            ->orderByDesc('emision')
-            ->paginate(25)
-            ->withQueryString();
+        $query = $this->filteredOrdersQuery($filters)
+            ->selectRaw('orders.id, contact_id, serie, emision, autorization, total, state, serie_retention, state_retention, vt.code')
+            ->with(['contact:id,name']);
+
+        if ($sortField === 'contact') {
+            $query->orderBy(
+                Contact::select('name')
+                    ->whereColumn('contacts.id', 'orders.contact_id')
+                    ->limit(1),
+                $sortDirection
+            );
+        } else {
+            $query->orderBy('emision', $sortDirection);
+        }
+
+        $orders = $query->paginate(25)->withQueryString();
 
         return Inertia::render('Tenant/Orders/Index', [
             'orders' => $orders,
@@ -188,7 +182,7 @@ class OrderController extends Controller
 
             $content = file_get_contents($request->file('file')->getRealPath());
 
-            ['imported' => $imported, 'skipped' => $skipped] = $service->import($content, $company->id, $company->ruc);
+            ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors] = $service->import($content, $company->id, $company->ruc);
         }
 
         return redirect()->route('tenant.orders.index')->with($skipped > 0 ? 'error' : 'success', "Importación completada: {$imported} ventas importadas, {$skipped} omitidas.");
@@ -241,6 +235,9 @@ class OrderController extends Controller
                 if ($hasLetters) {
                     $q->join('contacts AS sc', 'sc.id', '=', 'orders.contact_id')
                         ->where('sc.name', 'ilike', "%{$s}%");
+                } elseif ($isOnlyDigits && ($len === 10 || $len === 13)) {
+                    $q->join('contacts AS sc', 'sc.id', '=', 'orders.contact_id')
+                        ->where('sc.identification', 'like', "%{$s}%");
                 } elseif ($isOnlyDigits && $len === 49) {
                     $q->where('orders.autorization', $s);
                 } elseif ($isOnlyDigits && $len >= 5) {
@@ -263,7 +260,7 @@ class OrderController extends Controller
     {
         $validated = $request->validate([
             'serie_retention' => ['required', 'string', 'max:17'],
-            'date_retention' => ['required', 'date'],
+            'date_retention' => ['required', 'date', 'after_or_equal:'.$order->emision],
             'autorization_retention' => ['required', 'string', 'max:49'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.retention_id' => ['required', 'integer', 'exists:retentions,id'],

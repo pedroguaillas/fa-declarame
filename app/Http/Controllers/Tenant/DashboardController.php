@@ -60,6 +60,7 @@ class DashboardController extends Controller
         $ivaExpr = $this->signedSum('iva5+iva8+iva12+iva15');
 
         $sales = Order::where('orders.company_id', $companyId)
+            ->where('orders.state', 'AUTORIZADO')
             ->whereBetween('orders.emision', [$from->toDateString(), $to->toDateString()])
             ->join('voucher_types as vt', 'vt.id', '=', 'orders.voucher_type_id')
             ->selectRaw("COUNT(*) as count, {$totalExpr} as total, {$ivaExpr} as iva")
@@ -95,6 +96,7 @@ class DashboardController extends Controller
         $totalExpr = $this->signedSum('sub_total');
 
         $sales = Order::where('orders.company_id', $companyId)
+            ->where('orders.state', 'AUTORIZADO')
             ->where('orders.emision', '>=', $from)
             ->join('voucher_types as vt', 'vt.id', '=', 'orders.voucher_type_id')
             ->selectRaw("TO_CHAR(orders.emision, 'YYYY-MM') as month, {$totalExpr} as total")

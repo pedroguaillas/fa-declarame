@@ -135,7 +135,7 @@ class ReportController extends Controller
         return Excel::download(new OrdersByClientExport($rows, $filters), 'ventas-por-cliente.xlsx');
     }
 
-    /** @return array{start_date: string, end_date: string} */
+    /** @return array{start_date: string, end_date: string, only_authorized: bool} */
     private function resolvedOrderFilters(Request $request): array
     {
         $request->validate([
@@ -143,8 +143,10 @@ class ReportController extends Controller
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
         ]);
 
+        $onlyAuthorized = $request->boolean('only_authorized', true);
+
         if ($request->filled('start_date') || $request->filled('end_date')) {
-            return $request->only('start_date', 'end_date');
+            return array_merge($request->only('start_date', 'end_date'), ['only_authorized' => $onlyAuthorized]);
         }
 
         $lastEmision = Order::max('emision');
@@ -153,11 +155,12 @@ class ReportController extends Controller
         return [
             'start_date' => $ref->copy()->startOfMonth()->format('Y-m-d'),
             'end_date' => $ref->copy()->endOfMonth()->format('Y-m-d'),
+            'only_authorized' => $onlyAuthorized,
         ];
     }
 
     /**
-     * @param  array{start_date?: string|null, end_date?: string|null}  $filters
+     * @param  array{start_date?: string|null, end_date?: string|null, only_authorized?: bool}  $filters
      * @return Collection<int, array<string, mixed>>
      */
     private function ordersByVoucherTypeRows(int $companyId, array $filters): Collection
@@ -169,6 +172,7 @@ class ReportController extends Controller
             ->where('company_id', $companyId)
             ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
             ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
+            ->when($filters['only_authorized'] ?? true, fn ($q) => $q->where('orders.state', 'AUTORIZADO'))
             ->get();
 
         return $orders
@@ -197,7 +201,7 @@ class ReportController extends Controller
     }
 
     /**
-     * @param  array{start_date?: string|null, end_date?: string|null}  $filters
+     * @param  array{start_date?: string|null, end_date?: string|null, only_authorized?: bool}  $filters
      * @return Collection<int, array<string, mixed>>
      */
     private function ordersByClientRows(int $companyId, array $filters): Collection
@@ -210,6 +214,7 @@ class ReportController extends Controller
             ->where('company_id', $companyId)
             ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
             ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
+            ->when($filters['only_authorized'] ?? true, fn ($q) => $q->where('orders.state', 'AUTORIZADO'))
             ->get();
 
         return $orders

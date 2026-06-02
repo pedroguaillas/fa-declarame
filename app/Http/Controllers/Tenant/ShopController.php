@@ -159,6 +159,9 @@ class ShopController extends Controller
                 if ($hasLetters) {
                     $q->join('contacts AS sc', 'sc.id', '=', 'shops.contact_id')
                         ->where('sc.name', 'ilike', "%{$s}%");
+                } elseif ($isOnlyDigits && ($len === 10 || $len === 13)) {
+                    $q->join('contacts AS sc', 'sc.id', '=', 'shops.contact_id')
+                        ->where('sc.identification', 'like', "%{$s}%");
                 } elseif ($isOnlyDigits && $len === 49) {
                     $q->where('shops.autorization', $s);
                 } elseif ($isOnlyDigits && $len >= 5) {

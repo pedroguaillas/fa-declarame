@@ -34,6 +34,7 @@ class AtsXmlService
             ->leftJoin('order_retention_items', 'order_retention_items.order_id', '=', 'orders.id')
             ->leftJoin('retentions', 'retentions.id', '=', 'order_retention_items.retention_id')
             ->join('voucher_types', 'voucher_types.id', '=', 'orders.voucher_type_id')
+            ->where('orders.state', 'AUTORIZADO')
             ->whereYear('orders.emision', $year)
             ->whereMonth('orders.emision', $month)
             ->selectRaw("
