@@ -92,7 +92,7 @@ function selectOverlayCompany(company: CompanyScope) {
                     <!-- Overlay when no company is selected -->
                     <div
                         v-if="showOverlay"
-                        class="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+                        class="absolute inset-0 z-50 flex items-start justify-center pt-8 sm:items-center sm:pt-0 bg-background/80 backdrop-blur-sm"
                     >
                         <div class="w-full max-w-sm rounded-xl border bg-card p-6 shadow-lg">
                             <!-- Sin contribuyentes registrados -->

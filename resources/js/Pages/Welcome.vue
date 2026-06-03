@@ -9,9 +9,9 @@ defineProps<{
 const features = [
     {
         icon: "upload",
-        title: "Importación SRI",
+        title: "Conexión directa con el SRI",
         description:
-            "Importa tus documentos directamente desde el portal del SRI. Compatible con archivos .txt, .xml o .zip de compras, ventas y retenciones.",
+            "Tus comprobantes electrónicos se sincronizan automáticamente para mantener actualizadas tus compras, ventas y retenciones, listas para la declaración de impuestos.",
     },
     {
         icon: "building",
@@ -23,7 +23,7 @@ const features = [
         icon: "calculator",
         title: "Distribución de IVA",
         description:
-            "Distribución automática de bases imponibles por tarifa (0%, 5%, 8%, 12%, 15%). Sin cálculos manuales, sin errores.",
+            "Distribución automática de bases imponibles por tarifa (0%, 5%, 8%, 15%). Sin cálculos manuales, sin errores.",
     },
     {
         icon: "receipt",
@@ -49,49 +49,47 @@ const steps = [
     {
         number: "01",
         title: "Contrata tu plan",
-        description: "Crea tu cuenta en segundos.",
+        description: "Crea tu cuenta en segundos y accede a todas las funcionalidades de la plataforma.",
     },
     {
         number: "02",
-        title: "Agrega tu empresa",
-        description: "Ingresa el RUC y datos de tu empresa o la de tu cliente.",
+        title: "Registra tus contribuyentes",
+        description:
+            "Agrega uno o varios contribuyentes mediante su RUC y centraliza toda su información tributaria en un solo lugar.",
     },
     {
         number: "03",
-        title: "Importa desde el SRI",
+        title: "Sincroniza con el SRI",
         description:
-            "Sube el archivo .txt, .xml o .zip exportado del portal SRI.",
+            "Sincroniza la cuenta y obtén automáticamente compras, ventas y retenciones organizadas en un solo lugar.",
     },
     {
         number: "04",
         title: "Declara con confianza",
         description:
-            "Revisa, valida y exporta los datos listos para el formulario.",
+            "Revisa, valida y utiliza la información organizada para preparar tus declaraciones de forma rápida y segura.",
     },
 ];
 </script>
 
 <template>
-    <Head title="Declárame — Declaraciones tributarias sin complicaciones">
+    <Head title="Declárame — La forma inteligente de preparar tus declaraciones">
         <meta
             name="description"
-            content="Importa, organiza y valida tus documentos del SRI en segundos. Compras, ventas y retenciones en un solo lugar, listas para declarar. Hecho para contadores ecuatorianos."
+            content="Compras, ventas y retenciones organizadas automáticamente en un solo lugar. Sin descargas, sin importaciones manuales y sin horas perdidas preparando información tributaria. Hecho para contadores ecuatorianos."
         />
         <meta
             name="keywords"
-            content="declaraciones tributarias Ecuador, SRI, importar compras SRI, retenciones, contabilidad Ecuador, facturas electrónicas, IVA Ecuador, RUC"
+            content="Las declaraciones tributarias Ecuador, SRI, compras SRI, retenciones, contabilidad Ecuador, facturas electrónicas, IVA Ecuador, RUC"
         />
         <meta name="robots" content="index, follow" />
         <meta name="author" content="Declárame" />
 
         <!-- Open Graph -->
-        <meta
-            property="og:title"
-            content="Declárame — Declaraciones tributarias sin complicaciones"
-        />
+        <meta property="og:title" content="Declárame — La forma inteligente de preparar tus declaraciones" />
         <meta
             property="og:description"
-            content="Importa, organiza y valida tus documentos del SRI en segundos. Compras, ventas y retenciones en un solo lugar, listas para declarar."
+            content="Compras, ventas y retenciones organizadas automáticamente en un solo lugar. Sin descargas, sin importaciones manuales y sin horas perdidas preparando información tributaria."
         />
         <meta property="og:type" content="website" />
         <meta property="og:locale" content="es_EC" />
@@ -99,31 +97,22 @@ const steps = [
 
         <!-- Twitter Card -->
         <meta name="twitter:card" content="summary_large_image" />
-        <meta
-            name="twitter:title"
-            content="Declárame — Declaraciones tributarias sin complicaciones"
-        />
+        <meta name="twitter:title" content="Declárame — La forma inteligente de preparar tus declaraciones" />
         <meta
             name="twitter:description"
-            content="Importa, organiza y valida tus documentos del SRI en segundos. Compras, ventas y retenciones en un solo lugar, listas para declarar."
+            content="Compras, ventas y retenciones organizadas automáticamente en un solo lugar. Sin descargas, sin importaciones manuales y sin horas perdidas preparando información tributaria."
         />
     </Head>
 
-    <div
-        class="min-h-screen bg-white text-gray-900 transition-colors duration-300 dark:bg-gray-950 dark:text-gray-100"
-    >
+    <div class="min-h-screen bg-white text-gray-900 transition-colors duration-300 dark:bg-gray-950 dark:text-gray-100">
         <!-- Navbar -->
         <header
             class="sticky top-0 z-50 border-b border-gray-200/80 bg-white/90 backdrop-blur-md dark:border-gray-800/80 dark:bg-gray-950/90"
         >
-            <div
-                class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4"
-            >
+            <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
                 <!-- Logo -->
                 <div class="flex items-center gap-2">
-                    <div
-                        class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600"
-                    >
+                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600">
                         <svg
                             class="h-5 w-5 text-white"
                             fill="none"
@@ -138,11 +127,7 @@ const steps = [
                             />
                         </svg>
                     </div>
-                    <span
-                        class="text-xl font-bold tracking-tight text-gray-900 dark:text-white"
-                    >
-                        Declárame
-                    </span>
+                    <span class="text-xl font-bold tracking-tight text-gray-900 dark:text-white"> Declárame </span>
                 </div>
 
                 <!-- Nav actions -->
@@ -161,7 +146,7 @@ const steps = [
                         <template v-else>
                             <Link
                                 :href="route('login')"
-                                class="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                                class="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 hover:shadow-emerald-500/30 hover:shadow-md"
                             >
                                 Ingresar
                             </Link>
@@ -178,10 +163,7 @@ const steps = [
         </header>
 
         <!-- Hero -->
-        <section
-            aria-labelledby="hero-heading"
-            class="relative overflow-hidden px-6 py-24 sm:py-32"
-        >
+        <section aria-labelledby="hero-heading" class="relative overflow-hidden px-6 py-24 sm:py-32">
             <!-- Background gradient -->
             <div class="pointer-events-none absolute inset-0 -z-10">
                 <div
@@ -196,9 +178,7 @@ const steps = [
                 <div
                     class="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400"
                 >
-                    <span
-                        class="h-1.5 w-1.5 rounded-full bg-emerald-500"
-                    ></span>
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                     Hecho para contadores ecuatorianos
                 </div>
 
@@ -206,23 +186,16 @@ const steps = [
                     id="hero-heading"
                     class="mb-6 text-5xl leading-tight font-extrabold tracking-tight text-gray-900 sm:text-6xl dark:text-white"
                 >
-                    Declaraciones tributarias
-                    <span class="text-emerald-600 dark:text-emerald-400"
-                        >sin complicaciones</span
-                    >
+                    La forma inteligente
+                    <span class="text-emerald-600 dark:text-emerald-400">de preparar tus declaraciones</span>
                 </h1>
 
-                <p
-                    class="mx-auto mb-10 max-w-2xl text-xl leading-relaxed text-gray-600 dark:text-gray-400"
-                >
-                    Importa, organiza y valida tus documentos del SRI en
-                    segundos. Compras, ventas y retenciones en un solo lugar,
-                    listas para declarar.
+                <p class="mx-auto mb-10 max-w-2xl text-xl leading-relaxed text-gray-600 dark:text-gray-400">
+                    Compras, ventas y retenciones organizadas automáticamente en un solo lugar. Sin descargas, sin
+                    importaciones manuales y sin horas perdidas preparando información tributaria.
                 </p>
 
-                <div
-                    class="flex flex-col items-center justify-center gap-4 sm:flex-row"
-                >
+                <div class="flex flex-col items-center justify-center gap-4 sm:flex-row">
                     <!-- <Link
                         v-if="canLogin && !$page.props.auth?.user"
                         :href="route('register')"
@@ -249,13 +222,7 @@ const steps = [
                         class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-700"
                     >
                         Ir a mi panel
-                        <svg
-                            class="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2"
-                        >
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
@@ -272,44 +239,16 @@ const steps = [
                 </div>
 
                 <!-- Stats -->
-                <div
-                    class="mt-16 grid grid-cols-3 gap-8 border-t border-gray-200 pt-10 dark:border-gray-800"
-                >
-                    <div>
-                        <div
-                            class="text-3xl font-bold text-gray-900 dark:text-white"
-                        >
-                            100%
-                        </div>
-                        <div
-                            class="mt-1 text-sm text-gray-500 dark:text-gray-400"
-                        >
-                            Compatible SRI
-                        </div>
+                <div class="mt-16 flex items-center justify-center gap-3 border-t border-gray-200 pt-10 dark:border-gray-800">
+                    <div class="relative flex h-9 w-9 items-center justify-center">
+                        <svg class="absolute inset-0 h-9 w-9 animate-spin text-emerald-500/30 dark:text-emerald-400/20 [animation-duration:3s]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                        </svg>
+                        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
                     </div>
                     <div>
-                        <div
-                            class="text-3xl font-bold text-gray-900 dark:text-white"
-                        >
-                            4
-                        </div>
-                        <div
-                            class="mt-1 text-sm text-gray-500 dark:text-gray-400"
-                        >
-                            Tarifas de IVA
-                        </div>
-                    </div>
-                    <div>
-                        <div
-                            class="text-3xl font-bold text-gray-900 dark:text-white"
-                        >
-                            ∞
-                        </div>
-                        <div
-                            class="mt-1 text-sm text-gray-500 dark:text-gray-400"
-                        >
-                            Empresas por cuenta
-                        </div>
+                        <span class="text-sm font-semibold text-gray-900 dark:text-white">Sincronizado en tiempo real</span>
+                        <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">con el portal del SRI</span>
                     </div>
                 </div>
             </div>
@@ -323,17 +262,11 @@ const steps = [
         >
             <div class="mx-auto max-w-7xl">
                 <div class="mb-16 text-center">
-                    <h2
-                        id="features-heading"
-                        class="mb-4 text-4xl font-bold text-gray-900 dark:text-white"
-                    >
+                    <h2 id="features-heading" class="mb-4 text-4xl font-bold text-gray-900 dark:text-white">
                         Todo lo que necesitas para declarar
                     </h2>
-                    <p
-                        class="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400"
-                    >
-                        Diseñado específicamente para el flujo de trabajo del
-                        contador ecuatoriano con el SRI.
+                    <p class="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-400">
+                        Diseñado específicamente para el flujo de trabajo del contador ecuatoriano con el SRI.
                     </p>
                 </div>
 
@@ -437,14 +370,10 @@ const steps = [
                                 />
                             </svg>
                         </div>
-                        <h3
-                            class="mb-2 text-lg font-semibold text-gray-900 dark:text-white"
-                        >
+                        <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
                             {{ feature.title }}
                         </h3>
-                        <p
-                            class="text-sm leading-relaxed text-gray-600 dark:text-gray-400"
-                        >
+                        <p class="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
                             {{ feature.description }}
                         </p>
                     </div>
@@ -456,35 +385,23 @@ const steps = [
         <section class="px-6 py-24">
             <div class="mx-auto max-w-7xl">
                 <div class="mb-16 text-center">
-                    <h2
-                        class="mb-4 text-4xl font-bold text-gray-900 dark:text-white"
-                    >
-                        Así de simple
-                    </h2>
+                    <h2 class="mb-4 text-4xl font-bold text-gray-900 dark:text-white">Así de simple</h2>
                     <p class="text-lg text-gray-600 dark:text-gray-400">
-                        De la exportación del SRI a tu declaración en 4 pasos.
+                        Conecta tus contribuyentes, sincroniza la información del SRI y ten todo listo para declarar.
                     </p>
                 </div>
 
                 <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-                    <div
-                        v-for="step in steps"
-                        :key="step.number"
-                        class="relative"
-                    >
+                    <div v-for="step in steps" :key="step.number" class="relative">
                         <div
                             class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-600 text-lg font-bold text-white"
                         >
                             {{ step.number }}
                         </div>
-                        <h3
-                            class="mb-2 text-lg font-semibold text-gray-900 dark:text-white"
-                        >
+                        <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
                             {{ step.title }}
                         </h3>
-                        <p
-                            class="text-sm leading-relaxed text-gray-600 dark:text-gray-400"
-                        >
+                        <p class="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
                             {{ step.description }}
                         </p>
                         <!-- Connector line -->
@@ -502,17 +419,12 @@ const steps = [
             <div class="mx-auto max-w-7xl">
                 <div class="grid items-center gap-16 lg:grid-cols-2">
                     <div>
-                        <h2
-                            class="mb-6 text-4xl font-bold text-gray-900 dark:text-white"
-                        >
+                        <h2 class="mb-6 text-4xl font-bold text-gray-900 dark:text-white">
                             Todos los documentos tributarios en un solo sistema
                         </h2>
-                        <p
-                            class="mb-8 text-lg text-gray-600 dark:text-gray-400"
-                        >
-                            Declárame soporta todos los tipos de comprobantes
-                            reconocidos por el SRI, con validación automática de
-                            la clave de acceso.
+                        <p class="mb-8 text-lg text-gray-600 dark:text-gray-400">
+                            Declárame soporta todos los tipos de comprobantes reconocidos por el SRI, con validación
+                            automática de la clave de acceso.
                         </p>
                         <ul class="space-y-4">
                             <li
@@ -541,102 +453,43 @@ const steps = [
                                 >
                                     {{ item.code }}
                                 </div>
-                                <span
-                                    class="text-gray-700 dark:text-gray-300"
-                                    >{{ item.label }}</span
-                                >
+                                <span class="text-gray-700 dark:text-gray-300">{{ item.label }}</span>
                             </li>
                         </ul>
                     </div>
 
-                    <div
-                        class="rounded-2xl border border-gray-200 bg-white p-8 dark:border-gray-800 dark:bg-gray-900"
-                    >
+                    <div class="rounded-2xl border border-gray-200 bg-white p-8 dark:border-gray-800 dark:bg-gray-900">
                         <div class="mb-4 flex items-center gap-2">
                             <div class="h-3 w-3 rounded-full bg-red-400"></div>
-                            <div
-                                class="h-3 w-3 rounded-full bg-yellow-400"
-                            ></div>
-                            <div
-                                class="h-3 w-3 rounded-full bg-green-400"
-                            ></div>
-                            <span class="ml-2 text-xs text-gray-400"
-                                >compras_abril_2026.txt</span
-                            >
+                            <div class="h-3 w-3 rounded-full bg-yellow-400"></div>
+                            <div class="h-3 w-3 rounded-full bg-green-400"></div>
+                            <span class="ml-2 text-xs text-gray-400">compras_abril_2026.txt</span>
                         </div>
                         <div class="space-y-3 font-mono text-xs">
-                            <div
-                                class="flex items-center gap-3 rounded-lg bg-emerald-50 p-3 dark:bg-emerald-900/20"
-                            >
-                                <span
-                                    class="text-emerald-600 dark:text-emerald-400"
-                                    >✓</span
-                                >
-                                <span class="text-gray-600 dark:text-gray-400"
-                                    >Factura #001-001-0001234</span
-                                >
-                                <span
-                                    class="ml-auto text-emerald-600 dark:text-emerald-400"
-                                    >$1,240.00</span
-                                >
+                            <div class="flex items-center gap-3 rounded-lg bg-emerald-50 p-3 dark:bg-emerald-900/20">
+                                <span class="text-emerald-600 dark:text-emerald-400">✓</span>
+                                <span class="text-gray-600 dark:text-gray-400">Factura #001-001-0001234</span>
+                                <span class="ml-auto text-emerald-600 dark:text-emerald-400">$1,240.00</span>
                             </div>
-                            <div
-                                class="flex items-center gap-3 rounded-lg bg-emerald-50 p-3 dark:bg-emerald-900/20"
-                            >
-                                <span
-                                    class="text-emerald-600 dark:text-emerald-400"
-                                    >✓</span
-                                >
-                                <span class="text-gray-600 dark:text-gray-400"
-                                    >Factura #001-001-0001235</span
-                                >
-                                <span
-                                    class="ml-auto text-emerald-600 dark:text-emerald-400"
-                                    >$850.00</span
-                                >
+                            <div class="flex items-center gap-3 rounded-lg bg-emerald-50 p-3 dark:bg-emerald-900/20">
+                                <span class="text-emerald-600 dark:text-emerald-400">✓</span>
+                                <span class="text-gray-600 dark:text-gray-400">Factura #001-001-0001235</span>
+                                <span class="ml-auto text-emerald-600 dark:text-emerald-400">$850.00</span>
                             </div>
-                            <div
-                                class="flex items-center gap-3 rounded-lg bg-yellow-50 p-3 dark:bg-yellow-900/20"
-                            >
-                                <span
-                                    class="text-yellow-600 dark:text-yellow-400"
-                                    >→</span
-                                >
-                                <span class="text-gray-600 dark:text-gray-400"
-                                    >Factura #001-001-0001236</span
-                                >
-                                <span
-                                    class="ml-auto text-yellow-600 dark:text-yellow-400"
-                                    >retener</span
-                                >
+                            <div class="flex items-center gap-3 rounded-lg bg-yellow-50 p-3 dark:bg-yellow-900/20">
+                                <span class="text-yellow-600 dark:text-yellow-400">→</span>
+                                <span class="text-gray-600 dark:text-gray-400">Factura #001-001-0001236</span>
+                                <span class="ml-auto text-yellow-600 dark:text-yellow-400">retener</span>
                             </div>
-                            <div
-                                class="flex items-center gap-3 rounded-lg bg-emerald-50 p-3 dark:bg-emerald-900/20"
-                            >
-                                <span
-                                    class="text-emerald-600 dark:text-emerald-400"
-                                    >✓</span
-                                >
-                                <span class="text-gray-600 dark:text-gray-400"
-                                    >Factura #001-001-0001237</span
-                                >
-                                <span
-                                    class="ml-auto text-emerald-600 dark:text-emerald-400"
-                                    >$3,100.00</span
-                                >
+                            <div class="flex items-center gap-3 rounded-lg bg-emerald-50 p-3 dark:bg-emerald-900/20">
+                                <span class="text-emerald-600 dark:text-emerald-400">✓</span>
+                                <span class="text-gray-600 dark:text-gray-400">Factura #001-001-0001237</span>
+                                <span class="ml-auto text-emerald-600 dark:text-emerald-400">$3,100.00</span>
                             </div>
-                            <div
-                                class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700"
-                            >
+                            <div class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
                                 <div class="flex justify-between text-xs">
-                                    <span class="text-gray-500"
-                                        >3 documentos importados · 1
-                                        omitido</span
-                                    >
-                                    <span
-                                        class="font-semibold text-emerald-600 dark:text-emerald-400"
-                                        >$5,190.00</span
-                                    >
+                                    <span class="text-gray-500">3 documentos importados · 1 omitido</span>
+                                    <span class="font-semibold text-emerald-600 dark:text-emerald-400">$5,190.00</span>
                                 </div>
                             </div>
                         </div>
@@ -648,18 +501,13 @@ const steps = [
         <!-- CTA -->
         <section class="px-6 py-24">
             <div class="mx-auto max-w-3xl text-center">
-                <h2
-                    class="mb-6 text-4xl font-bold text-gray-900 dark:text-white"
-                >
+                <h2 class="mb-6 text-4xl font-bold text-gray-900 dark:text-white">
                     Listo para simplificar tus declaraciones?
                 </h2>
                 <p class="mb-10 text-xl text-gray-600 dark:text-gray-400">
-                    Únete a los contadores que ya usan Declárame para gestionar
-                    sus obligaciones tributarias con el SRI.
+                    Únete a los contadores que ya usan Declárame para gestionar sus obligaciones tributarias con el SRI.
                 </p>
-                <div
-                    class="flex flex-col items-center justify-center gap-4 sm:flex-row"
-                >
+                <div class="flex flex-col items-center justify-center gap-4 sm:flex-row">
                     <!-- <Link
                         v-if="canLogin && !$page.props.auth?.user"
                         :href="route('register')"
@@ -686,13 +534,7 @@ const steps = [
                         class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-700"
                     >
                         Ir a mi panel
-                        <svg
-                            class="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2"
-                        >
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
@@ -713,15 +555,9 @@ const steps = [
 
         <!-- Footer -->
         <footer class="border-t border-gray-200 px-6 py-8 dark:border-gray-800">
-            <div
-                class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 sm:flex-row"
-            >
-                <div
-                    class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400"
-                >
-                    <div
-                        class="flex h-6 w-6 items-center justify-center rounded bg-emerald-600"
-                    >
+            <div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 sm:flex-row">
+                <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <div class="flex h-6 w-6 items-center justify-center rounded bg-emerald-600">
                         <svg
                             class="h-3.5 w-3.5 text-white"
                             fill="none"
@@ -736,14 +572,11 @@ const steps = [
                             />
                         </svg>
                     </div>
-                    <span class="font-semibold text-gray-900 dark:text-white"
-                        >Declárame</span
-                    >
+                    <span class="font-semibold text-gray-900 dark:text-white">Declárame</span>
                     <span>&mdash; Sistema tributario para Ecuador</span>
                 </div>
                 <p class="text-sm text-gray-400 dark:text-gray-500">
-                    &copy; {{ new Date().getFullYear() }} Declárame. Todos los
-                    derechos reservados.
+                    &copy; {{ new Date().getFullYear() }} Declárame. Todos los derechos reservados.
                 </p>
             </div>
         </footer>
