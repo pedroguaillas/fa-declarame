@@ -149,7 +149,7 @@ class SriScraperService
         // Async mode confirmed: server will POST result to callbackUrl
         if (($body['status'] ?? null) === 'accepted') {
             $scrapeJob->update([
-                'progress' => ['step' => 'server', 'message' => 'Procesando en el servidor… recibiremos el resultado por callback.'],
+                'progress' => ['step' => 'server', 'message' => 'Procesando… Puedes continuar usando el sistema mientras completamos la descarga.'],
             ]);
 
             return ['async' => true];

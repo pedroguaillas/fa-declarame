@@ -17,7 +17,9 @@ use App\Http\Controllers\Tenant\ProfileController as TenantProfileController;
 use App\Http\Controllers\Tenant\ReportController;
 use App\Http\Controllers\Tenant\RetentionController;
 use App\Http\Controllers\Tenant\ShopController;
+use App\Http\Controllers\Tenant\ShopItemController;
 use App\Http\Controllers\Tenant\SriScrapeController;
+use App\Http\Controllers\Tenant\TenantSettingsController;
 use App\Http\Middleware\Tenant\RequireCompanyScope;
 use Illuminate\Support\Facades\Route;
 
@@ -82,6 +84,14 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
         Route::get('accounts', [AccountController::class, 'index'])->name('tenant.accounts.index');
         Route::post('accounts/import', [AccountController::class, 'import'])->name('tenant.accounts.import');
         Route::get('accounts/search', [AccountController::class, 'search'])->name('tenant.accounts.search');
+
+        Route::get('ajustes', [TenantSettingsController::class, 'edit'])->name('tenant.settings.edit');
+        Route::post('ajustes', [TenantSettingsController::class, 'update'])->name('tenant.settings.update');
+        Route::get('ajustes/logo', [TenantSettingsController::class, 'logo'])->name('tenant.settings.logo');
+
+        Route::get('vinculacion', [ShopItemController::class, 'link'])->name('tenant.shop-items.link');
+        Route::patch('vinculacion/assign', [ShopItemController::class, 'assignAccount'])->name('tenant.shop-items.assign-account');
+        Route::get('vinculacion/{contact}/items', [ShopItemController::class, 'byContact'])->name('tenant.shop-items.by-contact');
 
         Route::get('retentions/search', [RetentionController::class, 'search'])->name('tenant.retentions.search');
 

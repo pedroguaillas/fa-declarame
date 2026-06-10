@@ -2,16 +2,20 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\HasReportHeader;
 use Constants;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ShopsByVoucherTypeExport implements FromArray, WithColumnWidths, WithHeadings, WithStyles, WithTitle
+class ShopsByVoucherTypeExport implements FromArray, WithColumnWidths, WithEvents, WithHeadings, WithStyles, WithTitle
 {
+    use HasReportHeader;
+
     /** @var array<string, string> */
     private array $activeColumns;
 
@@ -19,7 +23,7 @@ class ShopsByVoucherTypeExport implements FromArray, WithColumnWidths, WithHeadi
      * @param  array<int, array<string, mixed>>  $rows
      * @param  array{start_date?: string|null, end_date?: string|null}  $filters
      */
-    public function __construct(private readonly array $rows, array $filters = [])
+    public function __construct(private readonly array $rows, array $filters = [], private readonly ?string $logoPath = null, private readonly ?string $companyName = null)
     {
         $endDate = $filters['end_date'] ?? null;
         $startDate = $filters['start_date'] ?? null;
@@ -102,8 +106,6 @@ class ShopsByVoucherTypeExport implements FromArray, WithColumnWidths, WithHeadi
     /** @return array<int|string, mixed> */
     public function styles(Worksheet $sheet): array
     {
-        return [
-            1 => ['font' => ['bold' => true]],
-        ];
+        return [];
     }
 }

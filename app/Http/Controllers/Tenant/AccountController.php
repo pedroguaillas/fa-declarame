@@ -44,11 +44,10 @@ class AccountController extends Controller
 
         $prefix = $this->accountPrefixForVoucherType($voucherTypeCode);
 
-        $accounts = Account::where('code', 'like', "{$prefix}%")
-            ->where('is_detail', true)
+        $accounts = Account::where('is_detail', true)
             ->when($q, fn ($query) => $query->where(function ($query) use ($q) {
-                $query->where('code', 'like', "%{$q}%")
-                    ->orWhere('name', 'like', "%{$q}%");
+                $query->where('code', 'ilike', "%{$q}%")
+                    ->orWhere('name', 'ilike', "%{$q}%");
             }))
             ->orderBy('code')
             ->limit(10)

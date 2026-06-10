@@ -58,6 +58,7 @@ const props = defineProps<{
     jobs: Paginator<ScrapeJob>;
     hasPassword: boolean;
     hasCaptchaKey: boolean;
+    isRetentionAgent: boolean;
 }>();
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -107,7 +108,13 @@ const voucherTypesByMode: Record<string, { value: string; label: string }[]> = {
     ],
 };
 
-const voucherTypeOptions = computed(() => voucherTypesByMode[form.type] ?? voucherTypesByMode.compras);
+const voucherTypeOptions = computed(() => {
+    const options = voucherTypesByMode[form.type] ?? voucherTypesByMode.compras;
+    if (form.type === 'ventas' && !props.isRetentionAgent) {
+        return options.filter((o) => o.value !== '6');
+    }
+    return options;
+});
 
 function toggleVoucherType(value: string) {
     if (selectedVoucherTypes.value.includes(value)) {

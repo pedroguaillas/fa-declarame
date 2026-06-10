@@ -39,6 +39,7 @@ class SriScrapeController extends Controller
             'jobs' => $jobs,
             'hasPassword' => $hasPassword,
             'hasCaptchaKey' => true,
+            'isRetentionAgent' => (bool) $company->retention_agent,
         ]);
     }
 

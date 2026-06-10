@@ -2,11 +2,13 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\HasReportHeader;
 use Constants;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
@@ -16,8 +18,10 @@ use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ShopsByProviderExport extends DefaultValueBinder implements FromArray, WithColumnFormatting, WithColumnWidths, WithCustomValueBinder, WithHeadings, WithStyles, WithTitle
+class ShopsByProviderExport extends DefaultValueBinder implements FromArray, WithColumnFormatting, WithColumnWidths, WithCustomValueBinder, WithEvents, WithHeadings, WithStyles, WithTitle
 {
+    use HasReportHeader;
+
     private bool $showNewRates;
 
     private bool $showOldRates;
@@ -26,7 +30,7 @@ class ShopsByProviderExport extends DefaultValueBinder implements FromArray, Wit
      * @param  array<int, array<string, mixed>>  $rows
      * @param  array{start_date?: string|null, end_date?: string|null}  $filters
      */
-    public function __construct(private readonly array $rows, array $filters = [])
+    public function __construct(private readonly array $rows, array $filters = [], private readonly ?string $logoPath = null, private readonly ?string $companyName = null)
     {
         $endDate = $filters['end_date'] ?? null;
         $startDate = $filters['start_date'] ?? null;
@@ -139,8 +143,6 @@ class ShopsByProviderExport extends DefaultValueBinder implements FromArray, Wit
     /** @return array<int|string, mixed> */
     public function styles(Worksheet $sheet): array
     {
-        return [
-            1 => ['font' => ['bold' => true]],
-        ];
+        return [];
     }
 }

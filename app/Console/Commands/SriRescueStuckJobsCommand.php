@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 #[Signature('sri:rescue-stuck-jobs
     {--hours=1 : Horas mínimas que un job debe llevar en "running" para considerarse atascado}
+    {--date= : Filtrar solo jobs atascados en un día específico (formato: YYYY-MM-DD)}
     {--mark-failed : Marcar como failed en lugar de re-despachar}
     {--dry-run : Solo listar los jobs atascados sin realizar ninguna acción}
 ')]
@@ -23,10 +24,16 @@ class SriRescueStuckJobsCommand extends Command
         $hours = (int) $this->option('hours');
         $markFailed = $this->option('mark-failed');
         $dryRun = $this->option('dry-run');
+        $dateFilter = $this->option('date');
         $cutoff = now()->subHours($hours);
 
         $action = $dryRun ? 'DRY-RUN' : ($markFailed ? 'marcar como failed' : 're-despachar');
-        $this->info("Buscando jobs atascados en 'running' desde hace más de {$hours}h — acción: {$action}");
+
+        if ($dateFilter) {
+            $this->info("Buscando jobs atascados en 'running' del día {$dateFilter} — acción: {$action}");
+        } else {
+            $this->info("Buscando jobs atascados en 'running' desde hace más de {$hours}h — acción: {$action}");
+        }
 
         $tenants = Tenant::all();
         $totalFound = 0;
@@ -39,7 +46,11 @@ class SriRescueStuckJobsCommand extends Command
             try {
                 $stuck = SriScrapeJob::where('status', 'running')
                     ->whereNull('completed_at')
-                    ->where('started_at', '<', $cutoff)
+                    ->when($dateFilter, function ($query) use ($dateFilter): void {
+                        $query->whereDate('started_at', $dateFilter);
+                    }, function ($query) use ($cutoff): void {
+                        $query->where('started_at', '<', $cutoff);
+                    })
                     ->get();
 
                 foreach ($stuck as $job) {

@@ -2,17 +2,23 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\HasReportHeader;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class OrdersByVoucherTypeExport implements FromArray, WithColumnWidths, WithHeadings, WithStyles, WithTitle
+class OrdersByVoucherTypeExport implements FromArray, WithColumnWidths, WithEvents, WithHeadings, WithStyles, WithTitle
 {
-    /** @param array<int, array<string, mixed>> $rows */
-    public function __construct(private readonly array $rows) {}
+    use HasReportHeader;
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    public function __construct(private readonly array $rows, private readonly ?string $logoPath = null, private readonly ?string $companyName = null) {}
 
     /** @return array<int, array<int, mixed>> */
     public function array(): array
@@ -48,8 +54,6 @@ class OrdersByVoucherTypeExport implements FromArray, WithColumnWidths, WithHead
     /** @return array<int|string, mixed> */
     public function styles(Worksheet $sheet): array
     {
-        return [
-            1 => ['font' => ['bold' => true]],
-        ];
+        return [];
     }
 }

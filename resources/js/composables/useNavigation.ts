@@ -5,6 +5,7 @@ import {
     CreditCard,
     Sheet,
     Book,
+    Link2,
     Settings,
     Building2,
     ShoppingCart,
@@ -111,6 +112,11 @@ export function useNavigation(user: User) {
             icon: Book,
         },
         {
+            title: "Vinculación",
+            url: route("tenant.shop-items.link"),
+            icon: Link2,
+        },
+        {
             title: "Reportes",
             url: route("tenant.reports.index"),
             icon: Sheet,
@@ -119,6 +125,11 @@ export function useNavigation(user: User) {
             title: "Declaración",
             url: route("tenant.declaration.index"),
             icon: ClipboardList,
+        },
+        {
+            title: "Ajustes",
+            url: route("tenant.settings.edit"),
+            icon: Settings,
         },
     ];
 

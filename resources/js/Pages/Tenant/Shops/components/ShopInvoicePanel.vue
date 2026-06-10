@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { Shop, ShopItem } from "@/types/tenant";
+import { computed } from "vue";
 
-defineProps<{
+const props = defineProps<{
     shop: Shop;
     shopItems: ShopItem[];
     shopItemsLoading: boolean;
 }>();
+
+const hasDiscounts = computed(() => props.shopItems.some((item) => Number(item.discount) > 0));
 </script>
 
 <template>
@@ -151,6 +154,12 @@ defineProps<{
                                 <th class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium">
                                     P. Unit.
                                 </th>
+                                <th
+                                    v-if="hasDiscounts"
+                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium"
+                                >
+                                    Desc
+                                </th>
                                 <th class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium">
                                     Total
                                 </th>
@@ -170,11 +179,38 @@ defineProps<{
                                 <td class="text-foreground whitespace-nowrap px-3 py-1.5 text-right font-mono">
                                     ${{ Number(item.unit_price).toFixed(2) }}
                                 </td>
+                                <td
+                                    v-if="hasDiscounts"
+                                    class="text-foreground whitespace-nowrap px-3 py-1.5 text-right font-mono"
+                                >
+                                    ${{ Number(item.discount).toFixed(2) }}
+                                </td>
                                 <td class="text-foreground whitespace-nowrap px-3 py-1.5 text-right font-mono">
                                     ${{ Number(item.total).toFixed(2) }}
                                 </td>
                             </tr>
                         </tbody>
+                        <tfoot class="bg-muted sticky bottom-0">
+                            <tr>
+                                <th
+                                    colspan="4"
+                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-center font-medium"
+                                >
+                                    TOTAL
+                                </th>
+                                <th
+                                    v-if="hasDiscounts"
+                                    class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium"
+                                >
+                                    {{
+                                        props.shopItems.reduce((sum, item) => sum + Number(item.discount), 0).toFixed(2)
+                                    }}
+                                </th>
+                                <th class="text-muted-foreground whitespace-nowrap px-3 py-2 text-right font-medium">
+                                    {{ shopItems.reduce((sum, item) => sum + Number(item.total), 0).toFixed(2) }}
+                                </th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>

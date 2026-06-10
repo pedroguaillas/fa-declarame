@@ -2,16 +2,20 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\HasReportHeader;
 use Constants;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ShopsByAccountExport implements FromArray, WithColumnWidths, WithHeadings, WithStyles, WithTitle
+class ShopsByAccountExport implements FromArray, WithColumnWidths, WithEvents, WithHeadings, WithStyles, WithTitle
 {
+    use HasReportHeader;
+
     private bool $showNewRates;
 
     private bool $showOldRates;
@@ -20,7 +24,7 @@ class ShopsByAccountExport implements FromArray, WithColumnWidths, WithHeadings,
      * @param  array<int, array<string, mixed>>  $rows
      * @param  array{start_date?: string|null, end_date?: string|null}  $filters
      */
-    public function __construct(private readonly array $rows, array $filters = [])
+    public function __construct(private readonly array $rows, array $filters = [], private readonly ?string $logoPath = null, private readonly ?string $companyName = null)
     {
         $endDate = $filters['end_date'] ?? null;
         $startDate = $filters['start_date'] ?? null;
@@ -36,10 +40,9 @@ class ShopsByAccountExport implements FromArray, WithColumnWidths, WithHeadings,
 
         return array_map(function (array $row) use ($n) {
             $data = [
-                ($row['account_code'] ? $row['account_code'].' – ' : '').$row['account_name'],
+                $row['account_code'] ?? '',
+                $row['account_name'],
                 $n($row['subtotal']),
-                $n($row['no_iva']),
-                $n($row['exempt']),
                 $n($row['base0']),
             ];
 
@@ -62,9 +65,8 @@ class ShopsByAccountExport implements FromArray, WithColumnWidths, WithHeadings,
                 $data[] = $n($row['iva15']);
             }
 
+            $data[] = $n($row['iva']);
             $data[] = $n($row['total']);
-            $data[] = $n($row['retentions']);
-            $data[] = $n($row['a_pagar']);
 
             return $data;
         }, $this->rows);
@@ -73,7 +75,7 @@ class ShopsByAccountExport implements FromArray, WithColumnWidths, WithHeadings,
     /** @return array<int, string> */
     public function headings(): array
     {
-        $headings = ['Cuenta Contable', 'Subtotal', 'No IVA', 'Excenta', 'Base 0%'];
+        $headings = ['Código', 'Cuenta Contable', 'Subtotal', 'Base 0%'];
 
         if ($this->showNewRates) {
             $headings[] = 'Base 5%';
@@ -94,9 +96,8 @@ class ShopsByAccountExport implements FromArray, WithColumnWidths, WithHeadings,
             $headings[] = 'IVA 15%';
         }
 
+        $headings[] = 'IVA Total';
         $headings[] = 'Total';
-        $headings[] = 'Retenciones';
-        $headings[] = 'A Pagar';
 
         return $headings;
     }
@@ -104,7 +105,7 @@ class ShopsByAccountExport implements FromArray, WithColumnWidths, WithHeadings,
     /** @return array<string, int> */
     public function columnWidths(): array
     {
-        return ['A' => 35];
+        return ['A' => 15, 'B' => 40];
     }
 
     public function title(): string
@@ -115,8 +116,6 @@ class ShopsByAccountExport implements FromArray, WithColumnWidths, WithHeadings,
     /** @return array<int|string, mixed> */
     public function styles(Worksheet $sheet): array
     {
-        return [
-            1 => ['font' => ['bold' => true]],
-        ];
+        return [];
     }
 }

@@ -46,12 +46,14 @@ export interface ShopItem {
     shop_id: number;
     product_id: number;
     product: { id: number; code: string; aux_code: string | null; description: string };
+    account: Account | null;
     quantity: string;
     unit_price: string;
     discount: string;
     total: string;
     tax_percentage: string;
     tax_value: string;
+    serie?: string;
 }
 
 export interface RetentionItem {

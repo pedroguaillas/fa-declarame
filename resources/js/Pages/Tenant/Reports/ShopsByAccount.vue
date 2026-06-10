@@ -3,7 +3,6 @@ import TenantLayout from "@/layouts/TenantLayout.vue";
 import { Head, router } from "@inertiajs/vue3";
 import { computed, ref } from "vue";
 import { useDateRangeFilter } from "@/composables/useDateRangeFilter";
-import { IVA_NEW_RATES_START } from "@/constants/ecuador";
 import { Download } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 
@@ -11,20 +10,8 @@ interface Row {
     account_code: string | null;
     account_name: string;
     subtotal: number;
-    no_iva: number;
-    exempt: number;
-    base0: number;
-    base5: number;
-    base8: number;
-    base12: number;
-    base15: number;
-    iva5: number;
-    iva8: number;
-    iva12: number;
-    iva15: number;
+    iva: number;
     total: number;
-    retentions: number;
-    a_pagar: number;
 }
 
 interface Filters {
@@ -71,40 +58,12 @@ function download() {
 
 const fmt = (v: number) => v.toLocaleString("es-EC", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const NEW_RATES_START = IVA_NEW_RATES_START;
-
-// Muestra tasas nuevas (5%, 8%, 15%) si el período incluye fechas desde abril 2024
-const showNewRates = computed(() => {
-    const end = props.filters.end_date;
-    if (!end) return true;
-    return end >= NEW_RATES_START;
-});
-
-// Muestra base 12% / IVA 12% si el período incluye fechas antes de abril 2024
-const showOldRates = computed(() => {
-    const start = props.filters.start_date;
-    if (!start) return true;
-    return start < NEW_RATES_START;
-});
-
 const sum = (key: keyof Row) => props.rows.reduce((s, r) => s + (r[key] as number), 0);
 
 const totals = computed(() => ({
     subtotal: sum("subtotal"),
-    no_iva: sum("no_iva"),
-    exempt: sum("exempt"),
-    base0: sum("base0"),
-    base5: sum("base5"),
-    base8: sum("base8"),
-    base12: sum("base12"),
-    base15: sum("base15"),
-    iva5: sum("iva5"),
-    iva8: sum("iva8"),
-    iva12: sum("iva12"),
-    iva15: sum("iva15"),
+    iva: sum("iva"),
     total: sum("total"),
-    retentions: sum("retentions"),
-    a_pagar: sum("a_pagar"),
 }));
 </script>
 
@@ -178,20 +137,8 @@ const totals = computed(() => ({
                     <tr>
                         <th class="text-muted-foreground px-4 py-3 text-left text-xs font-medium tracking-wider uppercase">Cuenta Contable</th>
                         <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Subtotal</th>
-                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">No IVA</th>
-                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Excenta</th>
-                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Base 0%</th>
-                        <th v-if="showNewRates" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Base 5%</th>
-                        <th v-if="showNewRates" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Base 8%</th>
-                        <th v-if="showOldRates" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Base 12%</th>
-                        <th v-if="showNewRates" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Base 15%</th>
-                        <th v-if="showNewRates" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">IVA 5%</th>
-                        <th v-if="showNewRates" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">IVA 8%</th>
-                        <th v-if="showOldRates" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">IVA 12%</th>
-                        <th v-if="showNewRates" class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">IVA 15%</th>
+                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">IVA</th>
                         <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Total</th>
-                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">Retenciones</th>
-                        <th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium tracking-wider uppercase">A Pagar</th>
                     </tr>
                 </thead>
                 <tbody class="divide-border bg-card divide-y">
@@ -201,50 +148,16 @@ const totals = computed(() => ({
                             <span class="text-foreground font-medium">{{ row.account_name }}</span>
                         </td>
                         <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.subtotal) }}</td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.no_iva) }}</td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.exempt) }}</td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.base0) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.base5) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.base8) }}</td>
-                        <td v-if="showOldRates" class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.base12) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.base15) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.iva5) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.iva8) }}</td>
-                        <td v-if="showOldRates" class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.iva12) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.iva15) }}</td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.total) }}</td>
-                        <td
-                            class="px-4 py-3 text-right font-mono text-sm tabular-nums"
-                            :class="row.retentions > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'"
-                        >
-                            {{ fmt(row.retentions) }}
-                        </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(row.a_pagar) }}</td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm tabular-nums">{{ fmt(row.iva) }}</td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(row.total) }}</td>
                     </tr>
                 </tbody>
                 <tfoot class="bg-muted border-border border-t-2">
                     <tr>
                         <td class="text-foreground px-4 py-3 text-sm font-semibold">Total general</td>
                         <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.subtotal) }}</td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.no_iva) }}</td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.exempt) }}</td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.base0) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.base5) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.base8) }}</td>
-                        <td v-if="showOldRates" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.base12) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.base15) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.iva5) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.iva8) }}</td>
-                        <td v-if="showOldRates" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.iva12) }}</td>
-                        <td v-if="showNewRates" class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.iva15) }}</td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.total) }}</td>
-                        <td
-                            class="px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums"
-                            :class="totals.retentions > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'"
-                        >
-                            {{ fmt(totals.retentions) }}
-                        </td>
-                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-bold tabular-nums">{{ fmt(totals.a_pagar) }}</td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-semibold tabular-nums">{{ fmt(totals.iva) }}</td>
+                        <td class="text-foreground px-4 py-3 text-right font-mono text-sm font-bold tabular-nums">{{ fmt(totals.total) }}</td>
                     </tr>
                 </tfoot>
             </table>

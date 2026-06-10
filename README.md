@@ -58,3 +58,11 @@ Desde local se puede actualizar el scrape
 # Change setting scrape
 
 ExecStart=/opt/sri-scraper/.venv/bin/python /opt/sri-scraper/server.py     --host=127.0.0.1     --port=8765     --user-data-dir=/opt/sri-scraper/browser-session     --headless
+
+# Backup tenant DB
+
+`./vendor/bin/sail exec pgsql pg_dump -U sail tenant_abc123 > backup_tenant_abc123_$(date +%Y%m%d).sql`
+
+# Restore 
+
+`./vendor/bin/sail exec -T pgsql psql -U sail tenant_[UUID] < backup_tenant_[UUID]_YYYYMMDD.sql`

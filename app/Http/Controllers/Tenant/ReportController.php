@@ -9,8 +9,10 @@ use App\Exports\ShopsByProviderExport;
 use App\Exports\ShopsByRetentionExport;
 use App\Exports\ShopsByVoucherTypeExport;
 use App\Http\Controllers\Controller;
+use App\Models\Tenant\Company;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\Shop;
+use App\Models\Tenant\ShopItem;
 use App\Models\Tenant\ShopRetentionItem;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -42,7 +44,7 @@ class ReportController extends Controller
         $filters = $this->resolvedFilters($request);
         $rows = $this->shopsByAccountRows((int) session('current_company_id'), $filters)->toArray();
 
-        return Excel::download(new ShopsByAccountExport($rows, $filters), 'compras-por-cuentas.xlsx');
+        return Excel::download(new ShopsByAccountExport($rows, $filters, currentTenant()->logo_path, $this->currentCompanyName()), 'compras-por-cuentas.xlsx');
     }
 
     public function shopsByRetention(Request $request): Response
@@ -60,7 +62,7 @@ class ReportController extends Controller
         $filters = $this->resolvedFilters($request);
         $rows = $this->shopsByRetentionRows((int) session('current_company_id'), $filters)->toArray();
 
-        return Excel::download(new ShopsByRetentionExport($rows), 'compras-por-retenciones.xlsx');
+        return Excel::download(new ShopsByRetentionExport($rows, currentTenant()->logo_path, $this->currentCompanyName()), 'compras-por-retenciones.xlsx');
     }
 
     public function shopsByVoucherType(Request $request): Response
@@ -78,7 +80,7 @@ class ReportController extends Controller
         $filters = $this->resolvedFilters($request);
         $rows = $this->shopsByVoucherTypeRows((int) session('current_company_id'), $filters)->toArray();
 
-        return Excel::download(new ShopsByVoucherTypeExport($rows, $filters), 'compras-por-tipo-comprobante.xlsx');
+        return Excel::download(new ShopsByVoucherTypeExport($rows, $filters, currentTenant()->logo_path, $this->currentCompanyName()), 'compras-por-tipo-comprobante.xlsx');
     }
 
     public function shopsByProvider(Request $request): Response
@@ -96,7 +98,7 @@ class ReportController extends Controller
         $filters = $this->resolvedFilters($request);
         $rows = $this->shopsByProviderRows((int) session('current_company_id'), $filters)->toArray();
 
-        return Excel::download(new ShopsByProviderExport($rows, $filters), 'compras-por-proveedor.xlsx');
+        return Excel::download(new ShopsByProviderExport($rows, $filters, currentTenant()->logo_path, $this->currentCompanyName()), 'compras-por-proveedor.xlsx');
     }
 
     public function ordersByVoucherType(Request $request): Response
@@ -114,7 +116,7 @@ class ReportController extends Controller
         $filters = $this->resolvedOrderFilters($request);
         $rows = $this->ordersByVoucherTypeRows((int) session('current_company_id'), $filters)->toArray();
 
-        return Excel::download(new OrdersByVoucherTypeExport($rows), 'ventas-por-tipo-comprobante.xlsx');
+        return Excel::download(new OrdersByVoucherTypeExport($rows, currentTenant()->logo_path, $this->currentCompanyName()), 'ventas-por-tipo-comprobante.xlsx');
     }
 
     public function ordersByClient(Request $request): Response
@@ -132,7 +134,12 @@ class ReportController extends Controller
         $filters = $this->resolvedOrderFilters($request);
         $rows = $this->ordersByClientRows((int) session('current_company_id'), $filters)->toArray();
 
-        return Excel::download(new OrdersByClientExport($rows, $filters), 'ventas-por-cliente.xlsx');
+        return Excel::download(new OrdersByClientExport($rows, $filters, currentTenant()->logo_path, $this->currentCompanyName()), 'ventas-por-cliente.xlsx');
+    }
+
+    private function currentCompanyName(): ?string
+    {
+        return Company::find(session('current_company_id'))?->name;
     }
 
     /** @return array{start_date: string, end_date: string, only_authorized: bool} */
@@ -288,55 +295,62 @@ class ReportController extends Controller
      */
     private function shopsByAccountRows(int $companyId, array $filters): Collection
     {
-        $shops = Shop::query()
-            ->join('voucher_types AS vt', 'vt.id', 'shops.voucher_type_id')
-            ->select(['shops.id', 'shops.account_id', 'vt.code as vt_code', 'sub_total', 'no_iva', 'exempt', 'base0', 'base5', 'base8', 'base12', 'base15', 'iva5', 'iva8', 'iva12', 'iva15', 'total'])
-            ->with('account:id,code,name')
-            ->withSum('retentionItems as total_retention', 'value')
-            ->where('company_id', $companyId)
-            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
-            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
+        $items = ShopItem::query()
+            ->select([
+                'pa.account_id',
+                'shop_items.total',
+                'shop_items.tax_value',
+                'shop_items.tax_percentage',
+                'vt.code as vt_code',
+                'acc.code as account_code',
+                'acc.name as account_name',
+            ])
+            ->join('shops', 'shops.id', '=', 'shop_items.shop_id')
+            ->join('voucher_types AS vt', 'vt.id', '=', 'shops.voucher_type_id')
+            ->join('product_accounts AS pa', function ($join) use ($companyId) {
+                $join->on('pa.product_id', '=', 'shop_items.product_id')
+                    ->where('pa.company_id', '=', $companyId);
+            })
+            ->join('accounts AS acc', 'acc.id', '=', 'pa.account_id')
+            ->where('shop_items.total', '>', 0)
+            ->where('shops.company_id', $companyId)
+            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('shops.emision', '>=', $d))
+            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('shops.emision', '<=', $d))
             ->when($filters['only_authorized'] ?? true, fn ($q) => $q->where('shops.state', 'AUTORIZADO'))
             ->get();
 
-        return $shops
+        return $items
             ->groupBy('account_id')
             ->map(function ($group) {
                 $first = $group->first();
-                $sign = fn ($s) => $s->vt_code === '04' ? -1 : 1;
-                $subtotal = $group->sum(fn ($s) => $sign($s) * (float) $s->sub_total);
-                $noIva = $group->sum(fn ($s) => $sign($s) * (float) $s->no_iva);
-                $exempt = $group->sum(fn ($s) => $sign($s) * (float) $s->exempt);
-                $base0 = $group->sum(fn ($s) => $sign($s) * (float) $s->base0);
-                $base5 = $group->sum(fn ($s) => $sign($s) * (float) $s->base5);
-                $base8 = $group->sum(fn ($s) => $sign($s) * (float) $s->base8);
-                $base12 = $group->sum(fn ($s) => $sign($s) * (float) $s->base12);
-                $base15 = $group->sum(fn ($s) => $sign($s) * (float) $s->base15);
-                $iva5 = $group->sum(fn ($s) => $sign($s) * (float) $s->iva5);
-                $iva8 = $group->sum(fn ($s) => $sign($s) * (float) $s->iva8);
-                $iva12 = $group->sum(fn ($s) => $sign($s) * (float) $s->iva12);
-                $iva15 = $group->sum(fn ($s) => $sign($s) * (float) $s->iva15);
-                $total = $group->sum(fn ($s) => $sign($s) * (float) $s->total);
-                $retentions = $group->sum(fn ($s) => (float) $s->total_retention);
+                $sign = fn ($i) => $i->vt_code === '04' ? -1 : 1;
+
+                $base = fn (float $pct) => $group
+                    ->filter(fn ($i) => (float) $i->tax_percentage === $pct)
+                    ->sum(fn ($i) => $sign($i) * (float) $i->total);
+
+                $ivaRate = fn (float $pct) => $group
+                    ->filter(fn ($i) => (float) $i->tax_percentage === $pct)
+                    ->sum(fn ($i) => $sign($i) * (float) $i->tax_value);
+
+                $subtotal = round($group->sum(fn ($i) => $sign($i) * (float) $i->total), 2);
+                $iva = round($group->sum(fn ($i) => $sign($i) * (float) $i->tax_value), 2);
 
                 return [
-                    'account_code' => $first->account?->code,
-                    'account_name' => $first->account?->name ?? 'Sin cuenta asignada',
-                    'subtotal' => round($subtotal, 2),
-                    'no_iva' => round($noIva, 2),
-                    'exempt' => round($exempt, 2),
-                    'base0' => round($base0, 2),
-                    'base5' => round($base5, 2),
-                    'base8' => round($base8, 2),
-                    'base12' => round($base12, 2),
-                    'base15' => round($base15, 2),
-                    'iva5' => round($iva5, 2),
-                    'iva8' => round($iva8, 2),
-                    'iva12' => round($iva12, 2),
-                    'iva15' => round($iva15, 2),
-                    'total' => round($total, 2),
-                    'retentions' => round($retentions, 2),
-                    'a_pagar' => round($total - $retentions, 2),
+                    'account_code' => $first->account_code,
+                    'account_name' => $first->account_name,
+                    'subtotal' => $subtotal,
+                    'base0' => round($base(0), 2),
+                    'base5' => round($base(5), 2),
+                    'base8' => round($base(8), 2),
+                    'base12' => round($base(12), 2),
+                    'base15' => round($base(15), 2),
+                    'iva5' => round($ivaRate(5), 2),
+                    'iva8' => round($ivaRate(8), 2),
+                    'iva12' => round($ivaRate(12), 2),
+                    'iva15' => round($ivaRate(15), 2),
+                    'iva' => $iva,
+                    'total' => round($subtotal + $iva, 2),
                 ];
             })
             ->sortBy('account_code')

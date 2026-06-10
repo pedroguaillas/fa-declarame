@@ -243,7 +243,7 @@ def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> N
 
             # Random cooldown between consecutive jobs to avoid SRI captcha detection.
             if not _work_queue.empty():
-                cooldown = random.uniform(180, 600)  # 3–10 min
+                cooldown = random.uniform(180, 540)  # 3–9 min
                 scraper.progress(
                     "server",
                     f"Cooldown {cooldown:.0f}s antes del siguiente job (job #{_job_counter})...",

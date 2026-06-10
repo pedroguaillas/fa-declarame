@@ -2,18 +2,24 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\HasReportHeader;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ShopsByRetentionExport implements FromArray, WithColumnWidths, WithHeadings, WithStyles, WithTitle
+class ShopsByRetentionExport implements FromArray, WithColumnWidths, WithEvents, WithHeadings, WithStyles, WithTitle
 {
-    /** @param array<int, array<string, mixed>> $rows */
-    public function __construct(private readonly array $rows) {}
+    use HasReportHeader;
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    public function __construct(private readonly array $rows, private readonly ?string $logoPath = null, private readonly ?string $companyName = null) {}
 
     /** @return array<int, array<int, mixed>> */
     public function array(): array
@@ -52,8 +58,6 @@ class ShopsByRetentionExport implements FromArray, WithColumnWidths, WithHeading
         $sheet->getStyle('A')->applyFromArray($centerH);
         $sheet->getStyle('C')->applyFromArray($centerH);
 
-        return [
-            1 => ['font' => ['bold' => true]],
-        ];
+        return [];
     }
 }

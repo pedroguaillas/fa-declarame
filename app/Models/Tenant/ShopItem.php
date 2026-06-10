@@ -21,12 +21,12 @@ class ShopItem extends Model
     protected function casts(): array
     {
         return [
-            'quantity'       => 'decimal:4',
-            'unit_price'     => 'decimal:6',
-            'discount'       => 'decimal:2',
-            'total'          => 'decimal:2',
+            'quantity' => 'decimal:4',
+            'unit_price' => 'decimal:6',
+            'discount' => 'decimal:2',
+            'total' => 'decimal:2',
             'tax_percentage' => 'decimal:2',
-            'tax_value'      => 'decimal:2',
+            'tax_value' => 'decimal:2',
         ];
     }
 
