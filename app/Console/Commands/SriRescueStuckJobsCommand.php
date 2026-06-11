@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 #[Signature('sri:rescue-stuck-jobs
     {--hours=1 : Horas mínimas que un job debe llevar en "running" para considerarse atascado}
     {--date= : Filtrar solo jobs atascados en un día específico (formato: YYYY-MM-DD)}
+    {--ids= : IDs específicos de jobs a rescatar, separados por coma (ignora filtros de tiempo)}
     {--mark-failed : Marcar como failed en lugar de re-despachar}
     {--dry-run : Solo listar los jobs atascados sin realizar ninguna acción}
 ')]
@@ -25,11 +26,16 @@ class SriRescueStuckJobsCommand extends Command
         $markFailed = $this->option('mark-failed');
         $dryRun = $this->option('dry-run');
         $dateFilter = $this->option('date');
+        $idsFilter = $this->option('ids')
+            ? array_map('intval', explode(',', $this->option('ids')))
+            : null;
         $cutoff = now()->subHours($hours);
 
         $action = $dryRun ? 'DRY-RUN' : ($markFailed ? 'marcar como failed' : 're-despachar');
 
-        if ($dateFilter) {
+        if ($idsFilter) {
+            $this->info('Buscando jobs por IDs: '.implode(', ', $idsFilter)." — acción: {$action}");
+        } elseif ($dateFilter) {
             $this->info("Buscando jobs atascados en 'running' del día {$dateFilter} — acción: {$action}");
         } else {
             $this->info("Buscando jobs atascados en 'running' desde hace más de {$hours}h — acción: {$action}");
@@ -44,13 +50,17 @@ class SriRescueStuckJobsCommand extends Command
             tenancy()->initialize($tenant);
 
             try {
-                $stuck = SriScrapeJob::where('status', 'running')
-                    ->whereNull('completed_at')
-                    ->when($dateFilter, function ($query) use ($dateFilter): void {
-                        $query->whereDate('started_at', $dateFilter);
-                    }, function ($query) use ($cutoff): void {
-                        $query->where('started_at', '<', $cutoff);
-                    })
+                $stuck = SriScrapeJob::when($idsFilter, function ($query) use ($idsFilter): void {
+                    $query->whereIn('id', $idsFilter);
+                }, function ($query) use ($dateFilter, $cutoff): void {
+                    $query->where('status', 'running')
+                        ->whereNull('completed_at')
+                        ->when($dateFilter, function ($q) use ($dateFilter): void {
+                            $q->whereDate('started_at', $dateFilter);
+                        }, function ($q) use ($cutoff): void {
+                            $q->where('started_at', '<', $cutoff);
+                        });
+                })
                     ->get();
 
                 foreach ($stuck as $job) {
