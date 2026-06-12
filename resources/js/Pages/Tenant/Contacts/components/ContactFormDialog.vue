@@ -82,7 +82,7 @@ const expectedLength = computed(() => {
 });
 
 async function resolveContact(identification: string) {
-    if (!identification || isEditing()) return;
+    if (!identification) return;
     resolveMessage.value = null;
     alreadyExists.value = false;
     resolving.value = true;
@@ -96,8 +96,12 @@ async function resolveContact(identification: string) {
             const data = await res.json();
             if (data.id) {
                 form.name = data.name;
-                resolveMessage.value = "Este contacto ya está registrado.";
-                alreadyExists.value = true;
+                if (isEditing() && data.id === props.contact?.id) {
+                    resolveMessage.value = "Nombre obtenido del SRI.";
+                } else {
+                    resolveMessage.value = "Este contacto ya está registrado.";
+                    alreadyExists.value = true;
+                }
             } else if (data.name) {
                 form.name = data.name;
                 resolveMessage.value = "Nombre obtenido del SRI.";
@@ -114,7 +118,7 @@ async function resolveContact(identification: string) {
 watch(
     () => form.identification,
     (value) => {
-        if (isEditing() || isPassport.value) return;
+        if (isPassport.value) return;
         resolveMessage.value = null;
         alreadyExists.value = false;
 

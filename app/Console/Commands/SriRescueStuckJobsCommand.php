@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
     {--hours=1 : Horas mínimas que un job debe llevar en "running" para considerarse atascado}
     {--date= : Filtrar solo jobs atascados en un día específico (formato: YYYY-MM-DD)}
     {--ids= : IDs específicos de jobs a rescatar, separados por coma (ignora filtros de tiempo)}
+    {--tenant= : Limitar a un tenant específico por su ID (ej: auditsmart)}
     {--mark-failed : Marcar como failed en lugar de re-despachar}
     {--dry-run : Solo listar los jobs atascados sin realizar ninguna acción}
 ')]
@@ -29,19 +30,30 @@ class SriRescueStuckJobsCommand extends Command
         $idsFilter = $this->option('ids')
             ? array_map('intval', explode(',', $this->option('ids')))
             : null;
+        $tenantFilter = $this->option('tenant');
         $cutoff = now()->subHours($hours);
 
         $action = $dryRun ? 'DRY-RUN' : ($markFailed ? 'marcar como failed' : 're-despachar');
 
+        $scope = $tenantFilter ? " [tenant: {$tenantFilter}]" : '';
+
         if ($idsFilter) {
-            $this->info('Buscando jobs por IDs: '.implode(', ', $idsFilter)." — acción: {$action}");
+            $this->info('Buscando jobs por IDs: '.implode(', ', $idsFilter)."{$scope} — acción: {$action}");
         } elseif ($dateFilter) {
-            $this->info("Buscando jobs atascados en 'running' del día {$dateFilter} — acción: {$action}");
+            $this->info("Buscando jobs atascados en 'running' del día {$dateFilter}{$scope} — acción: {$action}");
         } else {
-            $this->info("Buscando jobs atascados en 'running' desde hace más de {$hours}h — acción: {$action}");
+            $this->info("Buscando jobs atascados en 'running' desde hace más de {$hours}h{$scope} — acción: {$action}");
         }
 
-        $tenants = Tenant::all();
+        $tenants = $tenantFilter
+            ? Tenant::where('id', $tenantFilter)->get()
+            : Tenant::all();
+
+        if ($tenantFilter && $tenants->isEmpty()) {
+            $this->error("Tenant '{$tenantFilter}' no encontrado.");
+
+            return self::FAILURE;
+        }
         $totalFound = 0;
         $totalActioned = 0;
         $totalErrors = 0;

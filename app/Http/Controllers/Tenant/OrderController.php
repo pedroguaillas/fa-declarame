@@ -11,6 +11,7 @@ use App\Models\Tenant\Order;
 use App\Models\Tenant\VoucherType;
 use App\Services\OrderImportService;
 use App\Services\OrderRetentionImportService;
+use App\Services\SalesXlsxImportService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -186,6 +187,33 @@ class OrderController extends Controller
         }
 
         return redirect()->route('tenant.orders.index')->with($skipped > 0 ? 'error' : 'success', "Importación completada: {$imported} ventas importadas, {$skipped} omitidas.");
+    }
+
+    public function importSales(Request $request, SalesXlsxImportService $service): RedirectResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx', 'max:5120'],
+        ]);
+
+        $company = company();
+
+        [
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'errors' => $errors,
+            'errorMessages' => $messages,
+        ] = $service->import($request->file('file')->getRealPath(), $company->id, $company->ruc);
+
+        $status = $errors > 0 ? 'error' : 'success';
+        $message = "Importación completada: {$imported} ventas importadas, {$skipped} omitidas, {$errors} errores.";
+
+        $redirect = redirect()->route('tenant.orders.index')->with($status, $message);
+
+        if (! empty($messages)) {
+            $redirect = $redirect->with('import_errors', array_slice($messages, 0, 10));
+        }
+
+        return $redirect;
     }
 
     public function importRetentions(Request $request, OrderRetentionImportService $service): RedirectResponse

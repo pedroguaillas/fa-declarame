@@ -43,7 +43,9 @@ interface Summary {
 
 const props = defineProps<{
     year: number;
-    month: number;
+    month: number | null;
+    semester: number | null;
+    typeDeclaration: string;
     compras: Summary;
     ventas: Summary;
 }>();
@@ -51,8 +53,11 @@ const props = defineProps<{
 const page = usePage();
 const flash = computed(() => page.props.flash as { success?: string; error?: string });
 
+const isSemiannual = computed(() => props.typeDeclaration === "semestral");
+
 const selectedYear = ref(props.year);
-const selectedMonth = ref(props.month);
+const selectedMonth = ref(props.month ?? 1);
+const selectedSemester = ref(props.semester ?? 1);
 
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -72,28 +77,67 @@ const months = [
     { value: 12, label: "Diciembre" },
 ];
 
+const semesters = [
+    { value: 1, label: "Semestre 1 (Ene–Jun)" },
+    { value: 2, label: "Semestre 2 (Jul–Dic)" },
+];
+
 const monthName = (m: number) => months.find((mo) => mo.value === m)?.label ?? m;
 
+const periodLabel = computed(() =>
+    isSemiannual.value
+        ? `Semestre ${props.semester} ${props.year}`
+        : `${monthName(props.month ?? 1)} ${props.year}`,
+);
+
 function applyPeriod() {
-    router.get(
-        route("tenant.declaration.index"),
-        { year: selectedYear.value, month: selectedMonth.value },
-        { preserveState: true },
-    );
+    if (isSemiannual.value) {
+        router.get(
+            route("tenant.declaration.index"),
+            { year: selectedYear.value, semester: selectedSemester.value },
+            { preserveState: true },
+        );
+    } else {
+        router.get(
+            route("tenant.declaration.index"),
+            { year: selectedYear.value, month: selectedMonth.value },
+            { preserveState: true },
+        );
+    }
 }
 
 function downloadAts() {
-    const params = new URLSearchParams({
-        year: String(props.year),
-        month: String(props.month),
-    });
-    window.location.href = route("tenant.export-ats") + "?" + params.toString();
+    if (isSemiannual.value) {
+        const params = new URLSearchParams({
+            year: String(props.year),
+            semester: String(props.semester ?? 1),
+        });
+        window.location.href = route("tenant.export-ats") + "?" + params.toString();
+    } else {
+        const params = new URLSearchParams({
+            year: String(props.year),
+            month: String(props.month ?? 1),
+        });
+        window.location.href = route("tenant.export-ats") + "?" + params.toString();
+    }
 }
 
 function downloadReport(routeName: string) {
-    const start = `${props.year}-${String(props.month).padStart(2, "0")}-01`;
-    const lastDay = new Date(props.year, props.month, 0).getDate();
-    const end = `${props.year}-${String(props.month).padStart(2, "0")}-${lastDay}`;
+    let start: string;
+    let end: string;
+
+    if (isSemiannual.value) {
+        const startMonth = props.semester === 1 ? 1 : 7;
+        const endMonth = props.semester === 1 ? 6 : 12;
+        start = `${props.year}-${String(startMonth).padStart(2, "0")}-01`;
+        const lastDay = new Date(props.year, endMonth, 0).getDate();
+        end = `${props.year}-${String(endMonth).padStart(2, "0")}-${lastDay}`;
+    } else {
+        start = `${props.year}-${String(props.month).padStart(2, "0")}-01`;
+        const lastDay = new Date(props.year, props.month!, 0).getDate();
+        end = `${props.year}-${String(props.month).padStart(2, "0")}-${lastDay}`;
+    }
+
     const params = new URLSearchParams({ start_date: start, end_date: end });
     window.location.href = route(routeName) + "?" + params.toString();
 }
@@ -139,7 +183,7 @@ defineOptions({ layout: TenantLayout });
 <template>
     <HeaderList
         title="Declaración"
-        :description="`Resumen del período ${monthName(month)} ${year}`"
+        :description="`Resumen del período ${periodLabel}`"
     />
 
     <div class="mt-6 space-y-6 px-1">
@@ -169,7 +213,20 @@ defineOptions({ layout: TenantLayout });
                     </SelectContent>
                 </Select>
             </div>
-            <div class="flex flex-col gap-1.5">
+            <div v-if="isSemiannual" class="flex flex-col gap-1.5">
+                <label class="text-sm font-medium">Semestre</label>
+                <Select v-model="selectedSemester">
+                    <SelectTrigger class="w-[220px]">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem v-for="s in semesters" :key="s.value" :value="s.value">
+                            {{ s.label }}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+            <div v-else class="flex flex-col gap-1.5">
                 <label class="text-sm font-medium">Mes</label>
                 <Select v-model="selectedMonth">
                     <SelectTrigger class="w-[160px]">
@@ -303,7 +360,7 @@ defineOptions({ layout: TenantLayout });
                 <CardContent>
                     <p class="text-muted-foreground mb-4 text-sm">
                         Genera el XML del Anexo Transaccional para
-                        <strong>{{ monthName(month) }} {{ year }}</strong> listo para subir al portal del SRI.
+                        <strong>{{ periodLabel }}</strong> listo para subir al portal del SRI.
                     </p>
                     <Button @click="downloadAts">
                         <FileSpreadsheet class="size-4" />

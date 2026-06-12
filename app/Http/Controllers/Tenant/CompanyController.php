@@ -63,7 +63,13 @@ class CompanyController extends Controller
 
     public function update(UpdateCompanyRequest $request, Company $company): RedirectResponse
     {
-        $company->update($request->validated());
+        $data = $request->validated();
+
+        if (empty($data['pass_sri'])) {
+            unset($data['pass_sri']);
+        }
+
+        $company->update($data);
 
         return redirect()->route('tenant.companies.index')
             ->with('success', 'Empresa actualizada correctamente.');

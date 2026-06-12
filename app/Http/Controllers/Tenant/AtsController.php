@@ -15,7 +15,9 @@ class AtsController extends Controller
 {
     public function index(): InertiaResponse
     {
-        return Inertia::render('Tenant/Sri/Index');
+        return Inertia::render('Tenant/Sri/Index', [
+            'typeDeclaration' => company()->type_declaration ?? 'mensual',
+        ]);
     }
 
     public function import(Request $request, AtsXmlImportService $service): RedirectResponse
@@ -90,18 +92,27 @@ class AtsController extends Controller
 
     public function export(Request $request, AtsXmlService $service): Response
     {
-        $request->validate([
-            'year' => ['required', 'integer', 'min:2000', 'max:2099'],
-            'month' => ['required', 'integer', 'min:1', 'max:12'],
-        ]);
-
         $company = company();
+        $isSemiannual = $company->type_declaration === 'semestral';
+
+        $request->validate(array_merge(
+            ['year' => ['required', 'integer', 'min:2000', 'max:2099']],
+            $isSemiannual
+                ? ['semester' => ['required', 'integer', 'min:1', 'max:2']]
+                : ['month' => ['required', 'integer', 'min:1', 'max:12']],
+        ));
+
         $year = (int) $request->input('year');
-        $month = (int) $request->input('month');
 
-        $xml = $service->generate($company, $year, $month);
-
-        $filename = sprintf('ATS_%s_%d_%02d.xml', $company->ruc, $year, $month);
+        if ($isSemiannual) {
+            $semester = (int) $request->input('semester');
+            $xml = $service->generate($company, $year, $semester, true);
+            $filename = sprintf('ATS_%s_%d_S%d.xml', $company->ruc, $year, $semester);
+        } else {
+            $month = (int) $request->input('month');
+            $xml = $service->generate($company, $year, $month);
+            $filename = sprintf('ATS_%s_%d_%02d.xml', $company->ruc, $year, $month);
+        }
 
         return response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',

@@ -31,7 +31,7 @@ class UpdateCompanyRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:50'],
             'type_declaration' => ['required', 'string', 'in:mensual,semestral'],
-            'pass_sri' => ['required', 'string', 'max:50'],
+            'pass_sri' => ['nullable', 'string', 'max:50'],
         ];
     }
 }

@@ -2,6 +2,10 @@
 import { useForm, usePage } from "@inertiajs/vue3";
 import { ref, computed } from "vue";
 
+const props = defineProps<{
+    typeDeclaration: string;
+}>();
+
 import TenantLayout from "@/layouts/TenantLayout.vue";
 import HeaderList from "@/components/Shared/HeaderList.vue";
 
@@ -20,12 +24,18 @@ import { FileDown, FileUp, Loader2, CheckCircle2, XCircle } from "lucide-vue-nex
 // ─── State ──────────────────────────────────────────────────────────────────
 
 const currentYear = new Date().getFullYear();
-const currentMonth = new Date().getMonth();
-const previousMonth = currentMonth === 0 ? 12 : currentMonth;
-const previousYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+const currentMonth = new Date().getMonth() + 1; // 1-based
+const previousMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+const previousYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+// Previous semester: if we're in S1 (1-6) → S2 of last year; if S2 (7-12) → S1 of current year
+const previousSemesterYear = currentMonth <= 6 ? currentYear - 1 : currentYear;
+const previousSemester = currentMonth <= 6 ? 2 : 1;
 
 const page = usePage();
 const flash = computed(() => page.props.flash as { success?: string; error?: string });
+
+const isSemiannual = computed(() => props.typeDeclaration === "semestral");
 
 const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
@@ -44,17 +54,31 @@ const months = [
     { value: 12, label: "Diciembre" },
 ];
 
+const semesters = [
+    { value: 1, label: "Semestre 1 (Ene–Jun)" },
+    { value: 2, label: "Semestre 2 (Jul–Dic)" },
+];
+
 // ─── ATS Export ─────────────────────────────────────────────────────────────
 
-const exportYear = ref(previousYear);
+const exportYear = ref(isSemiannual.value ? previousSemesterYear : previousYear);
 const exportMonth = ref(previousMonth);
+const exportSemester = ref(previousSemester);
 
 function downloadAts() {
-    const params = new URLSearchParams({
-        year: String(exportYear.value),
-        month: String(exportMonth.value),
-    });
-    window.location.href = route("tenant.export-ats") + "?" + params.toString();
+    if (isSemiannual.value) {
+        const params = new URLSearchParams({
+            year: String(exportYear.value),
+            semester: String(exportSemester.value),
+        });
+        window.location.href = route("tenant.export-ats") + "?" + params.toString();
+    } else {
+        const params = new URLSearchParams({
+            year: String(exportYear.value),
+            month: String(exportMonth.value),
+        });
+        window.location.href = route("tenant.export-ats") + "?" + params.toString();
+    }
 }
 
 // ─── ATS Import ─────────────────────────────────────────────────────────────
@@ -127,7 +151,20 @@ defineOptions({ layout: TenantLayout });
                             </Select>
                         </div>
 
-                        <div class="flex flex-col gap-1.5">
+                        <div v-if="isSemiannual" class="flex flex-col gap-1.5">
+                            <label class="text-sm font-medium">Semestre</label>
+                            <Select v-model="exportSemester">
+                                <SelectTrigger class="w-[220px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem v-for="s in semesters" :key="s.value" :value="s.value">
+                                        {{ s.label }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div v-else class="flex flex-col gap-1.5">
                             <label class="text-sm font-medium">Mes</label>
                             <Select v-model="exportMonth">
                                 <SelectTrigger class="w-[160px]">

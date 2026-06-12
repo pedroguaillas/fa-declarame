@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Tenant\Company;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\Shop;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Normalizer;
 use SimpleXMLElement;
@@ -13,8 +14,14 @@ class AtsXmlService
 {
     private const BC_SCALE = 6;
 
-    public function generate(Company $company, int $year, int $month): string
+    public function generate(Company $company, int $year, int $period, bool $isSemiannual = false): string
     {
+        if ($isSemiannual) {
+            [$startMonth, $endMonth] = $period === 1 ? [1, 6] : [7, 12];
+            $startDate = sprintf('%d-%02d-01', $year, $startMonth);
+            $endDate = Carbon::create($year, $endMonth)->endOfMonth()->format('Y-m-d');
+        }
+
         $shops = Shop::with([
             'contact.identificationType',
             'retentionItems.retention',
@@ -23,8 +30,11 @@ class AtsXmlService
             'taxSupport',
         ])
             ->where('state', 'AUTORIZADO')
-            ->whereYear('emision', $year)
-            ->whereMonth('emision', $month)
+            ->when(
+                $isSemiannual,
+                fn ($q) => $q->whereBetween('emision', [$startDate, $endDate]),
+                fn ($q) => $q->whereYear('emision', $year)->whereMonth('emision', $period),
+            )
             ->orderBy('emision')
             ->get();
 
@@ -35,8 +45,11 @@ class AtsXmlService
             ->leftJoin('retentions', 'retentions.id', '=', 'order_retention_items.retention_id')
             ->join('voucher_types', 'voucher_types.id', '=', 'orders.voucher_type_id')
             ->where('orders.state', 'AUTORIZADO')
-            ->whereYear('orders.emision', $year)
-            ->whereMonth('orders.emision', $month)
+            ->when(
+                $isSemiannual,
+                fn ($q) => $q->whereBetween('orders.emision', [$startDate, $endDate]),
+                fn ($q) => $q->whereYear('orders.emision', $year)->whereMonth('orders.emision', $period),
+            )
             ->selectRaw("
                 SUM(orders.no_iva) AS no_iva,
                 SUM(orders.exempt) AS exempt,
@@ -103,8 +116,17 @@ class AtsXmlService
         $xml->addChild('TipoIDInformante', 'R');
         $xml->addChild('IdInformante', $company->ruc);
         $xml->addChild('razonSocial', $this->normalize($company->name));
+        $mesValue = $isSemiannual
+            ? ($period === 1 ? '06' : '12')
+            : str_pad((string) $period, 2, '0', STR_PAD_LEFT);
+
         $xml->addChild('Anio', (string) $year);
-        $xml->addChild('Mes', str_pad((string) $month, 2, '0', STR_PAD_LEFT));
+        $xml->addChild('Mes', $mesValue);
+
+        if ($isSemiannual) {
+            $xml->addChild('regimenMicroempresa', 'SI');
+        }
+
         $xml->addChild('numEstabRuc', '001');
         $xml->addChild('totalVentas', $this->fmt($totalVentas));
         $xml->addChild('codigoOperativo', 'IVA');

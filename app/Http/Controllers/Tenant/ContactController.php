@@ -56,7 +56,7 @@ class ContactController extends Controller
     {
         $contact = Contact::where('identification', $identification)->first();
 
-        if ($contact) {
+        if ($contact && strlen($contact->name) > 0) {
             return response()->json([
                 'id' => $contact->id,
                 'name' => $contact->name,

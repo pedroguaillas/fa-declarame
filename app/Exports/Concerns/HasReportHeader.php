@@ -35,8 +35,23 @@ trait HasReportHeader
             },
             AfterSheet::class => function (AfterSheet $event): void {
                 $sheet = $event->sheet->getDelegate();
-                $headingRow = $this->headerRowCount + 2; // library always places headings at insertedRows+2
                 $lastCol = $sheet->getHighestColumn();
+
+                // Detect actual heading row: first row where column A has a value.
+                // Maatwebsite places headings at insertedRows+1 or insertedRows+2 depending on version.
+                $headingRow = 1;
+                while ($headingRow <= 10 && $sheet->getCell("A{$headingRow}")->getValue() === null) {
+                    $headingRow++;
+                }
+
+                // Normalize: ensure heading row is at headerRowCount+2 (row 3).
+                // If it landed one row too early (row 2), insert a blank row before it.
+                $expectedHeadingRow = $this->headerRowCount + 2;
+                while ($headingRow < $expectedHeadingRow) {
+                    $sheet->insertNewRowBefore($headingRow, 1);
+                    $headingRow++;
+                }
+
                 $lastRow = $sheet->getHighestRow();
 
                 // Company name in row 1 next to logo

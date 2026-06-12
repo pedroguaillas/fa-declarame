@@ -64,6 +64,7 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
         Route::post('import-ats', [AtsController::class, 'import'])->name('tenant.import-ats');
         Route::get('orders/export', [OrderController::class, 'export'])->name('tenant.orders.export');
         Route::post('orders/import', [OrderController::class, 'import'])->name('tenant.orders.import');
+        Route::post('orders/import-sales', [OrderController::class, 'importSales'])->name('tenant.orders.import-sales');
         Route::post('orders/import-retentions', [OrderController::class, 'importRetentions'])->name('tenant.orders.import-retentions');
 
         Route::resource('orders', OrderController::class)

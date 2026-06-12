@@ -176,6 +176,7 @@ watch(
 
 const importFileInput = ref<HTMLInputElement | null>(null);
 const importForm = useForm<{ file: File | null }>({ file: null });
+const importSalesForm = useForm<{ file: File | null }>({ file: null });
 
 const importRetentionsFileInput = ref<HTMLInputElement | null>(null);
 const importRetentionsForm = useForm<{ file: File | null }>({ file: null });
@@ -183,14 +184,28 @@ const importRetentionsForm = useForm<{ file: File | null }>({ file: null });
 function handleFileSelected(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    importForm.file = file;
-    importForm.post(route("tenant.orders.import"), {
-        forceFormData: true,
-        onFinish: () => {
-            importForm.reset();
-            if (importFileInput.value) importFileInput.value.value = "";
-        },
-    });
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+
+    if (ext === "xlsx") {
+        importSalesForm.file = file;
+        importSalesForm.post(route("tenant.orders.import-sales"), {
+            forceFormData: true,
+            onFinish: () => {
+                importSalesForm.reset();
+                if (importFileInput.value) importFileInput.value.value = "";
+            },
+        });
+    } else {
+        importForm.file = file;
+        importForm.post(route("tenant.orders.import"), {
+            forceFormData: true,
+            onFinish: () => {
+                importForm.reset();
+                if (importFileInput.value) importFileInput.value.value = "";
+            },
+        });
+    }
 }
 
 function handleRetentionsFileSelected(event: Event) {
@@ -222,7 +237,7 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
                 link-label="Nueva venta"
                 :link-href="route('tenant.orders.create')"
                 :show-import="true"
-                import-label="Importar SRI"
+                import-label="Importar"
                 @click-import="importFileInput?.click()"
             >
                 <template #extra-actions>
@@ -260,7 +275,7 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
             <FilterBar :filters="filters" @change="applyFilters" />
 
             <!-- Hidden file inputs -->
-            <input ref="importFileInput" type="file" accept=".txt,.zip" class="hidden" @change="handleFileSelected" />
+            <input ref="importFileInput" type="file" accept=".txt,.zip,.xlsx" class="hidden" @change="handleFileSelected" />
             <input
                 ref="importRetentionsFileInput"
                 type="file"
