@@ -67,15 +67,15 @@ function selectCompany(company: CompanyScope) {
 <template>
     <Popover v-model:open="open">
         <PopoverTrigger as-child>
-            <!-- Contribuyente seleccionado: chip outline con nombre + RUC -->
+            <!-- Contribuyente seleccionado: ícono solo en móvil, nombre+RUC en desktop -->
             <Button
                 v-if="currentCompany"
                 variant="outline"
-                size="sm"
-                class="hidden h-9 max-w-72 gap-2 px-3 sm:flex"
+                class="h-9 gap-2 px-2 sm:max-w-72 sm:px-3"
+                :title="currentCompany.name"
             >
                 <Building2 class="size-4 shrink-0 text-primary" />
-                <div class="flex min-w-0 flex-1 flex-col items-start leading-tight">
+                <div class="hidden min-w-0 flex-1 flex-col items-start leading-tight sm:flex">
                     <span class="max-w-44 truncate text-sm font-semibold leading-none">
                         {{ currentCompany.name }}
                     </span>
@@ -83,18 +83,7 @@ function selectCompany(company: CompanyScope) {
                         {{ currentCompany.ruc }}
                     </span>
                 </div>
-                <ChevronsUpDown class="size-3.5 shrink-0 opacity-50" />
-            </Button>
-
-            <!-- Móvil: solo ícono cuando hay selección -->
-            <Button
-                v-if="currentCompany"
-                variant="outline"
-                size="icon"
-                class="size-9 sm:hidden"
-                :title="currentCompany.name"
-            >
-                <Building2 class="size-4 text-primary" />
+                <ChevronsUpDown class="hidden size-3.5 shrink-0 opacity-50 sm:block" />
             </Button>
 
             <!-- Sin contribuyente: botón amber pulsante -->
