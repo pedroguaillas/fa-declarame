@@ -9,7 +9,8 @@ return [
     ],
 
     'scraper' => [
-        'server_url' => env('SRI_SCRAPER_SERVER_URL'), // e.g. http://localhost:8765
+        'server_url' => env('SRI_SCRAPER_SERVER_URL'),   // e.g. http://127.0.0.1:8765
+        'server_url_2' => env('SRI_SCRAPER_SERVER_URL_2'), // e.g. http://10.116.0.2:8765 (vpc)
         'timeout' => (int) env('SRI_SCRAPER_TIMEOUT', 600),
         'engine' => env('SRI_SCRAPER_ENGINE', 'python'), // 'python' or 'node'
         'node_path' => env('SRI_SCRAPER_NODE_PATH', 'node'),

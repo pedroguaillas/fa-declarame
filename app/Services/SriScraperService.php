@@ -13,6 +13,7 @@ use App\Models\Tenant\Shop;
 use App\Models\Tenant\SriScrapeJob;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
@@ -51,7 +52,7 @@ class SriScraperService
         $downloadDir = storage_path('app/private/sri-scrape/'.$scrapeJob->id);
 
         try {
-            $serverUrl = config('sri.scraper.server_url');
+            $serverUrl = $this->selectServer();
 
             $config = [
                 'ruc' => $company->ruc,
@@ -120,6 +121,24 @@ class SriScraperService
      * When a callbackUrl is provided the server responds immediately with
      * {"status":"accepted"} and POSTs the result back asynchronously.
      */
+    private function selectServer(): ?string
+    {
+        $primary = config('sri.scraper.server_url');
+        $secondary = config('sri.scraper.server_url_2');
+
+        if (! $primary) {
+            return null;
+        }
+
+        if (! $secondary) {
+            return $primary;
+        }
+
+        $counter = Cache::increment('sri_scraper_server_rr');
+
+        return ($counter % 2 === 1) ? $primary : $secondary;
+    }
+
     private function runViaServer(string $serverUrl, array $config, SriScrapeJob $scrapeJob, string $tenantId = ''): array
     {
         $scrapeJob->update([

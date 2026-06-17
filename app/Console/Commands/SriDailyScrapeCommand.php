@@ -35,8 +35,7 @@ class SriDailyScrapeCommand extends Command
 
         $totalErrors = 0;
 
-        // Seconds between each company scrape to avoid SRI captcha on concurrent sessions
-        $delaySeconds = (int) config('sri.scraper.daily_dispatch_interval', 90);
+        $cumulativeDelay = 0;
         $dispatchIndex = 0;
 
         foreach ($tenants as $tenant) {
@@ -76,8 +75,9 @@ class SriDailyScrapeCommand extends Command
                         ]);
 
                         ScrapeFromSriJob::dispatch($scrapeJob->id, $company->id, $tenant->getTenantKey())
-                            ->delay(now()->addSeconds($dispatchIndex * $delaySeconds));
+                            ->delay(now()->addSeconds($cumulativeDelay));
 
+                        $cumulativeDelay += rand(50, 100);
                         $dispatchIndex++;
 
                         $totalDispatched++;

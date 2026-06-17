@@ -18,11 +18,15 @@ set -euo pipefail
 
 # ─── Configuración ───────────────────────────────────────────────────────────
 
-VPS_USER="root"              # Usuario SSH del VPS
-VPS_HOST="147.182.223.172"  # IP del droplet de Digital Ocean (mismo servidor que Laravel)
-VPS_PORT="22"                # Puerto SSH (normalmente 22)
+VPS_USER="root"                    # Usuario SSH del VPS
+VPS_HOST="${1:-147.182.223.172}"   # IP del droplet (arg 1, default: servidor Laravel)
+VPS_PORT="22"                      # Puerto SSH (normalmente 22)
 REMOTE_DIR="/opt/sri-scraper"
-SERVICE_USER="www-data"      # Usuario del sistema que corre el servicio
+SERVICE_USER="www-data"            # Usuario del sistema que corre el servicio
+
+# --remote: bind en 0.0.0.0 (servidor separado de Laravel) + abre UFW puerto 8765
+SCRAPER_BIND_HOST="127.0.0.1"
+[[ "${2:-}" == "--remote" ]] && SCRAPER_BIND_HOST="0.0.0.0"
 
 # ─── Colores ─────────────────────────────────────────────────────────────────
 
@@ -133,7 +137,7 @@ Environment=HOME=$REMOTE_DIR
 Environment=TMPDIR=/tmp
 NoNewPrivileges=false
 ExecStart=$REMOTE_DIR/.venv/bin/python $REMOTE_DIR/server.py \\
-    --host=127.0.0.1 \\
+    --host=$SCRAPER_BIND_HOST \\
     --port=8765 \\
     --user-data-dir=$REMOTE_DIR/browser-session \\
     --headless
@@ -146,6 +150,13 @@ SyslogIdentifier=sri-scraper
 [Install]
 WantedBy=multi-user.target
 SERVICE
+
+# ── Firewall (solo modo --remote) ────────────────────────────────────────────
+
+if [[ "$SCRAPER_BIND_HOST" == "0.0.0.0" ]]; then
+    step "Abriendo puerto 8765 solo desde servidor Laravel (147.182.223.172)..."
+    ufw allow from 10.116.0.4 to any port 8765 comment 'sri-scraper from srv-declarame vpc' 2>/dev/null || true
+fi
 
 # ── Activar servicios ─────────────────────────────────────────────────────────
 
