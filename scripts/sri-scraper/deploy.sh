@@ -200,6 +200,6 @@ if [[ "${1:-}" == "--update-only" ]]; then
         "$SCRIPT_DIR/server.py" \
         "$SCRIPT_DIR/test-scraper.py" \
         "$VPS_USER@$VPS_HOST:$REMOTE_DIR/"
-    ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" "systemctl restart sri-scraper && sleep 2 && curl -s http://127.0.0.1:8765/health"
+    ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" "supervisorctl restart sri-scraper && sleep 3 && curl -s http://127.0.0.1:8765/health"
     info "Actualización completada."
 fi

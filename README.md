@@ -2,67 +2,112 @@
 
 Sistema Tributario para el procesamiento de información de Compras, Ventas y Retenciones de los contribuyentes que los contadores llevan contabilidad externa.
 
-# Levantar app con docker
+---
 
-`docker run --rm \
+## Instalación inicial
+
+```bash
+# Instalar dependencias con Docker
+docker run --rm \
     -u "$(id -u):$(id -g)" \
     -v "$(pwd):/var/www/html" \
     -w /var/www/html \
     laravelsail/php84-composer:latest \
-    composer install --ignore-platform-reqs`
+    composer install --ignore-platform-reqs
 
-# Copiar .env.example a .env
+# Copiar configuración
+cp .env.example .env
+```
 
-`cp .env.example .env`
+---
 
-# Descargar cambios del repositorio
+## Actualizar repositorio
 
-`git fetch origin`
+```bash
+git fetch origin
+git merge origin/main
+```
 
-# Aplicar cambios para correguir
+---
 
-`git merge origin/main`
+## Base de datos
 
-# Instalar una dependencia ignorando la incompatibilidad
+```bash
+# Migrar base de datos de tenants
+./vendor/bin/sail artisan tenants:migrate
 
-`./vendor/bin/sail composer require maatwebsite/excel --ignore-platform-reqs`
-`./vendor/bin/sail composer require maatwebsite/excel: "4.x-dev as 4.0.0"`
+# Migrar un tenant específico
+./vendor/bin/sail artisan tenants:migrate --tenants=ID
 
-Migrar tenant (opcional) `./vendor/bin/sail artisan tenants:migrate`
+# Seed faltante de tipos de identificación
+./vendor/bin/sail php artisan tenant:seed-identification-types
+```
 
-Probar script
+---
 
-`cd scripts/sri-scraper`
+## Dependencias especiales
 
-`source venv/bin/activate`
-  
-`python server.py`
+```bash
+# Instalar maatwebsite/excel ignorando incompatibilidades
+./vendor/bin/sail composer require maatwebsite/excel --ignore-platform-reqs
+./vendor/bin/sail composer require maatwebsite/excel:"4.x-dev as 4.0.0"
+```
 
-# Probar el job automatico
+---
 
-`./vendor/bin/sail artisan sri:daily-scrape`
+## Scraper SRI
 
-# Seed faltante
+```bash
+# Iniciar servidor scraper (local)
+cd scripts/sri-scraper
+source venv/bin/activate
+python server.py
 
-`./vendor/bin/sail php artisan tenant:seed-identification-types`
+# Probar job automático de scraping
+./vendor/bin/sail artisan sri:daily-scrape
 
-# Despliegue
+# Desplegar scraper (local → remoto)
+bash scripts/sri-scraper/deploy.sh --update-only
+bash scripts/sri-scraper/deploy.sh IP-REMOTE --update-only --remote
+```
 
-`bash /var/www/fa-declarame/deployment/deploy.sh`
+Configuración del servicio systemd:
+```
+ExecStart=/opt/sri-scraper/.venv/bin/python /opt/sri-scraper/server.py \
+    --host=127.0.0.1 \
+    --port=8765 \
+    --user-data-dir=/opt/sri-scraper/browser-session \
+    --headless
+```
 
-Desde local se puede actualizar el scrape
+---
 
-`bash scripts/sri-scraper/deploy.sh --update-only`
+## Despliegue
 
+```bash
+bash /var/www/fa-declarame/deployment/deploy.sh
+```
 
-# Change setting scrape
+---
 
-ExecStart=/opt/sri-scraper/.venv/bin/python /opt/sri-scraper/server.py     --host=127.0.0.1     --port=8765     --user-data-dir=/opt/sri-scraper/browser-session     --headless
+## Backup y restauración de tenant DB
 
-# Backup tenant DB
+```bash
+# Backup
+./vendor/bin/sail exec pgsql pg_dump -U sail tenant_abc123 > backup_tenant_abc123_$(date +%Y%m%d).sql
 
-`./vendor/bin/sail exec pgsql pg_dump -U sail tenant_abc123 > backup_tenant_abc123_$(date +%Y%m%d).sql`
+# Restore
+./vendor/bin/sail exec -T pgsql psql -U sail tenant_[UUID] < backup_tenant_[UUID]_YYYYMMDD.sql
+```
 
-# Restore 
+---
 
-`./vendor/bin/sail exec -T pgsql psql -U sail tenant_[UUID] < backup_tenant_[UUID]_YYYYMMDD.sql`
+## Logs
+
+```bash
+# Últimas N líneas del scraper
+journalctl -u sri-scraper -n 100 --no-pager
+
+# Seguimiento en tiempo real
+journalctl -u sri-scraper -f
+```

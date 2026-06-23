@@ -96,10 +96,10 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
         "accept_downloads": True,
         "extra_http_headers": {
             "Accept-Language": "es-EC,es;q=0.9,en;q=0.8",
-            "sec-ch-ua": '"Chromium";v="147", "Google Chrome";v="147", "Not=A?Brand";v="24"',
+            "sec-ch-ua": scraper.CH_UA_SEC,
             "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"macOS"',
-            "sec-ch-ua-full-version-list": '"Chromium";v="147.0.7727.15", "Google Chrome";v="147.0.7727.15", "Not=A?Brand";v="24.0.0.0"',
+            "sec-ch-ua-platform": scraper.CH_UA_PLATFORM,
+            "sec-ch-ua-full-version-list": scraper.CH_UA_SEC_FULL,
         },
     }
 

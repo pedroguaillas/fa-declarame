@@ -23,7 +23,11 @@ import argparse
 import json
 import math
 import random
+import glob
+import os
+import platform as _platform
 import re
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -70,12 +74,67 @@ COMPRAS_VOUCHER_TYPES = [
     {"value": "6", "label": "Retencion"},
 ]
 
-# Realistic Chrome user agent — must match Playwright's bundled Chromium build exactly.
-# Run: .venv/bin/python -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(); pg=b.new_page(); print(pg.evaluate('navigator.userAgent'))"
-CHROME_USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/147.0.7727.15 Safari/537.36"
+# Chrome user agent and sec-ch-ua headers — auto-detected from Playwright's bundled Chromium.
+_SYS = _platform.system()  # 'Darwin', 'Linux', 'Windows'
+
+
+def _detect_chrome_version() -> tuple[str, str]:
+    """Returns (full_version, major) e.g. ('148.0.7778.96', '148'). Falls back to ('147.0.7727.15', '147')."""
+    browsers_path = os.environ.get(
+        "PLAYWRIGHT_BROWSERS_PATH",
+        os.path.expanduser("~/.cache/ms-playwright"),
+    )
+    patterns = [
+        f"{browsers_path}/chromium-*/chrome-linux64/chrome",
+        os.path.expanduser("~/Library/Caches/ms-playwright/chromium-*/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"),
+        os.path.expanduser("~/Library/Caches/ms-playwright/chromium-*/chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"),
+        os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome"),
+    ]
+    for pattern in patterns:
+        matches = glob.glob(pattern)
+        if not matches:
+            continue
+        try:
+            result = subprocess.run(
+                [matches[0], "--version"], capture_output=True, text=True, timeout=10
+            )
+            m = re.search(r"(\d+)\.(\d[\d.]+)", result.stdout + result.stderr)
+            if m:
+                return m.group(0), m.group(1)
+        except Exception:
+            continue
+    return "147.0.7727.15", "147"
+
+
+_CHROME_FULL_VER, _CHROME_MAJOR = _detect_chrome_version()
+
+if _SYS == "Darwin":
+    CHROME_USER_AGENT = (
+        f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        f"AppleWebKit/537.36 (KHTML, like Gecko) "
+        f"Chrome/{_CHROME_FULL_VER} Safari/537.36"
+    )
+    CH_UA_PLATFORM = '"macOS"'
+elif _SYS == "Linux":
+    CHROME_USER_AGENT = (
+        f"Mozilla/5.0 (X11; Linux x86_64) "
+        f"AppleWebKit/537.36 (KHTML, like Gecko) "
+        f"Chrome/{_CHROME_FULL_VER} Safari/537.36"
+    )
+    CH_UA_PLATFORM = '"Linux"'
+else:
+    CHROME_USER_AGENT = (
+        f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        f"AppleWebKit/537.36 (KHTML, like Gecko) "
+        f"Chrome/{_CHROME_FULL_VER} Safari/537.36"
+    )
+    CH_UA_PLATFORM = '"Windows"'
+
+CH_UA_SEC = (
+    f'"Chromium";v="{_CHROME_MAJOR}", "Google Chrome";v="{_CHROME_MAJOR}", "Not=A?Brand";v="24"'
+)
+CH_UA_SEC_FULL = (
+    f'"Chromium";v="{_CHROME_FULL_VER}", "Google Chrome";v="{_CHROME_FULL_VER}", "Not=A?Brand";v="24.0.0.0"'
 )
 
 
@@ -651,6 +710,10 @@ def search_with_captcha(
             progress(label, f"No se encontró botón Buscar en intento {attempt}")
             if attempt < 3:
                 progress(label, "Recargando página para reintentar...")
+                try:
+                    page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
+                except Exception:
+                    pass
                 navigate_to_comprobantes(page, tipo)
                 set_filters(page, voucher_type, year, month, day, tipo)
             continue
@@ -665,6 +728,10 @@ def search_with_captcha(
 
         if attempt < 3:
             progress(label, "Recargando página para nuevo intento...")
+            try:
+                page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
+            except Exception:
+                pass
             navigate_to_comprobantes(page, tipo)
             set_filters(page, voucher_type, year, month, day, tipo)
 
@@ -1855,10 +1922,10 @@ def main():
         "accept_downloads": True,
         "extra_http_headers": {
             "Accept-Language": "es-EC,es;q=0.9,en;q=0.8",
-            "sec-ch-ua": '"Chromium";v="147", "Google Chrome";v="147", "Not=A?Brand";v="24"',
+            "sec-ch-ua": CH_UA_SEC,
             "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"macOS"',
-            "sec-ch-ua-full-version-list": '"Chromium";v="147.0.7727.15", "Google Chrome";v="147.0.7727.15", "Not=A?Brand";v="24.0.0.0"',
+            "sec-ch-ua-platform": CH_UA_PLATFORM,
+            "sec-ch-ua-full-version-list": CH_UA_SEC_FULL,
         },
     }
 

@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Normalizer;
 use SimpleXMLElement;
+use Constants;
 
 class AtsXmlService
 {
@@ -104,7 +105,7 @@ class AtsXmlService
             $valor = bcadd($this->toStr($order->base0), $this->toStr($order->base), self::BC_SCALE);
 
             // NOTA DE CREDITO RESTA
-            if ($order->voucher_code === '04') {
+            if ($order->voucher_code === Constants::NOTA_CREDITO) {
                 $valor = bcmul($valor, '-1', self::BC_SCALE);
             }
 
@@ -171,7 +172,7 @@ class AtsXmlService
         $d->addChild('tpIdProv', $idTypeCode);
         $d->addChild('idProv', $contact?->identification ?? '');
 
-        $voucherCode = $shop->voucherType?->code ?? '01';
+        $voucherCode = $shop->voucherType?->code ?? Constants::FACTURA;
 
         $d->addChild('tipoComprobante', $voucherCode);
         $d->addChild('tipoProv', $contact?->provider_type ?? '01');
@@ -229,7 +230,7 @@ class AtsXmlService
         $pagoExt->addChild('aplicConvDobTrib', 'NA');
         $pagoExt->addChild('pagExtSujRetNorLeg', 'NA');
 
-        if (in_array($voucherCode, ['04', '05'])) {
+        if (in_array($voucherCode, [Constants::NOTA_CREDITO, Constants::NOTA_DEBITO])) {
 
             if (
                 $shop->voucher_type_modify_id &&
@@ -238,7 +239,7 @@ class AtsXmlService
                 $shop->sec_modify !== null &&
                 $shop->aut_modify
             ) {
-                $tipoModificado = $shop->voucherTypeModify?->code ?? '01';
+                $tipoModificado = $shop->voucherTypeModify?->code ?? Constants::FACTURA;
                 $d->addChild('docModificado', $tipoModificado);
                 $d->addChild('estabModificado', str_pad((string) $shop->est_modify, 3, '0', STR_PAD_LEFT));
                 $d->addChild('ptoEmiModificado', str_pad((string) $shop->poi_modify, 3, '0', STR_PAD_LEFT));
@@ -247,7 +248,7 @@ class AtsXmlService
             }
         }
         // FORMAS PAGO
-        if (bccomp($this->toStr($shop->total), '500', self::BC_SCALE) > 0) {
+        if ($voucherCode !== Constants::NOTA_CREDITO && bccomp($this->toStr($shop->total), '500', self::BC_SCALE) > 0) {
             $formas = $d->addChild('formasDePago');
             $formas->addChild('formaPago', '20');
         }
@@ -293,17 +294,17 @@ class AtsXmlService
             $d->addChild('idCliente', $order->identification);
 
             // TODO venta consumidor final
-            if ($order->identification_code !== '07') {
+            if ($order->identification_code !== Constants::CONSUMIDOR_FINAL) {
                 $d->addChild('parteRelVtas', 'NO');
             }
 
             // TODO: en contactos aumentar para el tipo de pasaporte, recuperar al cliente aki no sobrecargar la bd
-            if ($order->identification_code === '06') {
-                $d->addChild('tipoCliente', '03');
+            if ($order->identification_code === Constants::PASAPORTE_VENTA) {
+                $d->addChild('tipoCliente', Constants::PASAPORTE_COMPRA);
                 $d->addChild('denoCli', 'PERSONA EXTRANJERA');
             }
 
-            $type = ((int) ($order->voucher_code)) > 7 || $order->voucher_code === '01' ? '18' : $order->voucher_code;
+            $type = ((int) ($order->voucher_code)) > 7 || $order->voucher_code === Constants::FACTURA ? '18' : $order->voucher_code;
 
             $d->addChild('tipoComprobante', $type);
             $d->addChild('tipoEmision', 'F');
@@ -317,7 +318,7 @@ class AtsXmlService
             $d->addChild('valorRetRenta', $this->fmt($order->retention_renta));
 
             // FORMAS DE PAGO EXEPTO NOTAS CREDITO
-            if ($order->voucher_code !== '04') {
+            if ($order->voucher_code !== Constants::NOTA_CREDITO) {
                 $formas = $d->addChild('formasDePago');
                 $formas->addChild('formaPago', '20');
             }
@@ -334,7 +335,7 @@ class AtsXmlService
             $valor = bcadd($this->toStr($order->base0), $this->toStr($order->base), self::BC_SCALE);
 
             // NOTA CRÉDITO RESTA
-            if ($order->voucher_code === '04') {
+            if ($order->voucher_code === Constants::NOTA_CREDITO) {
                 $valor = bcmul($valor, '-1', self::BC_SCALE);
             }
 
