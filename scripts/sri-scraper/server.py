@@ -241,9 +241,28 @@ def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> N
             global _job_counter
             _job_counter += 1
 
-            # Random cooldown between consecutive jobs to avoid SRI captcha detection.
+            # Clear session before cooldown so next job starts fresh (clean IP + browser state).
             if not _work_queue.empty():
-                cooldown = random.uniform(120, 420)  # 2–7 min
+                try:
+                    context = _browser_state["context"]
+                    # Close all pages except one, then navigate it to about:blank
+                    pages = context.pages
+                    for p in pages[1:]:
+                        try:
+                            p.close()
+                        except Exception:
+                            pass
+                    main_page = pages[0] if pages else context.new_page()
+                    main_page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
+                    context.clear_cookies()
+                    main_page.goto("about:blank", wait_until="commit", timeout=10000)
+                    _browser_state["page"] = main_page
+                    _browser_state["logged_in_ruc"] = None
+                    scraper.progress("server", f"Sesión limpiada ({len(pages)} pestañas cerradas).")
+                except Exception as e:
+                    scraper.progress("server", f"Advertencia al limpiar sesión: {e}")
+
+                cooldown = random.uniform(180, 600)  # 3–10 min
                 scraper.progress(
                     "server",
                     f"Cooldown {cooldown:.0f}s antes del siguiente job (job #{_job_counter})...",

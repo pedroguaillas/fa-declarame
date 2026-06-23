@@ -77,7 +77,7 @@ class SriDailyScrapeCommand extends Command
                         ScrapeFromSriJob::dispatch($scrapeJob->id, $company->id, $tenant->getTenantKey())
                             ->delay(now()->addSeconds($cumulativeDelay));
 
-                        $cumulativeDelay += rand(50, 100);
+                        $cumulativeDelay += rand(50, 500);
                         $dispatchIndex++;
 
                         $totalDispatched++;
