@@ -81,6 +81,8 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
         Route::get('orders/{order}', [OrderController::class, 'show'])->name('tenant.orders.show');
         Route::post('orders/{order}/retention', [OrderController::class, 'storeRetention'])
             ->name('tenant.orders.retention.store');
+        Route::put('orders/{order}/retention', [OrderController::class, 'updateRetention'])
+            ->name('tenant.orders.retention.update');
 
         Route::get('accounts', [AccountController::class, 'index'])->name('tenant.accounts.index');
         Route::post('accounts/import', [AccountController::class, 'import'])->name('tenant.accounts.import');

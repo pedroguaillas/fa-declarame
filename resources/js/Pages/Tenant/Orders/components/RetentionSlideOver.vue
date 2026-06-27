@@ -12,6 +12,7 @@ import type { Order, RetentionItem, RetentionOption } from "@/types/tenant";
 const today = new Date().toISOString().slice(0, 10);
 const panelOpen = ref(false);
 const selectedOrder = ref<Order | null>(null);
+const isEditing = ref(false);
 
 interface ItemSearch {
     query: string;
@@ -61,6 +62,7 @@ const typeLabel: Record<string, string> = { iva: "IVA", renta: "Renta" };
 async function open(order: Order) {
     selectedOrder.value = order;
     panelOpen.value = true;
+    isEditing.value = false;
 
     if (!order.serie_retention) {
         retentionForm.reset();
@@ -86,6 +88,36 @@ async function open(order: Order) {
 function close() {
     panelOpen.value = false;
     selectedOrder.value = null;
+    isEditing.value = false;
+}
+
+function startEditing() {
+    const order = selectedOrder.value;
+    if (!order) return;
+
+    retentionForm.serie_retention = order.serie_retention ?? "";
+    retentionForm.date_retention = order.date_retention ?? "";
+    retentionForm.autorization_retention = order.autorization_retention ?? "";
+
+    if (order.retention_items && order.retention_items.length > 0) {
+        retentionForm.items = order.retention_items.map((item) => ({
+            retention_id: item.retention?.id ?? null,
+            base: Number(item.base),
+            percentage: item.percentage,
+            value: item.value,
+        }));
+        itemSearches.value = order.retention_items.map((item) => ({
+            query: item.retention ? `${item.retention.code} – ${item.retention.description}` : "",
+            open: false,
+            rect: null,
+        }));
+    } else {
+        retentionForm.items = [emptyItem(order.sub_total ?? 0)];
+        itemSearches.value = [emptySearch()];
+    }
+
+    fetchRetentions("");
+    isEditing.value = true;
 }
 
 defineExpose({ open, close });
@@ -140,10 +172,18 @@ function recalcValue(idx: number) {
 
 function submitRetention() {
     if (!selectedOrder.value) return;
-    retentionForm.post(
-        route("tenant.orders.retention.store", { order: selectedOrder.value.id }),
-        { onSuccess: () => close() },
-    );
+
+    if (isEditing.value) {
+        retentionForm.put(
+            route("tenant.orders.retention.update", { order: selectedOrder.value.id }),
+            { onSuccess: () => close() },
+        );
+    } else {
+        retentionForm.post(
+            route("tenant.orders.retention.store", { order: selectedOrder.value.id }),
+            { onSuccess: () => close() },
+        );
+    }
 }
 
 function openSearch(idx: number, event: FocusEvent) {
@@ -307,7 +347,10 @@ function closeItemSearchDelayed(idx: number) {
                     </div>
 
                     <!-- Registered view -->
-                    <div v-if="selectedOrder.serie_retention" class="min-w-0 flex-1 overflow-y-auto p-6">
+                    <div v-if="selectedOrder.serie_retention && !isEditing" class="min-w-0 flex-1 overflow-y-auto p-6">
+                        <div class="mb-4 flex justify-end">
+                            <Button variant="outline" size="sm" type="button" @click="startEditing">Editar</Button>
+                        </div>
                         <div class="mb-6 grid grid-cols-2 gap-4">
                             <div>
                                 <p class="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">Serie</p>
@@ -364,8 +407,8 @@ function closeItemSearchDelayed(idx: number) {
                         </div>
                     </div>
 
-                    <!-- Registration form -->
-                    <form v-else class="flex flex-1 flex-col overflow-hidden" @submit.prevent="submitRetention">
+                    <!-- Registration / Edit form -->
+                    <form v-if="!selectedOrder.serie_retention || isEditing" class="flex flex-1 flex-col overflow-hidden" @submit.prevent="submitRetention">
                         <div class="flex-1 space-y-5 overflow-y-auto p-6">
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="flex flex-col gap-1.5">
@@ -508,9 +551,9 @@ function closeItemSearchDelayed(idx: number) {
                             </div>
                         </div>
                         <div class="border-border flex items-center justify-end gap-3 border-t px-6 py-4">
-                            <Button variant="outline" type="button" @click="close">Cancelar</Button>
+                            <Button variant="outline" type="button" @click="isEditing ? (isEditing = false) : close()">Cancelar</Button>
                             <Button type="submit" :disabled="retentionForm.processing">
-                                {{ retentionForm.processing ? "Guardando…" : "Guardar retención" }}
+                                {{ retentionForm.processing ? "Guardando…" : isEditing ? "Actualizar retención" : "Guardar retención" }}
                             </Button>
                         </div>
                     </form>

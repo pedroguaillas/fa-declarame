@@ -315,4 +315,32 @@ class OrderController extends Controller
                 'Retención registrada correctamente.'
             );
     }
+
+    public function updateRetention(Request $request, Order $order): RedirectResponse
+    {
+        $validated = $request->validate([
+            'serie_retention' => ['required', 'string', 'max:17'],
+            'date_retention' => ['required', 'date', 'after_or_equal:'.$order->emision],
+            'autorization_retention' => ['required', 'string', 'max:49'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.retention_id' => ['required', 'integer', 'exists:retentions,id'],
+            'items.*.base' => ['required', 'numeric', 'min:0'],
+            'items.*.percentage' => ['required', 'numeric', 'min:0'],
+            'items.*.value' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $order->update([
+            'serie_retention' => $validated['serie_retention'],
+            'date_retention' => $validated['date_retention'],
+            'autorization_retention' => $validated['autorization_retention'],
+            'state_retention' => 'AUTORIZADO',
+        ]);
+
+        $order->retentionItems()->delete();
+        $order->retentionItems()->createMany($validated['items']);
+
+        return redirect()
+            ->route('tenant.orders.index')
+            ->with('success', 'Retención actualizada correctamente.');
+    }
 }

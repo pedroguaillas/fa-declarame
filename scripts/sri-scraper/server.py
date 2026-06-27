@@ -277,7 +277,9 @@ def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> N
             global _job_counter
             _job_counter += 1
 
-            # Always clear session after each job — most requests are different RUCs.
+            # Clear SRI session after each job (different RUCs must not share login state).
+            # Strategy: save Google/reCAPTCHA cookies → clear ALL → restore Google cookies.
+            # This avoids Keycloak partial-state issues while keeping the reCAPTCHA score warm.
             try:
                 context = _browser_state["context"]
                 pages = context.pages
@@ -287,12 +289,28 @@ def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> N
                     except Exception:
                         pass
                 main_page = pages[0] if pages else context.new_page()
-                main_page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
+
+                # Save reCAPTCHA/Google cookies before wiping everything.
+                google_domains = ("google.com", "gstatic.com", "googleapis.com", "recaptcha.net")
+                all_cookies = context.cookies()
+                google_cookies = [
+                    c for c in all_cookies
+                    if any(c.get("domain", "").lstrip(".").endswith(d) for d in google_domains)
+                ]
+
+                # Clear ALL cookies — gives SRI/Keycloak a completely clean slate.
                 context.clear_cookies()
+                main_page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
+
+                # Restore Google/reCAPTCHA cookies so captcha score survives between jobs.
+                if google_cookies:
+                    context.add_cookies(google_cookies)
+                    scraper.progress("server", f"Restauradas {len(google_cookies)} cookies Google/reCAPTCHA.")
+
                 main_page.goto("about:blank", wait_until="commit", timeout=10000)
                 _browser_state["page"] = main_page
                 _browser_state["logged_in_ruc"] = None
-                scraper.progress("server", f"Sesión limpiada ({len(pages)} pestañas cerradas).")
+                scraper.progress("server", f"Sesión limpiada ({len(pages)} tabs, {len(google_cookies)} cookies Google preservadas).")
             except Exception as e:
                 scraper.progress("server", f"Advertencia al limpiar sesión: {e}")
 

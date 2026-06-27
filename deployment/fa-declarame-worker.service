@@ -1,0 +1,18 @@
+[Unit]
+Description=FA Declarame Queue Worker
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/fa-declarame
+ExecStart=php8.4 /var/www/fa-declarame/artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=3600
+StandardOutput=append:/var/www/fa-declarame/storage/logs/worker.log
+StandardError=append:/var/www/fa-declarame/storage/logs/worker.log
+
+[Install]
+WantedBy=multi-user.target

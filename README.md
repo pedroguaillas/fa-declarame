@@ -112,12 +112,6 @@ journalctl --rotate && journalctl --vacuum-time=1s -u sri-scraper
 # Ver qué proceso ocupa puerto 8765
 ss -tlnp | grep 8765
 
-# Verificar si supervisor también está corriendo (no debería)
-supervisorctl status sri-scraper 2>/dev/null
-
-# Si supervisor está activo, detenerlo
-supervisorctl stop sri-scraper 2>/dev/null
-
 # Health check del scraper
 curl -s http://127.0.0.1:8765/health
 ```
@@ -129,6 +123,35 @@ systemctl stop sri-scraper
 rm -rf /opt/sri-scraper/browser-session
 rm -f /opt/sri-scraper/browser-session/Singleton*
 systemctl start sri-scraper
+```
+
+---
+
+## Queue Worker
+
+Gestionado con systemd (`/etc/systemd/system/fa-declarame-worker.service`).
+
+```bash
+# Estado
+systemctl status fa-declarame-worker
+
+# Reiniciar (deploy lo hace automáticamente)
+systemctl restart fa-declarame-worker
+
+# Logs en tiempo real
+journalctl -u fa-declarame-worker -f
+
+# Últimas 100 líneas
+journalctl -u fa-declarame-worker --no-pager -n 100
+```
+
+### Instalación inicial del servicio (una sola vez)
+
+```bash
+cp /var/www/fa-declarame/deployment/fa-declarame-worker.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable fa-declarame-worker
+systemctl start fa-declarame-worker
 ```
 
 ---
