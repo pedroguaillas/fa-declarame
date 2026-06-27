@@ -78,63 +78,26 @@ COMPRAS_VOUCHER_TYPES = [
 _SYS = _platform.system()  # 'Darwin', 'Linux', 'Windows'
 
 
-def _detect_chrome_version() -> tuple[str, str]:
-    """Returns (full_version, major) e.g. ('148.0.7778.96', '148'). Falls back to ('147.0.7727.15', '147')."""
-    browsers_path = os.environ.get(
-        "PLAYWRIGHT_BROWSERS_PATH",
-        os.path.expanduser("~/.cache/ms-playwright"),
-    )
-    patterns = [
-        f"{browsers_path}/chromium-*/chrome-linux64/chrome",
-        os.path.expanduser("~/Library/Caches/ms-playwright/chromium-*/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"),
-        os.path.expanduser("~/Library/Caches/ms-playwright/chromium-*/chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"),
-        os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome"),
-    ]
-    for pattern in patterns:
-        matches = glob.glob(pattern)
-        if not matches:
-            continue
-        try:
-            result = subprocess.run(
-                [matches[0], "--version"], capture_output=True, text=True, timeout=10
-            )
-            m = re.search(r"(\d+)\.(\d[\d.]+)", result.stdout + result.stderr)
-            if m:
-                return m.group(0), m.group(1)
-        except Exception:
-            continue
-    return "147.0.7727.15", "147"
+# Chrome 149 fingerprint — captured from a real Chrome 149 (arm64, macOS).
+# Used on ALL platforms (Mac + Linux server) for a consistent fingerprint.
+# Chrome 101+ sends only the major version in the UA string (User-Agent reduction).
+# sec-ch-ua brand order: "Google Chrome" first, then "Chromium" — matches real Chrome.
+_CHROME_MAJOR = "149"
+_CHROME_FULL_VER = "149.0.7827.201"
+_CHROME_UA_VER = "149.0.0.0"  # User-Agent reduction: major.0.0.0
 
-
-_CHROME_FULL_VER, _CHROME_MAJOR = _detect_chrome_version()
-
-if _SYS == "Darwin":
-    CHROME_USER_AGENT = (
-        f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        f"AppleWebKit/537.36 (KHTML, like Gecko) "
-        f"Chrome/{_CHROME_FULL_VER} Safari/537.36"
-    )
-    CH_UA_PLATFORM = '"macOS"'
-elif _SYS == "Linux":
-    CHROME_USER_AGENT = (
-        f"Mozilla/5.0 (X11; Linux x86_64) "
-        f"AppleWebKit/537.36 (KHTML, like Gecko) "
-        f"Chrome/{_CHROME_FULL_VER} Safari/537.36"
-    )
-    CH_UA_PLATFORM = '"Linux"'
-else:
-    CHROME_USER_AGENT = (
-        f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        f"AppleWebKit/537.36 (KHTML, like Gecko) "
-        f"Chrome/{_CHROME_FULL_VER} Safari/537.36"
-    )
-    CH_UA_PLATFORM = '"Windows"'
+CHROME_USER_AGENT = (
+    f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    f"AppleWebKit/537.36 (KHTML, like Gecko) "
+    f"Chrome/{_CHROME_UA_VER} Safari/537.36"
+)
+CH_UA_PLATFORM = '"macOS"'
 
 CH_UA_SEC = (
-    f'"Chromium";v="{_CHROME_MAJOR}", "Google Chrome";v="{_CHROME_MAJOR}", "Not=A?Brand";v="24"'
+    f'"Google Chrome";v="{_CHROME_MAJOR}", "Chromium";v="{_CHROME_MAJOR}", "Not)A;Brand";v="24"'
 )
 CH_UA_SEC_FULL = (
-    f'"Chromium";v="{_CHROME_FULL_VER}", "Google Chrome";v="{_CHROME_FULL_VER}", "Not=A?Brand";v="24.0.0.0"'
+    f'"Google Chrome";v="{_CHROME_FULL_VER}", "Chromium";v="{_CHROME_FULL_VER}", "Not)A;Brand";v="24.0.0.0"'
 )
 
 
@@ -702,18 +665,17 @@ def search_with_captcha(
     for attempt in range(1, 4):
         progress(label, f"═══ Intento {attempt}/3 ═══")
 
-        # Simulate human presence — invisible reCAPTCHA scores based on browser behavior
-        simulate_human_presence(page, duration_s=random.uniform(5, 10))
+        # reCAPTCHA v3 needs enough session history to assign a good score.
+        # First attempt gets extra warm-up so it doesn't need a retry.
+        warmup = random.uniform(18, 28) if attempt == 1 else random.uniform(8, 14)
+        progress(label, f"Warm-up reCAPTCHA: {warmup:.0f}s...")
+        simulate_human_presence(page, duration_s=warmup)
 
         # Real Playwright click — triggers onclick="rcBuscar()" which fires the captcha
         if not _human_click_buscar(page, label):
             progress(label, f"No se encontró botón Buscar en intento {attempt}")
             if attempt < 3:
                 progress(label, "Recargando página para reintentar...")
-                try:
-                    page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
-                except Exception:
-                    pass
                 navigate_to_comprobantes(page, tipo)
                 set_filters(page, voucher_type, year, month, day, tipo)
             continue
@@ -728,10 +690,8 @@ def search_with_captcha(
 
         if attempt < 3:
             progress(label, "Recargando página para nuevo intento...")
-            try:
-                page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
-            except Exception:
-                pass
+            # Do NOT clear localStorage/sessionStorage on captcha retry —
+            # reCAPTCHA accumulates session signals there; clearing resets the score.
             navigate_to_comprobantes(page, tipo)
             set_filters(page, voucher_type, year, month, day, tipo)
 
@@ -1916,12 +1876,12 @@ def main():
     # ── Context options (realistic browser profile) ──
     context_opts = {
         "viewport": {"width": 1366, "height": 768},
-        "locale": "es-EC",
+        "locale": "es-419",
         "timezone_id": "America/Guayaquil",
         "user_agent": CHROME_USER_AGENT,
         "accept_downloads": True,
         "extra_http_headers": {
-            "Accept-Language": "es-EC,es;q=0.9,en;q=0.8",
+            "Accept-Language": "es-419,es;q=0.9",
             "sec-ch-ua": CH_UA_SEC,
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": CH_UA_PLATFORM,
@@ -1932,7 +1892,7 @@ def main():
     # ── Launch with stealth ──
     if STEALTH_VERSION == 2:
         stealth = Stealth(
-            navigator_languages_override=("es-EC", "es"),
+            navigator_languages_override=("es-419", "es"),
         )
         pw_context_manager = stealth.use_sync(sync_playwright())
     else:

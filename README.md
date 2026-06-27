@@ -71,13 +71,64 @@ bash scripts/sri-scraper/deploy.sh --update-only
 bash scripts/sri-scraper/deploy.sh IP-REMOTE --update-only --remote
 ```
 
-Configuración del servicio systemd:
+Configuración del servicio (systemd):
 ```
-ExecStart=/opt/sri-scraper/.venv/bin/python /opt/sri-scraper/server.py \
-    --host=127.0.0.1 \
-    --port=8765 \
-    --user-data-dir=/opt/sri-scraper/browser-session \
-    --headless
+/etc/systemd/system/sri-scraper.service
+```
+
+### Systemd — comandos frecuentes
+
+```bash
+# Estado
+systemctl status sri-scraper
+
+# Reiniciar (tras deploy --update-only)
+systemctl restart sri-scraper
+
+# Detener / arrancar
+systemctl stop sri-scraper
+systemctl start sri-scraper
+
+# Health check del scraper
+curl -s http://127.0.0.1:8765/health
+```
+
+### Logs
+
+```bash
+# Tiempo real
+journalctl -u sri-scraper -f
+
+# Últimas 100 líneas
+journalctl -u sri-scraper --no-pager -n 100
+
+# Limpiar log (vaciar journal del servicio)
+journalctl --rotate && journalctl --vacuum-time=1s -u sri-scraper
+```
+
+### Diagnóstico de conflictos de puerto
+
+```bash
+# Ver qué proceso ocupa puerto 8765
+ss -tlnp | grep 8765
+
+# Verificar si supervisor también está corriendo (no debería)
+supervisorctl status sri-scraper 2>/dev/null
+
+# Si supervisor está activo, detenerlo
+supervisorctl stop sri-scraper 2>/dev/null
+
+# Health check del scraper
+curl -s http://127.0.0.1:8765/health
+```
+
+### Limpiar sesión de browser (si RUC anterior quedó guardado)
+
+```bash
+systemctl stop sri-scraper
+rm -rf /opt/sri-scraper/browser-session
+rm -f /opt/sri-scraper/browser-session/Singleton*
+systemctl start sri-scraper
 ```
 
 ---
@@ -106,7 +157,7 @@ bash /var/www/fa-declarame/deployment/deploy.sh
 
 ```bash
 # Últimas N líneas del scraper
-journalctl -u sri-scraper -n 100 --no-pager
+journalctl -u sri-scraper --no-pager -n 100
 
 # Seguimiento en tiempo real
 journalctl -u sri-scraper -f

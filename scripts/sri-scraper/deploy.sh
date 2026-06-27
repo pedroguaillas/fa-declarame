@@ -11,7 +11,7 @@
 #   - Copia server.py y test-scraper.py al VPS
 #   - Instala dependencias del sistema, Python y Playwright (Chromium)
 #   - Configura Xvfb (display virtual, necesario para headless=False)
-#   - Crea y activa un servicio systemd sri-scraper
+#   - Crea y activa un programa supervisor sri-scraper (no systemd)
 # =============================================================================
 
 set -euo pipefail
@@ -84,14 +84,14 @@ apt-get install -y -qq \
     libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
     libxrandr2 libgbm1 libasound2t64 libpangocairo-1.0-0 \
     libpango-1.0-0 libcairo2 libatspi2.0-0 \
-    fonts-liberation wget curl 2>/dev/null || \
+    fonts-liberation wget curl xvfb 2>/dev/null || \
     apt-get install -y -qq \
     python3 python3-pip python3-venv \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
     libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
     libxrandr2 libgbm1 libasound2 libpangocairo-1.0-0 \
     libpango-1.0-0 libcairo2 libatspi2.0-0 \
-    fonts-liberation wget curl
+    fonts-liberation wget curl xvfb
 
 # ── Python venv ───────────────────────────────────────────────────────────────
 
@@ -135,7 +135,6 @@ WorkingDirectory=$REMOTE_DIR
 Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 Environment=HOME=$REMOTE_DIR
 Environment=TMPDIR=/tmp
-NoNewPrivileges=false
 ExecStart=$REMOTE_DIR/.venv/bin/python $REMOTE_DIR/server.py \\
     --host=$SCRAPER_BIND_HOST \\
     --port=8765 \\
@@ -151,6 +150,12 @@ SyslogIdentifier=sri-scraper
 WantedBy=multi-user.target
 SERVICE
 
+# ── Parar supervisor si está corriendo ───────────────────────────────────────
+
+if command -v supervisorctl &>/dev/null; then
+    supervisorctl stop sri-scraper 2>/dev/null || true
+fi
+
 # ── Firewall (solo modo --remote) ────────────────────────────────────────────
 
 if [[ "$SCRAPER_BIND_HOST" == "0.0.0.0" ]]; then
@@ -158,13 +163,21 @@ if [[ "$SCRAPER_BIND_HOST" == "0.0.0.0" ]]; then
     ufw allow from 10.116.0.4 to any port 8765 comment 'sri-scraper from srv-declarame vpc' 2>/dev/null || true
 fi
 
-# ── Activar servicios ─────────────────────────────────────────────────────────
+# ── Activar systemd ───────────────────────────────────────────────────────────
 
-step "Activando servicios..."
+step "Activando systemd..."
 systemctl daemon-reload
 systemctl enable sri-scraper
-systemctl restart sri-scraper
-sleep 3
+systemctl stop sri-scraper 2>/dev/null || true
+# Clean up Chromium lock files left by previous instance
+rm -f $REMOTE_DIR/browser-session/Singleton*
+# Wait for port 8765 to be fully released
+for i in \$(seq 1 15); do
+    ss -tlnp | grep -q ':8765' || break
+    sleep 2
+done
+systemctl start sri-scraper
+sleep 5
 
 # ── Verificar salud ───────────────────────────────────────────────────────────
 

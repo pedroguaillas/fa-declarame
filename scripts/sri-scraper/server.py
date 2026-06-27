@@ -90,12 +90,12 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
 
     context_opts = {
         "viewport": {"width": 1366, "height": 768},
-        "locale": "es-EC",
+        "locale": "es-419",
         "timezone_id": "America/Guayaquil",
         "user_agent": scraper.CHROME_USER_AGENT,
         "accept_downloads": True,
         "extra_http_headers": {
-            "Accept-Language": "es-EC,es;q=0.9,en;q=0.8",
+            "Accept-Language": "es-419,es;q=0.9",
             "sec-ch-ua": scraper.CH_UA_SEC,
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": scraper.CH_UA_PLATFORM,
@@ -104,7 +104,7 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
     }
 
     if scraper.STEALTH_VERSION == 2:
-        stealth = scraper.Stealth(navigator_languages_override=("es-EC", "es"))
+        stealth = scraper.Stealth(navigator_languages_override=("es-419", "es"))
         pw_cm = stealth.use_sync(scraper.sync_playwright())
     else:
         pw_cm = scraper.sync_playwright()
@@ -142,6 +142,42 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
         // Ensure window.chrome exists (missing in headless Chromium)
         if (!window.chrome) {
             window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
+        }
+
+        // Spoof platform to macOS — must match CH_UA_PLATFORM header ("macOS").
+        Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
+        Object.defineProperty(navigator, 'oscpu', { get: () => undefined });
+
+        // Patch userAgentData — reCAPTCHA reads this API directly.
+        // Must match sec-ch-ua headers: Google Chrome first, then Chromium.
+        if (navigator.userAgentData) {
+            const brands = [
+                { brand: 'Google Chrome', version: '149' },
+                { brand: 'Chromium',      version: '149' },
+                { brand: 'Not)A;Brand',   version: '24'  },
+            ];
+            Object.defineProperty(navigator, 'userAgentData', {
+                get: () => ({
+                    brands,
+                    mobile: false,
+                    platform: 'macOS',
+                    getHighEntropyValues: (hints) => Promise.resolve({
+                        brands,
+                        mobile: false,
+                        platform: 'macOS',
+                        platformVersion: '14.0.0',
+                        architecture: 'arm',
+                        model: '',
+                        uaFullVersion: '149.0.7827.201',
+                        fullVersionList: [
+                            { brand: 'Google Chrome', version: '149.0.7827.201' },
+                            { brand: 'Chromium',      version: '149.0.7827.201' },
+                            { brand: 'Not)A;Brand',   version: '24.0.0.0'       },
+                        ],
+                    }),
+                    toJSON: () => ({ brands, mobile: false, platform: 'macOS' }),
+                }),
+            });
         }
 
         // Realistic plugin list
@@ -241,27 +277,27 @@ def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> N
             global _job_counter
             _job_counter += 1
 
-            # Clear session before cooldown so next job starts fresh (clean IP + browser state).
-            if not _work_queue.empty():
-                try:
-                    context = _browser_state["context"]
-                    # Close all pages except one, then navigate it to about:blank
-                    pages = context.pages
-                    for p in pages[1:]:
-                        try:
-                            p.close()
-                        except Exception:
-                            pass
-                    main_page = pages[0] if pages else context.new_page()
-                    main_page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
-                    context.clear_cookies()
-                    main_page.goto("about:blank", wait_until="commit", timeout=10000)
-                    _browser_state["page"] = main_page
-                    _browser_state["logged_in_ruc"] = None
-                    scraper.progress("server", f"Sesión limpiada ({len(pages)} pestañas cerradas).")
-                except Exception as e:
-                    scraper.progress("server", f"Advertencia al limpiar sesión: {e}")
+            # Always clear session after each job — most requests are different RUCs.
+            try:
+                context = _browser_state["context"]
+                pages = context.pages
+                for p in pages[1:]:
+                    try:
+                        p.close()
+                    except Exception:
+                        pass
+                main_page = pages[0] if pages else context.new_page()
+                main_page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
+                context.clear_cookies()
+                main_page.goto("about:blank", wait_until="commit", timeout=10000)
+                _browser_state["page"] = main_page
+                _browser_state["logged_in_ruc"] = None
+                scraper.progress("server", f"Sesión limpiada ({len(pages)} pestañas cerradas).")
+            except Exception as e:
+                scraper.progress("server", f"Advertencia al limpiar sesión: {e}")
 
+            # Cooldown only when another job is already queued.
+            if not _work_queue.empty():
                 cooldown = random.uniform(180, 600)  # 3–10 min
                 scraper.progress(
                     "server",
