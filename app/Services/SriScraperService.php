@@ -13,7 +13,6 @@ use App\Models\Tenant\Shop;
 use App\Models\Tenant\SriScrapeJob;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
@@ -123,20 +122,7 @@ class SriScraperService
      */
     private function selectServer(): ?string
     {
-        $primary = config('sri.scraper.server_url');
-        $secondary = config('sri.scraper.server_url_2');
-
-        if (! $primary) {
-            return null;
-        }
-
-        if (! $secondary) {
-            return $primary;
-        }
-
-        $counter = Cache::increment('sri_scraper_server_rr');
-
-        return ($counter % 2 === 1) ? $primary : $secondary;
+        return config('sri.scraper.server_url') ?: null;
     }
 
     private function runViaServer(string $serverUrl, array $config, SriScrapeJob $scrapeJob, string $tenantId = ''): array
