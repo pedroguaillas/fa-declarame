@@ -120,41 +120,23 @@ chown -R $SERVICE_USER:$SERVICE_USER /opt/playwright-browsers 2>/dev/null || tru
 mkdir -p $REMOTE_DIR/browser-session
 chown -R $SERVICE_USER:$SERVICE_USER $REMOTE_DIR/browser-session 2>/dev/null || true
 
-# ── Systemd: sri-scraper ──────────────────────────────────────────────────────
+# ── Supervisor: sri-scraper ───────────────────────────────────────────────────
 
-step "Creando servicio systemd sri-scraper..."
-cat > /etc/systemd/system/sri-scraper.service <<SERVICE
-[Unit]
-Description=SRI Scraper HTTP Server
-After=network.target
-
-[Service]
-Type=simple
-User=$SERVICE_USER
-WorkingDirectory=$REMOTE_DIR
-Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
-Environment=HOME=$REMOTE_DIR
-Environment=TMPDIR=/tmp
-ExecStart=$REMOTE_DIR/.venv/bin/python $REMOTE_DIR/server.py \\
-    --host=$SCRAPER_BIND_HOST \\
-    --port=8765 \\
-    --user-data-dir=$REMOTE_DIR/browser-session \\
-    --headless
-Restart=on-failure
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=sri-scraper
-
-[Install]
-WantedBy=multi-user.target
-SERVICE
-
-# ── Parar supervisor si está corriendo ───────────────────────────────────────
-
-if command -v supervisorctl &>/dev/null; then
-    supervisorctl stop sri-scraper 2>/dev/null || true
-fi
+step "Creando config supervisor sri-scraper..."
+cat > /etc/supervisor/conf.d/sri-scraper.conf <<SUPCONF
+[program:sri-scraper]
+command=$REMOTE_DIR/.venv/bin/python $REMOTE_DIR/server.py --host=$SCRAPER_BIND_HOST --port=8765 --user-data-dir=$REMOTE_DIR/browser-session --headless
+directory=$REMOTE_DIR
+user=$SERVICE_USER
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+environment=PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers,HOME=$REMOTE_DIR,TMPDIR=/tmp
+redirect_stderr=true
+stdout_logfile=/var/log/sri-scraper.log
+stopwaitsecs=30
+SUPCONF
 
 # ── Firewall (solo modo --remote) ────────────────────────────────────────────
 
@@ -163,12 +145,10 @@ if [[ "$SCRAPER_BIND_HOST" == "0.0.0.0" ]]; then
     ufw allow from 10.116.0.4 to any port 8765 comment 'sri-scraper from srv-declarame vpc' 2>/dev/null || true
 fi
 
-# ── Activar systemd ───────────────────────────────────────────────────────────
+# ── Activar supervisor ────────────────────────────────────────────────────────
 
-step "Activando systemd..."
-systemctl daemon-reload
-systemctl enable sri-scraper
-systemctl stop sri-scraper 2>/dev/null || true
+step "Activando supervisor..."
+supervisorctl stop sri-scraper 2>/dev/null || true
 # Clean up Chromium lock files left by previous instance
 rm -f $REMOTE_DIR/browser-session/Singleton*
 # Wait for port 8765 to be fully released
@@ -176,7 +156,9 @@ for i in \$(seq 1 15); do
     ss -tlnp | grep -q ':8765' || break
     sleep 2
 done
-systemctl start sri-scraper
+supervisorctl reread
+supervisorctl update
+supervisorctl start sri-scraper
 sleep 5
 
 # ── Verificar salud ───────────────────────────────────────────────────────────
@@ -194,12 +176,12 @@ for i in 1 2 3 4 5; do
 done
 
 step "Logs recientes:"
-journalctl -u sri-scraper --no-pager -n 20
+supervisorctl tail sri-scraper
 
 REMOTE
 
 info "Deploy completado. Para ver logs en tiempo real:"
-echo "  ssh -p $VPS_PORT $VPS_USER@$VPS_HOST 'journalctl -u sri-scraper -f'"
+echo "  ssh -p $VPS_PORT $VPS_USER@$VPS_HOST 'supervisorctl tail -f sri-scraper'"
 echo ""
 info "Para actualizar solo los scripts Python (sin reinstalar todo):"
 echo "  bash scripts/sri-scraper/deploy.sh --update-only"

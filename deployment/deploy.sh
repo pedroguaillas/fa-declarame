@@ -39,6 +39,7 @@ chmod -R 775 storage bootstrap/cache
 
 # ── 8. Reiniciar servicios ───────────────────────────────────────────────────
 systemctl reload php8.4-fpm
-systemctl restart fa-declarame-worker
+$PHP artisan queue:restart
+supervisorctl restart fa-declarame-worker:*
 
 echo "── Despliegue completado ✓ ──────────────"

@@ -71,23 +71,23 @@ bash scripts/sri-scraper/deploy.sh --update-only
 bash scripts/sri-scraper/deploy.sh IP-REMOTE --update-only --remote
 ```
 
-Configuración del servicio (systemd):
+Configuración del servicio (supervisor):
 ```
-/etc/systemd/system/sri-scraper.service
+/etc/supervisor/conf.d/sri-scraper.conf
 ```
 
-### Systemd — comandos frecuentes
+### Supervisor — comandos frecuentes
 
 ```bash
 # Estado
-systemctl status sri-scraper
+supervisorctl status sri-scraper
 
 # Reiniciar (tras deploy --update-only)
-systemctl restart sri-scraper
+supervisorctl restart sri-scraper
 
 # Detener / arrancar
-systemctl stop sri-scraper
-systemctl start sri-scraper
+supervisorctl stop sri-scraper
+supervisorctl start sri-scraper
 
 # Health check del scraper
 curl -s http://127.0.0.1:8765/health
@@ -97,13 +97,10 @@ curl -s http://127.0.0.1:8765/health
 
 ```bash
 # Tiempo real
-journalctl -u sri-scraper -f
+supervisorctl tail -f sri-scraper
 
-# Últimas 100 líneas
-journalctl -u sri-scraper --no-pager -n 100
-
-# Limpiar log (vaciar journal del servicio)
-journalctl --rotate && journalctl --vacuum-time=1s -u sri-scraper
+# Últimas líneas del archivo de log
+tail -n 100 /var/log/sri-scraper.log
 ```
 
 ### Diagnóstico de conflictos de puerto
@@ -119,39 +116,40 @@ curl -s http://127.0.0.1:8765/health
 ### Limpiar sesión de browser (si RUC anterior quedó guardado)
 
 ```bash
-systemctl stop sri-scraper
+supervisorctl stop sri-scraper
 rm -rf /opt/sri-scraper/browser-session
 rm -f /opt/sri-scraper/browser-session/Singleton*
-systemctl start sri-scraper
+supervisorctl start sri-scraper
 ```
 
 ---
 
 ## Queue Worker
 
-Gestionado con systemd (`/etc/systemd/system/fa-declarame-worker.service`).
+Gestionado con supervisor (`/etc/supervisor/conf.d/fa-declarame.conf`).
 
 ```bash
 # Estado
-systemctl status fa-declarame-worker
+supervisorctl status fa-declarame-worker:*
 
-# Reiniciar (deploy lo hace automáticamente)
-systemctl restart fa-declarame-worker
+# Reiniciar graceful (deploy lo hace automáticamente)
+php artisan queue:restart
+supervisorctl restart fa-declarame-worker:*
 
 # Logs en tiempo real
-journalctl -u fa-declarame-worker -f
+supervisorctl tail -f fa-declarame-worker:fa-declarame-worker_00
 
-# Últimas 100 líneas
-journalctl -u fa-declarame-worker --no-pager -n 100
+# Últimas líneas del archivo de log
+tail -n 100 /var/www/fa-declarame/storage/logs/worker.log
 ```
 
 ### Instalación inicial del servicio (una sola vez)
 
 ```bash
-cp /var/www/fa-declarame/deployment/fa-declarame-worker.service /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable fa-declarame-worker
-systemctl start fa-declarame-worker
+cp /var/www/fa-declarame/deployment/supervisor.conf /etc/supervisor/conf.d/fa-declarame.conf
+supervisorctl reread
+supervisorctl update
+supervisorctl start fa-declarame-worker:*
 ```
 
 ---
@@ -179,9 +177,15 @@ bash /var/www/fa-declarame/deployment/deploy.sh
 ## Logs
 
 ```bash
-# Últimas N líneas del scraper
-journalctl -u sri-scraper --no-pager -n 100
+# Scraper — tiempo real
+supervisorctl tail -f sri-scraper
 
-# Seguimiento en tiempo real
-journalctl -u sri-scraper -f
+# Scraper — archivo
+tail -n 100 /var/log/sri-scraper.log
+
+# Queue worker — tiempo real
+supervisorctl tail -f fa-declarame-worker:fa-declarame-worker_00
+
+# Queue worker — archivo
+tail -n 100 /var/www/fa-declarame/storage/logs/worker.log
 ```
