@@ -30,6 +30,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -74,31 +75,174 @@ COMPRAS_VOUCHER_TYPES = [
     {"value": "6", "label": "Retencion"},
 ]
 
-# Chrome user agent and sec-ch-ua headers — auto-detected from Playwright's bundled Chromium.
+# Chrome user agent and sec-ch-ua headers.
 _SYS = _platform.system()  # 'Darwin', 'Linux', 'Windows'
 
 
-# Chrome 149 fingerprint — captured from a real Chrome 149 (arm64, macOS).
-# Used on ALL platforms (Mac + Linux server) for a consistent fingerprint.
-# Chrome 101+ sends only the major version in the UA string (User-Agent reduction).
-# sec-ch-ua brand order: "Google Chrome" first, then "Chromium" — matches real Chrome.
-_CHROME_MAJOR = "149"
-_CHROME_FULL_VER = "149.0.7827.201"
-_CHROME_UA_VER = "149.0.0.0"  # User-Agent reduction: major.0.0.0
+# The Chrome version we present is the latest STABLE consumer Chrome, fetched at
+# runtime (fetch_latest_chrome_version) and used to build the whole fingerprint
+# (build_chrome_fingerprint). reCAPTCHA v3 penalizes outdated browsers, so we must
+# present the newest stable version — NOT the Playwright-bundled "Chrome for
+# Testing" engine version, which lags stable by a release or two. Presenting an
+# old version tanks the score and the SRI rejects the captcha ("Captcha
+# incorrecta"). The engine-vs-claimed gap is not observable to reCAPTCHA in-page.
+#
+# This constant is only a fallback used when the version lookup fails; keep it
+# aligned with a recent stable Chrome so the fallback stays plausible.
+_CHROME_FULL_VER_DEFAULT = "150.0.7871.47"
 
-CHROME_USER_AGENT = (
-    f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    f"AppleWebKit/537.36 (KHTML, like Gecko) "
-    f"Chrome/{_CHROME_UA_VER} Safari/537.36"
+# Chrome for Testing publishes the current stable version here (official Google).
+_CHROME_VERSIONS_URL = (
+    "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json"
 )
-CH_UA_PLATFORM = '"macOS"'
 
-CH_UA_SEC = (
-    f'"Google Chrome";v="{_CHROME_MAJOR}", "Chromium";v="{_CHROME_MAJOR}", "Not)A;Brand";v="24"'
-)
-CH_UA_SEC_FULL = (
-    f'"Google Chrome";v="{_CHROME_FULL_VER}", "Chromium";v="{_CHROME_FULL_VER}", "Not)A;Brand";v="24.0.0.0"'
-)
+
+def build_chrome_fingerprint(full_version: str) -> dict:
+    """Build a consistent Chrome-on-macOS fingerprint from a real Chromium
+    version string like '147.0.7727.15'. Only the version is dynamic; the macOS
+    platform spoof stays fixed.
+
+    @param string $full_version Full version, e.g. '147.0.7727.15'.
+    @return array{major:string,full_version:string,ua_version:string,user_agent:string,platform:string,sec_ch_ua:string,sec_ch_ua_full:string}
+    """
+    major = full_version.split(".")[0]
+    ua_version = f"{major}.0.0.0"  # UA reduction: major.0.0.0
+    user_agent = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        f"Chrome/{ua_version} Safari/537.36"
+    )
+    sec_ch_ua = (
+        f'"Google Chrome";v="{major}", "Chromium";v="{major}", "Not)A;Brand";v="24"'
+    )
+    sec_ch_ua_full = (
+        f'"Google Chrome";v="{full_version}", "Chromium";v="{full_version}", '
+        '"Not)A;Brand";v="24.0.0.0"'
+    )
+
+    return {
+        "major": major,
+        "full_version": full_version,
+        "ua_version": ua_version,
+        "user_agent": user_agent,
+        "platform": '"macOS"',
+        "sec_ch_ua": sec_ch_ua,
+        "sec_ch_ua_full": sec_ch_ua_full,
+    }
+
+
+def fetch_latest_chrome_version(fallback: str = _CHROME_FULL_VER_DEFAULT) -> str:
+    """Fetch the latest STABLE consumer Chrome version so the spoofed fingerprint
+    presents as an up-to-date browser. This is deliberately NOT the bundled
+    Chromium-for-Testing engine version (which lags stable and would lower the
+    reCAPTCHA v3 score). Returns the fallback on any error.
+    """
+    try:
+        with urllib.request.urlopen(_CHROME_VERSIONS_URL, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        version = data["channels"]["Stable"]["version"]
+        if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", version):
+            return version
+        progress("fingerprint", f"Versión inesperada del endpoint: {version!r}")
+    except Exception as e:
+        progress("fingerprint", f"No se pudo obtener última versión Chrome estable: {e}")
+
+    return fallback
+
+
+# reCAPTCHA-hardening init script. Patches remaining headless/automation signals
+# that reCAPTCHA v3 checks. Version-bearing fields use __CHROME_MAJOR__ /
+# __CHROME_FULL__ tokens injected by build_stealth_init_script so they stay in
+# sync with the detected engine version.
+_STEALTH_INIT_TEMPLATE = """
+    // Remove webdriver flag
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+    // Ensure window.chrome exists (missing in headless Chromium)
+    if (!window.chrome) {
+        window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
+    }
+
+    // Spoof platform to macOS — must match CH_UA_PLATFORM header ("macOS").
+    Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
+    Object.defineProperty(navigator, 'oscpu', { get: () => undefined });
+
+    // Patch userAgentData — reCAPTCHA reads this API directly.
+    // Must match sec-ch-ua headers: Google Chrome first, then Chromium.
+    if (navigator.userAgentData) {
+        const brands = [
+            { brand: 'Google Chrome', version: '__CHROME_MAJOR__' },
+            { brand: 'Chromium',      version: '__CHROME_MAJOR__' },
+            { brand: 'Not)A;Brand',   version: '24'  },
+        ];
+        Object.defineProperty(navigator, 'userAgentData', {
+            get: () => ({
+                brands,
+                mobile: false,
+                platform: 'macOS',
+                getHighEntropyValues: (hints) => Promise.resolve({
+                    brands,
+                    mobile: false,
+                    platform: 'macOS',
+                    platformVersion: '14.0.0',
+                    architecture: 'arm',
+                    model: '',
+                    uaFullVersion: '__CHROME_FULL__',
+                    fullVersionList: [
+                        { brand: 'Google Chrome', version: '__CHROME_FULL__' },
+                        { brand: 'Chromium',      version: '__CHROME_FULL__' },
+                        { brand: 'Not)A;Brand',   version: '24.0.0.0'       },
+                    ],
+                }),
+                toJSON: () => ({ brands, mobile: false, platform: 'macOS' }),
+            }),
+        });
+    }
+
+    // Realistic plugin list
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => {
+            const p = [
+                { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+                { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+                { name: 'Native Client', filename: 'internal-nacl-plugin' },
+            ];
+            p.__proto__ = PluginArray.prototype;
+            return p;
+        }
+    });
+
+    // Permissions API — avoid the headless 'denied' default for notifications
+    const _origPermQuery = window.navigator.permissions.query.bind(navigator.permissions);
+    window.navigator.permissions.query = (params) =>
+        params.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : _origPermQuery(params);
+"""
+
+
+def build_stealth_init_script(fp: dict) -> str:
+    """Return the reCAPTCHA-hardening init script with the fingerprint version
+    injected, so userAgentData matches the detected Chromium version.
+
+    @param fp A fingerprint dict from build_chrome_fingerprint().
+    """
+    return (
+        _STEALTH_INIT_TEMPLATE
+        .replace("__CHROME_MAJOR__", fp["major"])
+        .replace("__CHROME_FULL__", fp["full_version"])
+    )
+
+
+# Backwards-compatible module constants (fallback fingerprint for standalone use).
+_DEFAULT_FINGERPRINT = build_chrome_fingerprint(_CHROME_FULL_VER_DEFAULT)
+_CHROME_MAJOR = _DEFAULT_FINGERPRINT["major"]
+_CHROME_FULL_VER = _DEFAULT_FINGERPRINT["full_version"]
+_CHROME_UA_VER = _DEFAULT_FINGERPRINT["ua_version"]
+CHROME_USER_AGENT = _DEFAULT_FINGERPRINT["user_agent"]
+CH_UA_PLATFORM = _DEFAULT_FINGERPRINT["platform"]
+CH_UA_SEC = _DEFAULT_FINGERPRINT["sec_ch_ua"]
+CH_UA_SEC_FULL = _DEFAULT_FINGERPRINT["sec_ch_ua_full"]
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1899,6 +2043,15 @@ def main():
         pw_context_manager = sync_playwright()
 
     with pw_context_manager as pw:
+        # Present the latest STABLE consumer Chrome so reCAPTCHA v3 sees an
+        # up-to-date browser (the bundled engine version lags stable).
+        fp = build_chrome_fingerprint(fetch_latest_chrome_version())
+        progress("init", f"Fingerprint Chrome {fp['full_version']} (última estable)")
+        context_opts["user_agent"] = fp["user_agent"]
+        context_opts["extra_http_headers"]["sec-ch-ua"] = fp["sec_ch_ua"]
+        context_opts["extra_http_headers"]["sec-ch-ua-platform"] = fp["platform"]
+        context_opts["extra_http_headers"]["sec-ch-ua-full-version-list"] = fp["sec_ch_ua_full"]
+
         # Use persistent context if user-data-dir provided (keeps cookies between runs)
         if user_data_dir:
             progress("init", f"Usando contexto persistente: {user_data_dir}")

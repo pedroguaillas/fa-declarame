@@ -19,14 +19,15 @@ set -euo pipefail
 # ─── Configuración ───────────────────────────────────────────────────────────
 
 VPS_USER="root"                    # Usuario SSH del VPS
-VPS_HOST="${1:-147.182.223.172}"   # IP del droplet (arg 1, default: servidor Laravel)
 VPS_PORT="22"                      # Puerto SSH (normalmente 22)
 REMOTE_DIR="/opt/sri-scraper"
 SERVICE_USER="www-data"            # Usuario del sistema que corre el servicio
 
-# --remote: bind en 0.0.0.0 (servidor separado de Laravel) + abre UFW puerto 8765
+# Defaults; los argumentos los sobreescriben (se parsean más abajo, en cualquier orden).
+VPS_HOST="147.182.223.172"         # IP del droplet (default: servidor Laravel)
+REMOTE_MODE=false                  # --remote: bind 0.0.0.0 + abre UFW puerto 8765
+UPDATE_ONLY=false                  # --update-only: solo copia scripts y reinicia (sin install)
 SCRAPER_BIND_HOST="127.0.0.1"
-[[ "${2:-}" == "--remote" ]] && SCRAPER_BIND_HOST="0.0.0.0"
 
 # ─── Colores ─────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,23 @@ info()    { echo -e "${GREEN}[deploy]${NC} $*"; }
 warning() { echo -e "${YELLOW}[deploy]${NC} $*"; }
 error()   { echo -e "${RED}[deploy]${NC} $*" >&2; exit 1; }
 
+# ─── Argumentos (host + flags en cualquier orden) ─────────────────────────────
+# Uso:
+#   bash deploy.sh <IP> [--remote] [--update-only]
+# El primer argumento que no empiece con -- se toma como host.
+
+_host_set=false
+for arg in "$@"; do
+    case "$arg" in
+        --remote)      REMOTE_MODE=true ;;
+        --update-only) UPDATE_ONLY=true ;;
+        --*)           warning "Flag desconocido ignorado: $arg" ;;
+        *)             if [[ "$_host_set" == false ]]; then VPS_HOST="$arg"; _host_set=true; fi ;;
+    esac
+done
+
+[[ "$REMOTE_MODE" == true ]] && SCRAPER_BIND_HOST="0.0.0.0"
+
 # ─── Validaciones locales ─────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,6 +66,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [[ "$VPS_HOST" == "TU_IP_O_DOMINIO" ]] && error "Edita VPS_HOST en el script antes de ejecutar"
 
 SSH_OPTS="-p $VPS_PORT -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=no -o PreferredAuthentications=password"
+
+# ─── Modo --update-only: copia scripts + reinicia, sin reinstalar nada ─────────
+
+if [[ "$UPDATE_ONLY" == true ]]; then
+    info "Modo --update-only: copiando scripts y reiniciando servicio en $VPS_HOST ..."
+    scp -P "$VPS_PORT" \
+        "$SCRIPT_DIR/server.py" \
+        "$SCRIPT_DIR/test-scraper.py" \
+        "$VPS_USER@$VPS_HOST:$REMOTE_DIR/"
+    ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" "supervisorctl restart sri-scraper && sleep 3 && curl -s http://127.0.0.1:8765/health"
+    info "Actualización completada."
+    exit 0
+fi
 
 # ─── 1. Copiar archivos al VPS ───────────────────────────────────────────────
 
@@ -84,14 +115,14 @@ apt-get install -y -qq \
     libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
     libxrandr2 libgbm1 libasound2t64 libpangocairo-1.0-0 \
     libpango-1.0-0 libcairo2 libatspi2.0-0 \
-    fonts-liberation wget curl xvfb 2>/dev/null || \
+    fonts-liberation wget curl xvfb xauth supervisor 2>/dev/null || \
     apt-get install -y -qq \
     python3 python3-pip python3-venv \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
     libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
     libxrandr2 libgbm1 libasound2 libpangocairo-1.0-0 \
     libpango-1.0-0 libcairo2 libatspi2.0-0 \
-    fonts-liberation wget curl xvfb
+    fonts-liberation wget curl xvfb xauth supervisor
 
 # ── Python venv ───────────────────────────────────────────────────────────────
 
@@ -122,10 +153,17 @@ chown -R $SERVICE_USER:$SERVICE_USER $REMOTE_DIR/browser-session 2>/dev/null || 
 
 # ── Supervisor: sri-scraper ───────────────────────────────────────────────────
 
+step "Asegurando que supervisor esté activo..."
+systemctl enable --now supervisor 2>/dev/null || service supervisor start 2>/dev/null || true
+mkdir -p /etc/supervisor/conf.d
+
 step "Creando config supervisor sri-scraper..."
 cat > /etc/supervisor/conf.d/sri-scraper.conf <<SUPCONF
 [program:sri-scraper]
-command=$REMOTE_DIR/.venv/bin/python $REMOTE_DIR/server.py --host=$SCRAPER_BIND_HOST --port=8765 --user-data-dir=$REMOTE_DIR/browser-session --headless
+# Corre el navegador VISIBLE dentro de un display virtual Xvfb (no --headless):
+# reCAPTCHA v3 penaliza el modo headless, así que presentamos un Chrome real con
+# ventana sobre un framebuffer sin pantalla física.
+command=xvfb-run -a --server-args="-screen 0 1366x768x24" $REMOTE_DIR/.venv/bin/python $REMOTE_DIR/server.py --host=$SCRAPER_BIND_HOST --port=8765 --user-data-dir=$REMOTE_DIR/browser-session
 directory=$REMOTE_DIR
 user=$SERVICE_USER
 autostart=true
@@ -184,17 +222,5 @@ info "Deploy completado. Para ver logs en tiempo real:"
 echo "  ssh -p $VPS_PORT $VPS_USER@$VPS_HOST 'supervisorctl tail -f sri-scraper'"
 echo ""
 info "Para actualizar solo los scripts Python (sin reinstalar todo):"
-echo "  bash scripts/sri-scraper/deploy.sh --update-only"
+echo "  bash scripts/sri-scraper/deploy.sh $VPS_HOST --update-only"
 echo ""
-
-# ─── Modo --update-only ───────────────────────────────────────────────────────
-
-if [[ "${1:-}" == "--update-only" ]]; then
-    info "Modo --update-only: solo copiando archivos y reiniciando servicio..."
-    scp -P "$VPS_PORT" \
-        "$SCRIPT_DIR/server.py" \
-        "$SCRIPT_DIR/test-scraper.py" \
-        "$VPS_USER@$VPS_HOST:$REMOTE_DIR/"
-    ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" "supervisorctl restart sri-scraper && sleep 3 && curl -s http://127.0.0.1:8765/health"
-    info "Actualización completada."
-fi

@@ -88,21 +88,6 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
         # visible browser, making it far harder to detect than the classic headless.
         launch_args.append("--headless=new")
 
-    context_opts = {
-        "viewport": {"width": 1366, "height": 768},
-        "locale": "es-419",
-        "timezone_id": "America/Guayaquil",
-        "user_agent": scraper.CHROME_USER_AGENT,
-        "accept_downloads": True,
-        "extra_http_headers": {
-            "Accept-Language": "es-419,es;q=0.9",
-            "sec-ch-ua": scraper.CH_UA_SEC,
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": scraper.CH_UA_PLATFORM,
-            "sec-ch-ua-full-version-list": scraper.CH_UA_SEC_FULL,
-        },
-    }
-
     if scraper.STEALTH_VERSION == 2:
         stealth = scraper.Stealth(navigator_languages_override=("es-419", "es"))
         pw_cm = stealth.use_sync(scraper.sync_playwright())
@@ -112,6 +97,28 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
     pw = pw_cm.__enter__()
     _browser_state["pw_cm"] = pw_cm
     _browser_state["pw"] = pw
+
+    # Present the latest STABLE consumer Chrome (fetched at runtime) and derive the
+    # entire fingerprint from it. reCAPTCHA v3 penalizes outdated browsers, so we
+    # must NOT claim the bundled Chromium-for-Testing version (which lags stable);
+    # a stale version tanks the score and the SRI rejects the captcha.
+    fp = scraper.build_chrome_fingerprint(scraper.fetch_latest_chrome_version())
+    scraper.progress("server", f"Fingerprint Chrome {fp['full_version']} (última estable)")
+
+    context_opts = {
+        "viewport": {"width": 1366, "height": 768},
+        "locale": "es-419",
+        "timezone_id": "America/Guayaquil",
+        "user_agent": fp["user_agent"],
+        "accept_downloads": True,
+        "extra_http_headers": {
+            "Accept-Language": "es-419,es;q=0.9",
+            "sec-ch-ua": fp["sec_ch_ua"],
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": fp["platform"],
+            "sec-ch-ua-full-version-list": fp["sec_ch_ua_full"],
+        },
+    }
 
     # When using --headless=new we pass headless=False to Playwright so it does not
     # add its own --headless flag (which would downgrade to the detectable old mode).
@@ -135,71 +142,8 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
 
     # Belt-and-suspenders: patch remaining headless/automation indicators that
     # reCAPTCHA v3 checks, regardless of what playwright-stealth already covers.
-    context.add_init_script("""
-        // Remove webdriver flag
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-
-        // Ensure window.chrome exists (missing in headless Chromium)
-        if (!window.chrome) {
-            window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
-        }
-
-        // Spoof platform to macOS — must match CH_UA_PLATFORM header ("macOS").
-        Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
-        Object.defineProperty(navigator, 'oscpu', { get: () => undefined });
-
-        // Patch userAgentData — reCAPTCHA reads this API directly.
-        // Must match sec-ch-ua headers: Google Chrome first, then Chromium.
-        if (navigator.userAgentData) {
-            const brands = [
-                { brand: 'Google Chrome', version: '149' },
-                { brand: 'Chromium',      version: '149' },
-                { brand: 'Not)A;Brand',   version: '24'  },
-            ];
-            Object.defineProperty(navigator, 'userAgentData', {
-                get: () => ({
-                    brands,
-                    mobile: false,
-                    platform: 'macOS',
-                    getHighEntropyValues: (hints) => Promise.resolve({
-                        brands,
-                        mobile: false,
-                        platform: 'macOS',
-                        platformVersion: '14.0.0',
-                        architecture: 'arm',
-                        model: '',
-                        uaFullVersion: '149.0.7827.201',
-                        fullVersionList: [
-                            { brand: 'Google Chrome', version: '149.0.7827.201' },
-                            { brand: 'Chromium',      version: '149.0.7827.201' },
-                            { brand: 'Not)A;Brand',   version: '24.0.0.0'       },
-                        ],
-                    }),
-                    toJSON: () => ({ brands, mobile: false, platform: 'macOS' }),
-                }),
-            });
-        }
-
-        // Realistic plugin list
-        Object.defineProperty(navigator, 'plugins', {
-            get: () => {
-                const p = [
-                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
-                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
-                    { name: 'Native Client', filename: 'internal-nacl-plugin' },
-                ];
-                p.__proto__ = PluginArray.prototype;
-                return p;
-            }
-        });
-
-        // Permissions API — avoid the headless 'denied' default for notifications
-        const _origPermQuery = window.navigator.permissions.query.bind(navigator.permissions);
-        window.navigator.permissions.query = (params) =>
-            params.name === 'notifications'
-                ? Promise.resolve({ state: Notification.permission })
-                : _origPermQuery(params);
-    """)
+    # userAgentData version is derived from the detected engine version (fp).
+    context.add_init_script(scraper.build_stealth_init_script(fp))
 
     if scraper.STEALTH_VERSION == 1:
         scraper.stealth_sync(page)
