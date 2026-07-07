@@ -7,6 +7,7 @@ use App\Models\Tenant\Order;
 use App\Models\Tenant\Scopes\CompanyScope;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
+use SimpleXMLElement;
 
 class OrderImportService
 {
@@ -15,6 +16,13 @@ class OrderImportService
         'factura' => '01',
         'nota de crédito' => '04',
         'nota de débito' => '05',
+    ];
+
+    /** @var array<string, string> Comprobante root element => info node holding fechaEmision */
+    private const COMPROBANTE_INFO_NODES = [
+        'factura' => 'infoFactura',
+        'notaCredito' => 'infoNotaCredito',
+        'notaDebito' => 'infoNotaDebito',
     ];
 
     public function __construct(
@@ -146,6 +154,53 @@ class OrderImportService
     }
 
     /**
+     * Import XML and TXT files from a ZIP archive.
+     *
+     * @return array{imported: int, skipped: int, errors: int}
+     */
+    public function importFromZip(string $zipPath, int $companyId, string $companyRuc): array
+    {
+        $zip = new \ZipArchive;
+
+        if ($zip->open($zipPath) !== true) {
+            return ['imported' => 0, 'skipped' => 0, 'errors' => 1];
+        }
+
+        $imported = 0;
+        $skipped = 0;
+        $errors = 0;
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+            if (! in_array($extension, ['xml', 'txt'])) {
+                continue;
+            }
+
+            $content = $zip->getFromIndex($i);
+
+            if ($content === false) {
+                $skipped++;
+
+                continue;
+            }
+
+            $result = $extension === 'xml'
+                ? $this->importFromXml($content, $companyId, $companyRuc)
+                : $this->import($content, $companyId, $companyRuc);
+
+            $imported += $result['imported'];
+            $skipped += $result['skipped'];
+            $errors += $result['errors'] ?? 0;
+        }
+
+        $zip->close();
+
+        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
+    }
+
+    /**
      * Import a single XML authorization file (SRI format).
      *
      * @return array{imported: int, skipped: int}
@@ -240,15 +295,43 @@ class OrderImportService
 
         $autorizacion = $xml->getName() === 'autorizacion' ? $xml : ($xml->autorizacion ?? null);
 
-        if ($autorizacion === null || ! isset($autorizacion->comprobante)) {
+        if ($autorizacion !== null && isset($autorizacion->comprobante)) {
+            return (object) [
+                'estado' => (string) ($autorizacion->estado ?? 'AUTORIZADO'),
+                'numeroAutorizacion' => (string) ($autorizacion->numeroAutorizacion ?? ''),
+                'fechaAutorizacion' => (string) ($autorizacion->fechaAutorizacion ?? ''),
+                'comprobante' => (string) $autorizacion->comprobante,
+            ];
+        }
+
+        return $this->wrapComprobanteXml($xml, $xmlContent);
+    }
+
+    /**
+     * Build a synthetic authorization wrapper for a bare comprobante XML
+     * (root <factura>, <notaCredito> or <notaDebito> without <autorizacion>).
+     * The clave de acceso doubles as numeroAutorizacion and fechaEmision as fechaAutorizacion.
+     */
+    private function wrapComprobanteXml(SimpleXMLElement $xml, string $xmlContent): ?object
+    {
+        $infoNode = self::COMPROBANTE_INFO_NODES[$xml->getName()] ?? null;
+        $claveAcceso = trim((string) ($xml->infoTributaria->claveAcceso ?? ''));
+
+        if ($infoNode === null || $claveAcceso === '' || ! isset($xml->{$infoNode})) {
+            return null;
+        }
+
+        try {
+            $fechaEmision = Carbon::createFromFormat('d/m/Y', trim((string) $xml->{$infoNode}->fechaEmision))->format('Y-m-d');
+        } catch (\Throwable) {
             return null;
         }
 
         return (object) [
-            'estado' => (string) ($autorizacion->estado ?? 'AUTORIZADO'),
-            'numeroAutorizacion' => (string) ($autorizacion->numeroAutorizacion ?? ''),
-            'fechaAutorizacion' => (string) ($autorizacion->fechaAutorizacion ?? ''),
-            'comprobante' => (string) $autorizacion->comprobante,
+            'estado' => 'AUTORIZADO',
+            'numeroAutorizacion' => $claveAcceso,
+            'fechaAutorizacion' => $fechaEmision,
+            'comprobante' => $xmlContent,
         ];
     }
 }

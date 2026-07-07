@@ -150,35 +150,11 @@ class OrderController extends Controller
 
         if ($uploaded->getClientOriginalExtension() === 'zip') {
 
-            $zip = new \ZipArchive;
+            ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors] = $service->importFromZip($uploaded->getRealPath(), $company->id, $company->ruc);
 
-            if ($zip->open($uploaded->getRealPath()) !== true) {
-
+            if ($imported === 0 && $skipped === 0 && $errors > 0) {
                 return redirect()->route('tenant.orders.index')->with('error', 'No se pudo abrir el archivo ZIP.');
             }
-
-            for ($i = 0; $i < $zip->numFiles; $i++) {
-
-                $name = $zip->getNameIndex($i);
-
-                if (strtolower(pathinfo($name, PATHINFO_EXTENSION)) !== 'txt') {
-                    continue;
-                }
-
-                $content = $zip->getFromIndex($i);
-
-                if ($content === false) {
-                    continue;
-                }
-
-                $result = $service->import($content, $company->id, $company->ruc);
-
-                $imported += $result['imported'];
-                $skipped += $result['skipped'];
-                $errors += $result['errors'];
-            }
-
-            $zip->close();
         } else {
 
             $content = file_get_contents($request->file('file')->getRealPath());

@@ -33,6 +33,8 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
         Route::get('reports', [ReportController::class, 'index'])->name('tenant.reports.index');
 
         Route::get('declaration', [DeclarationController::class, 'index'])->name('tenant.declaration.index');
+        Route::get('declaration/export-semester', [DeclarationController::class, 'exportSemester'])
+            ->name('tenant.declaration.export-semester');
 
         Route::get('reports/shops-by-account', [ReportController::class, 'shopsByAccount'])
             ->name('tenant.reports.shops-by-account');

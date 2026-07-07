@@ -122,6 +122,15 @@ function downloadAts() {
     }
 }
 
+function downloadSemesterReport() {
+    const params = new URLSearchParams({
+        year: String(props.year),
+        semester: String(props.semester ?? 1),
+    });
+    window.location.href =
+        route("tenant.declaration.export-semester") + "?" + params.toString();
+}
+
 function downloadReport(routeName: string) {
     let start: string;
     let end: string;
@@ -240,6 +249,10 @@ defineOptions({ layout: TenantLayout });
                 </Select>
             </div>
             <Button @click="applyPeriod">Ver período</Button>
+            <Button v-if="isSemiannual" variant="outline" @click="downloadSemesterReport">
+                <FileSpreadsheet class="size-4" />
+                Reporte Semestral Excel
+            </Button>
         </div>
 
         <!-- Summary cards -->
