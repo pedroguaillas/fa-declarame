@@ -20,12 +20,12 @@ Usage:
 """
 
 import argparse
+import glob
 import json
 import math
-import random
-import glob
 import os
 import platform as _platform
+import random
 import re
 import subprocess
 import sys
@@ -92,9 +92,7 @@ _SYS = _platform.system()  # 'Darwin', 'Linux', 'Windows'
 _CHROME_FULL_VER_DEFAULT = "150.0.7871.47"
 
 # Chrome for Testing publishes the current stable version here (official Google).
-_CHROME_VERSIONS_URL = (
-    "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json"
-)
+_CHROME_VERSIONS_URL = "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json"
 
 
 def build_chrome_fingerprint(full_version: str) -> dict:
@@ -145,7 +143,9 @@ def fetch_latest_chrome_version(fallback: str = _CHROME_FULL_VER_DEFAULT) -> str
             return version
         progress("fingerprint", f"Versión inesperada del endpoint: {version!r}")
     except Exception as e:
-        progress("fingerprint", f"No se pudo obtener última versión Chrome estable: {e}")
+        progress(
+            "fingerprint", f"No se pudo obtener última versión Chrome estable: {e}"
+        )
 
     return fallback
 
@@ -227,10 +227,8 @@ def build_stealth_init_script(fp: dict) -> str:
 
     @param fp A fingerprint dict from build_chrome_fingerprint().
     """
-    return (
-        _STEALTH_INIT_TEMPLATE
-        .replace("__CHROME_MAJOR__", fp["major"])
-        .replace("__CHROME_FULL__", fp["full_version"])
+    return _STEALTH_INIT_TEMPLATE.replace("__CHROME_MAJOR__", fp["major"]).replace(
+        "__CHROME_FULL__", fp["full_version"]
     )
 
 
@@ -491,7 +489,7 @@ def _navigate_compras(page: Page) -> None:
             progress("navigate", f"Intento {attempt} falló, reintentando...")
             random_delay(2, 5)
 
-    simulate_human_presence(page, duration_s=random.uniform(2, 4))
+    simulate_human_presence(page, duration_s=random.uniform(1, 2))
     progress("navigate", "Página de Comprobantes Recibidos cargada")
 
 
@@ -564,16 +562,16 @@ def set_filters(
     else:
         # Compras usa dropdowns de año/mes/día
         page.select_option("#frmPrincipal\\:ano", str(year))
-        random_delay(1.0, 2.0)
+        random_delay(0.5, 1.0)
 
         page.select_option("#frmPrincipal\\:mes", str(month))
-        random_delay(1.0, 2.0)
+        random_delay(0.5, 1.0)
 
         page.select_option("#frmPrincipal\\:dia", str(day))
-        random_delay(0.8, 1.5)
+        random_delay(0.5, 1.0)
 
         page.select_option("#frmPrincipal\\:cmbTipoComprobante", voucher_type["value"])
-        random_delay(0.8, 1.5)
+        random_delay(0.5, 1.0)
 
 
 # ─── Check Page State ─────────────────────────────────────────────────────────
@@ -704,7 +702,9 @@ def _human_click_buscar(page: Page, label: str) -> bool:
             continue
 
     if buscar_el is None:
-        progress(label, "No se encontró botón con locator, intentando query_selector...")
+        progress(
+            label, "No se encontró botón con locator, intentando query_selector..."
+        )
         el = page.query_selector(
             "[onclick*='rcBuscar'], [onclick*='rcConsultar'], "
             "[onclick*='Buscar'], [onclick*='Consultar'], "
@@ -810,8 +810,9 @@ def search_with_captcha(
         progress(label, f"═══ Intento {attempt}/3 ═══")
 
         # reCAPTCHA v3 needs enough session history to assign a good score.
-        # First attempt gets extra warm-up so it doesn't need a retry.
-        warmup = random.uniform(18, 28) if attempt == 1 else random.uniform(8, 14)
+        # Session already carries login + navigation signals, so the first
+        # attempt only needs a short warm-up; retries warm up a bit longer.
+        warmup = random.uniform(10, 15) if attempt == 1 else random.uniform(6, 11)
         progress(label, f"Warm-up reCAPTCHA: {warmup:.0f}s...")
         simulate_human_presence(page, duration_s=warmup)
 
@@ -934,7 +935,12 @@ def download_for_voucher_type(
 
     if not target_id:
         progress(label, "No se encontró link de descarga con onclick")
-        return {"type": label, "status": "download_button_not_found", "content": None, "xmls": []}
+        return {
+            "type": label,
+            "status": "download_button_not_found",
+            "content": None,
+            "xmls": [],
+        }
 
     page.on("response", on_response)
     final_content = None
@@ -999,7 +1005,10 @@ def download_for_voucher_type(
         recent_claves = [c for c in recent_claves if c not in skip_claves]
         skipped_count = before - len(old_claves) - len(recent_claves)
         if skipped_count:
-            progress(label, f"Saltando {skipped_count} ya importadas → {len(old_claves)} old + {len(recent_claves)} recent pendientes")
+            progress(
+                label,
+                f"Saltando {skipped_count} ya importadas → {len(old_claves)} old + {len(recent_claves)} recent pendientes",
+            )
 
     # Build clave → txt line lookup for old claves (needed by PHP for ventas modal entries)
     clave_to_line: dict[str, str] = {}
@@ -1020,11 +1029,17 @@ def download_for_voucher_type(
     if old_claves:
         if tipo == "compras":
             # Compras: column 10 has a direct XML download button
-            progress(label, f"{len(old_claves)} claves >30d: descargando XMLs de tabla (col 10)...")
+            progress(
+                label,
+                f"{len(old_claves)} claves >30d: descargando XMLs de tabla (col 10)...",
+            )
             xmls = download_xmls_from_table(page, tipo, set(old_claves))
         else:
             # Ventas (emitidos): no XML button — click clave in col 3 to open modal
-            progress(label, f"{len(old_claves)} claves >30d: extrayendo datos de modal (col 3)...")
+            progress(
+                label,
+                f"{len(old_claves)} claves >30d: extrayendo datos de modal (col 3)...",
+            )
             xmls_modal, modal_scraped = scrape_modals_from_table(
                 page, tipo, set(old_claves), clave_to_line, label
             )
@@ -1100,7 +1115,9 @@ def download_for_voucher_type_by_day(
                     )
             all_xmls.extend(result.get("xmls") or [])
             all_modal_entries.extend(result.get("modal_entries") or [])
-            all_retention_modal_entries.extend(result.get("retention_modal_entries") or [])
+            all_retention_modal_entries.extend(
+                result.get("retention_modal_entries") or []
+            )
             total_rows += result.get("rows", 0)
             progress(label, f"Día {day}: {result.get('rows', 0)} registros")
         elif result["status"] == "no_records":
@@ -1112,8 +1129,20 @@ def download_for_voucher_type_by_day(
 
         random_delay(0.5, 1.5)
 
-    if not all_content and not all_xmls and not all_modal_entries and not all_retention_modal_entries:
-        return {"type": label, "status": "no_records", "content": None, "xmls": [], "modal_entries": [], "retention_modal_entries": []}
+    if (
+        not all_content
+        and not all_xmls
+        and not all_modal_entries
+        and not all_retention_modal_entries
+    ):
+        return {
+            "type": label,
+            "status": "no_records",
+            "content": None,
+            "xmls": [],
+            "modal_entries": [],
+            "retention_modal_entries": [],
+        }
 
     progress(
         label, f"Total ventas {label}: {total_rows} registros en {days_in_month} días"
@@ -1274,10 +1303,14 @@ def scrape_modals_from_table(
                 continue
 
             progress("modal-scrape", f"Abriendo modal ...{clave[-10:]}...")
-            result = _click_and_scrape_modal(page, table_id, row_info["rowIndex"], voucher_label)
+            result = _click_and_scrape_modal(
+                page, table_id, row_info["rowIndex"], voucher_label
+            )
 
             if result is None:
-                progress("modal-scrape", f"No se pudo abrir modal para ...{clave[-10:]}")
+                progress(
+                    "modal-scrape", f"No se pudo abrir modal para ...{clave[-10:]}"
+                )
                 remaining.discard(clave)
                 continue
 
@@ -1287,10 +1320,15 @@ def scrape_modals_from_table(
 
             if "xml" in result:
                 xmls.append({"clave": clave, "xml": result["xml"]})
-                progress("modal-scrape", f"XML obtenido del modal ({len(result['xml'])} bytes)")
+                progress(
+                    "modal-scrape",
+                    f"XML obtenido del modal ({len(result['xml'])} bytes)",
+                )
             else:
                 modal_entries.append(result)
-                progress("modal-scrape", f"Datos extraídos del modal para ...{clave[-10:]}")
+                progress(
+                    "modal-scrape", f"Datos extraídos del modal para ...{clave[-10:]}"
+                )
 
             remaining.discard(clave)
             random_delay(0.5, 1.5)
@@ -1388,7 +1426,10 @@ def _click_and_scrape_modal(
         return None
 
     if clicked.get("method") and clicked["method"] != "clave_link":
-        progress("modal-scrape", f"Click via {clicked['method']} (col {clicked.get('colIdx')})")
+        progress(
+            "modal-scrape",
+            f"Click via {clicked['method']} (col {clicked.get('colIdx')})",
+        )
 
     # Force-hide ALL existing detail dialogs so the NEW one is the only visible one
     page.evaluate("""() => {
@@ -1439,7 +1480,8 @@ def _click_and_scrape_modal(
     else:
         progress("modal-scrape", "Modal no visible después de espera")
 
-    modal_data = page.evaluate("""(voucherLabel) => {
+    modal_data = page.evaluate(
+        """(voucherLabel) => {
         // ── Find the visible PrimeFaces dialog ──
         // We force-set display:none on stale dialogs before each click, so the only
         // dialog WITHOUT display:none after the click is the newly opened one.
@@ -1583,7 +1625,9 @@ def _click_and_scrape_modal(
 
         if (!data.identificacion_comprador && !data.clave_acceso) return null;
         return data;
-    }""", voucher_label)
+    }""",
+        voucher_label,
+    )
 
     if modal_data is None:
         progress("modal-scrape", "No se pudieron extraer datos del modal (null)")
@@ -1636,11 +1680,14 @@ def _click_and_scrape_modal(
         sujeto = modal_data.get("id_sujeto", "")
         razon = modal_data.get("razon_social_sujeto", "")
         n_ret = len(modal_data.get("retenciones", []))
-        progress("modal-scrape", f"Datos extraídos: clave={clave[:20]}... sujeto={sujeto} razon='{razon}' retenciones={n_ret}")
+        progress(
+            "modal-scrape",
+            f"Datos extraídos: clave={clave[:20]}... sujeto={sujeto} razon='{razon}' retenciones={n_ret}",
+        )
         for i, ret in enumerate(modal_data.get("retenciones", [])):
             progress(
                 "modal-scrape",
-                f"  Ret {i+1}: impuesto={ret.get('impuesto')} base={ret.get('base_imponible')} "
+                f"  Ret {i + 1}: impuesto={ret.get('impuesto')} base={ret.get('base_imponible')} "
                 f"pct={ret.get('porcentaje_retenido')}% valor={ret.get('valor_retenido')} "
                 f"doc={ret.get('num_doc_sustento')} fecha={ret.get('fecha_doc_sustento')}",
             )
@@ -1648,7 +1695,10 @@ def _click_and_scrape_modal(
         clave = modal_data.get("clave_acceso", "")
         comprador = modal_data.get("identificacion_comprador", "")
         total = modal_data.get("importe_total", 0)
-        progress("modal-scrape", f"Datos extraídos: clave={clave[:20]}... comprador={comprador} total={total}")
+        progress(
+            "modal-scrape",
+            f"Datos extraídos: clave={clave[:20]}... comprador={comprador} total={total}",
+        )
 
     _close_modal(page)
     return modal_data
@@ -1658,7 +1708,7 @@ def _close_modal(page: Page) -> None:
     """Close ALL open SRI PrimeFaces dialogs and overlays."""
     # 1. Click all visible close buttons via Playwright (reliable real click)
     try:
-        close_btns = page.locator('.ui-dialog:visible .ui-dialog-titlebar-close').all()
+        close_btns = page.locator(".ui-dialog:visible .ui-dialog-titlebar-close").all()
         for btn in close_btns:
             try:
                 btn.click(timeout=1000)
@@ -1697,9 +1747,7 @@ def _close_modal(page: Page) -> None:
 # ─── XML Download from Table ──────────────────────────────────────────────────
 
 
-def download_xmls_from_table(
-    page: Page, tipo: str, old_claves: set[str]
-) -> list[dict]:
+def download_xmls_from_table(page: Page, tipo: str, old_claves: set[str]) -> list[dict]:
     """
     Iterate the results table and for each row that has an XML download button,
     click it with a real Playwright click and capture the XML response.
@@ -1749,7 +1797,9 @@ def download_xmls_from_table(
             return result;
         }""")
 
-        progress("xml-tabla", f"Página {page_num}: {len(items)} botones XML encontrados")
+        progress(
+            "xml-tabla", f"Página {page_num}: {len(items)} botones XML encontrados"
+        )
 
         for item in items:
             link_id = item.get("linkId", "")
@@ -1841,7 +1891,9 @@ def _capture_xml_by_link_id(page: Page, xml_link_id: str) -> str | None:
                 except UnicodeDecodeError:
                     return raw.decode("latin-1")
         except Exception as e:
-            progress("xml-tabla", f"expect_download falló ({e}), intentando interceptor...")
+            progress(
+                "xml-tabla", f"expect_download falló ({e}), intentando interceptor..."
+            )
 
         # Attempt 2: response interceptor — JSF may stream XML inline (no download dialog)
         if not captured["content"]:
@@ -2050,7 +2102,9 @@ def main():
         context_opts["user_agent"] = fp["user_agent"]
         context_opts["extra_http_headers"]["sec-ch-ua"] = fp["sec_ch_ua"]
         context_opts["extra_http_headers"]["sec-ch-ua-platform"] = fp["platform"]
-        context_opts["extra_http_headers"]["sec-ch-ua-full-version-list"] = fp["sec_ch_ua_full"]
+        context_opts["extra_http_headers"]["sec-ch-ua-full-version-list"] = fp[
+            "sec_ch_ua_full"
+        ]
 
         # Use persistent context if user-data-dir provided (keeps cookies between runs)
         if user_data_dir:
@@ -2099,8 +2153,14 @@ def main():
                     if tipo == "ambos":
                         navigate_to_comprobantes(page, section)
 
-                    base_types = COMPRAS_VOUCHER_TYPES if section == "compras" else VOUCHER_TYPES
-                    active_voucher_types = [vt for vt in base_types if vt["value"] in selected_voucher_values]
+                    base_types = (
+                        COMPRAS_VOUCHER_TYPES if section == "compras" else VOUCHER_TYPES
+                    )
+                    active_voucher_types = [
+                        vt
+                        for vt in base_types
+                        if vt["value"] in selected_voucher_values
+                    ]
                     skip_set = skip_claves_set or None
 
                     for i, vt in enumerate(active_voucher_types):
@@ -2110,7 +2170,14 @@ def main():
 
                         try:
                             result = download_for_voucher_type(
-                                page, vt, year, month, download_dir, section, day, skip_set
+                                page,
+                                vt,
+                                year,
+                                month,
+                                download_dir,
+                                section,
+                                day,
+                                skip_set,
                             )
                             result["section"] = section
                             files.append(result)
@@ -2121,7 +2188,10 @@ def main():
                                     f"[{section}] {vt['label']}: {result['rows']} registros descargados",
                                 )
                             else:
-                                progress("summary", f"[{section}] {vt['label']}: {result['status']}")
+                                progress(
+                                    "summary",
+                                    f"[{section}] {vt['label']}: {result['status']}",
+                                )
 
                         except Exception as e:
                             progress(vt["label"], f"[{section}] Error: {e}")
@@ -2148,15 +2218,23 @@ def main():
                     if tipo == "ambos":
                         navigate_to_comprobantes(page, section)
 
-                    base_types = COMPRAS_VOUCHER_TYPES if section == "compras" else VOUCHER_TYPES
-                    active_voucher_types = [vt for vt in base_types if vt["value"] in selected_voucher_values]
+                    base_types = (
+                        COMPRAS_VOUCHER_TYPES if section == "compras" else VOUCHER_TYPES
+                    )
+                    active_voucher_types = [
+                        vt
+                        for vt in base_types
+                        if vt["value"] in selected_voucher_values
+                    ]
 
                     for i, vt in enumerate(active_voucher_types):
                         if i > 0 and section == "ventas":
                             navigate_to_comprobantes(page, section)
 
                         try:
-                            search_ok = search_with_captcha(page, vt, year, month, section)
+                            search_ok = search_with_captcha(
+                                page, vt, year, month, section
+                            )
                             if search_ok:
                                 claves = scrape_table_data(page, section)
                                 all_claves.extend(claves)

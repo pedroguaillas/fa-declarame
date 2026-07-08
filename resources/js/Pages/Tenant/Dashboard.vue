@@ -19,6 +19,7 @@ interface PeriodStats {
     count: number;
     total: number;
     iva: number;
+    retentions: number;
 }
 
 interface Period {
@@ -74,6 +75,7 @@ const stats = computed(() => (activePeriod.value === "month" ? props.month : pro
 
 const balance = computed(() => stats.value.sales.total - stats.value.purchases.total);
 const ivaNet = computed(() => stats.value.sales.iva - stats.value.purchases.iva);
+const aPagar = computed(() => ivaNet.value - stats.value.sales.retentions);
 
 function money(n: number): string {
     return new Intl.NumberFormat("es-EC", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -314,7 +316,7 @@ function barHeight(value: number): number {
         </div>
 
         <!-- KPI row 2: IVA cobrado / IVA pagado / IVA neto -->
-        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div class="border-border bg-card rounded-xl border p-5">
                 <p class="text-muted-foreground mb-1 text-xs font-medium uppercase tracking-wider">IVA cobrado</p>
                 <p class="text-foreground text-xl font-semibold tabular-nums">${{ money(stats.sales.iva) }}</p>
@@ -337,6 +339,42 @@ function barHeight(value: number): number {
                 </p>
                 <p class="text-muted-foreground mt-0.5 text-xs">
                     {{ ivaNet >= 0 ? "a pagar al SRI" : "a favor" }}
+                </p>
+            </div>
+        </div>
+
+        <!-- KPI row 3: Retenciones emitidas / Retenciones recibidas / A pagar -->
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="border-border bg-card rounded-xl border p-5">
+                <p class="text-muted-foreground mb-1 text-xs font-medium uppercase tracking-wider">
+                    Retenciones emitidas
+                </p>
+                <p class="text-foreground text-xl font-semibold tabular-nums">
+                    ${{ money(stats.purchases.retentions) }}
+                </p>
+                <p class="text-muted-foreground mt-0.5 text-xs">en compras</p>
+            </div>
+
+            <div class="border-border bg-card rounded-xl border p-5">
+                <p class="text-muted-foreground mb-1 text-xs font-medium uppercase tracking-wider">
+                    Retenciones recibidas
+                </p>
+                <p class="text-foreground text-xl font-semibold tabular-nums">
+                    ${{ money(stats.sales.retentions) }}
+                </p>
+                <p class="text-muted-foreground mt-0.5 text-xs">en ventas</p>
+            </div>
+
+            <div class="border-border bg-card rounded-xl border p-5">
+                <p class="text-muted-foreground mb-1 text-xs font-medium uppercase tracking-wider">A pagar</p>
+                <p
+                    class="text-xl font-semibold tabular-nums"
+                    :class="aPagar >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'"
+                >
+                    ${{ money(Math.abs(aPagar)) }}
+                </p>
+                <p class="text-muted-foreground mt-0.5 text-xs">
+                    IVA neto − retenciones recibidas{{ aPagar < 0 ? " (a favor)" : "" }}
                 </p>
             </div>
         </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 
 const today = new Date();
 const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
@@ -15,6 +15,7 @@ interface Filters {
 const props = defineProps<{
     filters: Filters;
     showRetention?: boolean;
+    semiannual?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -22,6 +23,24 @@ const emit = defineEmits<{
 }>();
 
 const local = reactive<Filters>({ ...props.filters });
+
+// Semester period (YYYY-S1 / YYYY-S2)
+const years = computed(() => Array.from({ length: 10 }, (_, i) => today.getFullYear() - i));
+
+function parseSemesterPeriod(period: string): { year: number; semester: number } {
+    const match = /^(\d{4})-S([12])$/.exec(period);
+    if (match) return { year: Number(match[1]), semester: Number(match[2]) };
+    return { year: today.getFullYear(), semester: today.getMonth() < 6 ? 1 : 2 };
+}
+
+const initial = parseSemesterPeriod(props.filters.period);
+const semesterYear = ref(initial.year);
+const semesterValue = ref(initial.semester);
+
+function onSemesterChange() {
+    local.period = `${semesterYear.value}-S${semesterValue.value}`;
+    emit("change", { ...local });
+}
 
 const hasActiveFilters = () => Object.values(local).some(Boolean);
 
@@ -49,7 +68,14 @@ function clearFilters() {
 // Sync if parent navigates back with different filters
 watch(
     () => props.filters,
-    (f) => Object.assign(local, f),
+    (f) => {
+        Object.assign(local, f);
+        if (props.semiannual) {
+            const parsed = parseSemesterPeriod(f.period);
+            semesterYear.value = parsed.year;
+            semesterValue.value = parsed.semester;
+        }
+    },
 );
 </script>
 
@@ -80,8 +106,28 @@ watch(
             />
         </div>
 
+        <!-- Period (semester) -->
+        <template v-if="semiannual">
+            <select
+                v-model.number="semesterYear"
+                class="border-border bg-background text-foreground focus:ring-ring/30 h-9 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
+                @change="onSemesterChange"
+            >
+                <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+            </select>
+            <select
+                v-model.number="semesterValue"
+                class="border-border bg-background text-foreground focus:ring-ring/30 h-9 rounded-md border px-3 text-sm focus:ring-2 focus:outline-none"
+                @change="onSemesterChange"
+            >
+                <option :value="1">Semestre 1 (Ene–Jun)</option>
+                <option :value="2">Semestre 2 (Jul–Dic)</option>
+            </select>
+        </template>
+
         <!-- Period (month/year) -->
         <input
+            v-else
             v-model="local.period"
             type="month"
             min="2015-01"

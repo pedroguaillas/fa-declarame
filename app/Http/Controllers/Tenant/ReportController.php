@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Exports\OrdersByClientExport;
+use App\Exports\OrdersByRetentionExport;
 use App\Exports\OrdersByVoucherTypeExport;
 use App\Exports\ShopsByAccountExport;
 use App\Exports\ShopsByProviderExport;
@@ -11,10 +12,12 @@ use App\Exports\ShopsByVoucherTypeExport;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\Company;
 use App\Models\Tenant\Order;
+use App\Models\Tenant\OrderRetentionItem;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\ShopItem;
 use App\Models\Tenant\ShopRetentionItem;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -135,6 +138,24 @@ class ReportController extends Controller
         $rows = $this->ordersByClientRows((int) session('current_company_id'), $filters)->toArray();
 
         return Excel::download(new OrdersByClientExport($rows, $filters, currentTenant()->logo_path, $this->currentCompanyName()), 'ventas-por-cliente.xlsx');
+    }
+
+    public function ordersByRetention(Request $request): Response
+    {
+        $filters = $this->resolvedOrderFilters($request);
+
+        return Inertia::render('Tenant/Reports/OrdersByRetention', [
+            'rows' => $this->ordersByRetentionRows((int) session('current_company_id'), $filters),
+            'filters' => $filters,
+        ]);
+    }
+
+    public function exportOrdersByRetention(Request $request): BinaryFileResponse
+    {
+        $filters = $this->resolvedOrderFilters($request);
+        $rows = $this->ordersByRetentionRows((int) session('current_company_id'), $filters)->toArray();
+
+        return Excel::download(new OrdersByRetentionExport($rows, currentTenant()->logo_path, $this->currentCompanyName()), 'ventas-por-retenciones.xlsx');
     }
 
     private function currentCompanyName(): ?string
@@ -486,10 +507,29 @@ class ReportController extends Controller
      */
     private function shopsByRetentionRows(int $companyId, array $filters): Collection
     {
-        $items = ShopRetentionItem::query()
+        return $this->retentionRows(ShopRetentionItem::query(), 'shop', $companyId, $filters);
+    }
+
+    /**
+     * @param  array{start_date?: string|null, end_date?: string|null, only_authorized?: bool}  $filters
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function ordersByRetentionRows(int $companyId, array $filters): Collection
+    {
+        return $this->retentionRows(OrderRetentionItem::query(), 'order', $companyId, $filters);
+    }
+
+    /**
+     * @param  Builder<ShopRetentionItem|OrderRetentionItem>  $query
+     * @param  array{start_date?: string|null, end_date?: string|null, only_authorized?: bool}  $filters
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function retentionRows($query, string $documentRelation, int $companyId, array $filters): Collection
+    {
+        $items = $query
             ->with('retention:id,code,description,percentage')
             ->whereHas('retention', fn ($q) => $q->where('type', 'RENTA'))
-            ->whereHas('shop', function ($q) use ($companyId, $filters) {
+            ->whereHas($documentRelation, function ($q) use ($companyId, $filters) {
                 $q->where('company_id', $companyId)
                     ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
                     ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))

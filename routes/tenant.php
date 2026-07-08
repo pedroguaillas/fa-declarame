@@ -61,6 +61,10 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
             ->name('tenant.reports.orders-by-client');
         Route::get('reports/orders-by-client/export', [ReportController::class, 'exportOrdersByClient'])
             ->name('tenant.reports.orders-by-client.export');
+        Route::get('reports/orders-by-retention', [ReportController::class, 'ordersByRetention'])
+            ->name('tenant.reports.orders-by-retention');
+        Route::get('reports/orders-by-retention/export', [ReportController::class, 'exportOrdersByRetention'])
+            ->name('tenant.reports.orders-by-retention.export');
 
         Route::get('export-ats', [AtsController::class, 'export'])->name('tenant.export-ats');
         Route::post('import-ats', [AtsController::class, 'import'])->name('tenant.import-ats');
@@ -104,6 +108,8 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
         Route::post('shops/import', [ShopController::class, 'import'])->name('tenant.shops.import');
         Route::post('shops/import-retentions', [ShopController::class, 'importRetentions'])->name('tenant.shops.import-retentions');
         Route::post('shops/complete-retentions', [ShopController::class, 'completeRetentions'])->name('tenant.shops.complete-retentions');
+        Route::post('shops/bulk-no-declara', [ShopController::class, 'bulkNoDeclara'])->name('tenant.shops.bulk-no-declara');
+        Route::delete('shops/bulk-destroy', [ShopController::class, 'bulkDestroy'])->name('tenant.shops.bulk-destroy');
         Route::resource('shops', ShopController::class)
             ->names([
                 'index' => 'tenant.shops.index',

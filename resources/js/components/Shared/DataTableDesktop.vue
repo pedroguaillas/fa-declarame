@@ -16,8 +16,9 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, MoreHorizontal, SearchX } from "lucide-vue-next";
-import type { Component } from "vue";
+import { computed, type Component } from "vue";
 
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { ActionDef, ActionPayload, ColumnDef } from "@/types/shared";
@@ -38,12 +39,44 @@ const props = defineProps<{
     emptyIcon?: Component;
     actionsMode?: "menu" | "icons" | "auto";
     rowClass?: (item: T) => string;
+    selectable?: boolean;
+    rowClick?: boolean;
 }>();
 
 const emit = defineEmits<{
     select: [item: T];
     action: [payload: ActionPayload<T>];
 }>();
+
+const selected = defineModel<Array<number | string>>("selected", { default: () => [] });
+
+function itemId(item: T): number | string {
+    return (item as Record<string, any>).id;
+}
+
+function isSelected(item: T): boolean {
+    return selected.value.includes(itemId(item));
+}
+
+function toggleSelect(item: T, checked: boolean | "indeterminate") {
+    const id = itemId(item);
+    selected.value = checked === true ? [...selected.value, id] : selected.value.filter((v) => v !== id);
+}
+
+const allSelected = computed<boolean | "indeterminate">(() => {
+    if (!props.items.length) return false;
+    const count = props.items.filter((item) => isSelected(item)).length;
+    if (count === 0) return false;
+    return count === props.items.length ? true : "indeterminate";
+});
+
+function toggleSelectAll(checked: boolean | "indeterminate") {
+    const pageIds = props.items.map(itemId);
+    selected.value =
+        checked === true
+            ? [...new Set([...selected.value, ...pageIds])]
+            : selected.value.filter((v) => !pageIds.includes(v));
+}
 
 const alignClass: Record<"left" | "center" | "right", string> = {
     left: "text-left",
@@ -84,6 +117,13 @@ function visibleActions(item: T): ActionDef<T>[] {
                 <Table>
                     <TableHeader class="bg-muted">
                         <TableRow class="hover:bg-transparent">
+                            <TableHead v-if="selectable" class="w-10">
+                                <Checkbox
+                                    :model-value="allSelected"
+                                    aria-label="Seleccionar todo"
+                                    @update:model-value="toggleSelectAll"
+                                />
+                            </TableHead>
                             <TableHead
                                 v-for="col in columns"
                                 :key="String(col.key)"
@@ -116,9 +156,9 @@ function visibleActions(item: T): ActionDef<T>[] {
                         >
                             <TableCell
                                 :colspan="
-                                    actions?.length
-                                        ? columns.length + 1
-                                        : columns.length
+                                    columns.length +
+                                    (actions?.length ? 1 : 0) +
+                                    (selectable ? 1 : 0)
                                 "
                                 class="py-10 text-center"
                             >
@@ -138,13 +178,21 @@ function visibleActions(item: T): ActionDef<T>[] {
                         <TableRow
                             v-for="(item, idx) in items"
                             :key="idx"
-                            class="cursor-pointer"
-                            @click="emit('select', item)"
+                            @click="(props.rowClick ?? true) && emit('select', item)"
                             :class="[
-                                'cursor-pointer transition-colors',
+                                'transition-colors',
+                                (props.rowClick ?? true) ? 'cursor-pointer' : '',
+                                selectable && isSelected(item) ? 'bg-primary/5' : '',
                                 props.rowClass?.(item),
                             ]"
                         >
+                            <TableCell v-if="selectable" class="w-10" @click.stop>
+                                <Checkbox
+                                    :model-value="isSelected(item)"
+                                    aria-label="Seleccionar fila"
+                                    @update:model-value="(v) => toggleSelect(item, v)"
+                                />
+                            </TableCell>
                             <TableCell
                                 v-for="col in columns"
                                 :key="String(col.key)"

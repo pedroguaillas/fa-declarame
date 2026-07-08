@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Exports\OrdersExport;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Tenant\Concerns\FiltersByPeriod;
 use App\Http\Requests\Tenant\StoreOrderRequest;
 use App\Http\Requests\Tenant\UpdateOrderRequest;
 use App\Models\Tenant\Contact;
@@ -23,20 +24,16 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class OrderController extends Controller
 {
+    use FiltersByPeriod;
+
     public function index(Request $request): Response
     {
         $filters = $request->only(['search', 'period', 'voucher_type', 'sort']);
 
-        if (empty($filters['period'])) {
-            $previousMonth = now('America/Guayaquil')->subMonth();
-            $hasPreviousMonth = Order::whereYear('emision', $previousMonth->year)
-                ->whereMonth('emision', $previousMonth->month)
-                ->exists();
+        $isSemiannual = company()?->type_declaration === 'semestral';
 
-            $lastEmision = $hasPreviousMonth ? null : Order::max('emision');
-            $filters['period'] = $hasPreviousMonth
-                ? $previousMonth->format('Y-m')
-                : ($lastEmision ? substr($lastEmision, 0, 7) : now()->format('Y-m'));
+        if (empty($filters['period'])) {
+            $filters['period'] = $this->defaultPeriod(Order::class, $isSemiannual);
         }
 
         [$sortField, $sortDirection] = match ($filters['sort'] ?? '') {
@@ -66,6 +63,7 @@ class OrderController extends Controller
         return Inertia::render('Tenant/Orders/Index', [
             'orders' => $orders,
             'filters' => $filters,
+            'typeDeclaration' => company()?->type_declaration ?? 'mensual',
         ]);
     }
 
@@ -253,10 +251,7 @@ class OrderController extends Controller
                     $q->where('orders.serie', 'ilike', "%{$s}%");
                 }
             })
-            ->when($filters['period'] ?? null, function ($q, $p) {
-                $q->whereYear('emision', substr($p, 0, 4))
-                    ->whereMonth('emision', substr($p, 5, 2));
-            })
+            ->when($filters['period'] ?? null, fn ($q, $p) => $this->applyPeriodFilter($q, $p))
             ->when($filters['voucher_type'] ?? null, fn ($q, $v) => $q->where('vt.code', $v));
     }
 

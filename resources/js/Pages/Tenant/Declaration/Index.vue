@@ -123,10 +123,12 @@ function downloadAts() {
 }
 
 function downloadSemesterReport() {
-    const params = new URLSearchParams({
-        year: String(props.year),
-        semester: String(props.semester ?? 1),
-    });
+    const params = new URLSearchParams({ year: String(props.year) });
+    if (isSemiannual.value) {
+        params.set("semester", String(props.semester ?? 1));
+    } else {
+        params.set("month", String(props.month ?? 1));
+    }
     window.location.href =
         route("tenant.declaration.export-semester") + "?" + params.toString();
 }
@@ -184,6 +186,7 @@ const reportLinks = [
     { title: "Retenciones", icon: Percent, route: "tenant.reports.shops-by-retention" },
     { title: "Ventas por tipo comprobante", icon: ReceiptIndianRupee, route: "tenant.reports.orders-by-voucher-type" },
     { title: "Por cliente", icon: UserCheck, route: "tenant.reports.orders-by-client" },
+    { title: "Retenciones recibidas", icon: Percent, route: "tenant.reports.orders-by-retention" },
 ];
 
 defineOptions({ layout: TenantLayout });
@@ -249,9 +252,9 @@ defineOptions({ layout: TenantLayout });
                 </Select>
             </div>
             <Button @click="applyPeriod">Ver período</Button>
-            <Button v-if="isSemiannual" variant="outline" @click="downloadSemesterReport">
+            <Button variant="outline" @click="downloadSemesterReport">
                 <FileSpreadsheet class="size-4" />
-                Reporte Semestral Excel
+                {{ isSemiannual ? "Reporte Semestral Excel" : "Reporte Mensual Excel" }}
             </Button>
         </div>
 

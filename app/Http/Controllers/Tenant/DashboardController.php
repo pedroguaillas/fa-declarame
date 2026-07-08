@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\Company;
 use App\Models\Tenant\Order;
+use App\Models\Tenant\OrderRetentionItem;
 use App\Models\Tenant\Shop;
+use App\Models\Tenant\ShopRetentionItem;
 use Carbon\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -50,9 +52,10 @@ class DashboardController extends Controller
     }
 
     /**
-     * @return array{sales: array{count: int, total: float, iva: float}, purchases: array{count: int, total: float, iva: float}}
+     * @return array{sales: array{count: int, total: float, iva: float, retentions: float}, purchases: array{count: int, total: float, iva: float, retentions: float}}
      *
      * Note: `total` contains the sum of sub_total (excluding IVA). Notas de crédito are subtracted.
+     * `retentions` is: on sales, retenciones recibidas; on purchases, retenciones emitidas.
      */
     private function periodStats(int $companyId, Carbon $from, Carbon $to): array
     {
@@ -73,16 +76,30 @@ class DashboardController extends Controller
             ->selectRaw("COUNT(*) as count, {$totalExpr} as total, {$ivaExpr} as iva")
             ->first();
 
+        $retentionsReceived = (float) OrderRetentionItem::whereHas('order', function ($q) use ($companyId, $from, $to) {
+            $q->where('company_id', $companyId)
+                ->where('state', 'AUTORIZADO')
+                ->whereBetween('emision', [$from->toDateString(), $to->toDateString()]);
+        })->sum('value');
+
+        $retentionsIssued = (float) ShopRetentionItem::whereHas('shop', function ($q) use ($companyId, $from, $to) {
+            $q->where('company_id', $companyId)
+                ->where('state', 'AUTORIZADO')
+                ->whereBetween('emision', [$from->toDateString(), $to->toDateString()]);
+        })->sum('value');
+
         return [
             'sales' => [
                 'count' => (int) $sales->count,
                 'total' => round((float) $sales->total, 2),
                 'iva' => round((float) $sales->iva, 2),
+                'retentions' => round($retentionsReceived, 2),
             ],
             'purchases' => [
                 'count' => (int) $purchases->count,
                 'total' => round((float) $purchases->total, 2),
                 'iva' => round((float) $purchases->iva, 2),
+                'retentions' => round($retentionsIssued, 2),
             ],
         ];
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Exports\ShopsExport;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Tenant\Concerns\FiltersByPeriod;
 use App\Http\Requests\Tenant\StoreShopRequest;
 use App\Http\Requests\Tenant\UpdateShopRequest;
 use App\Models\Tenant\Contact;
@@ -26,20 +27,16 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ShopController extends Controller
 {
+    use FiltersByPeriod;
+
     public function index(Request $request): Response
     {
         $filters = $request->only(['search', 'period', 'retention', 'voucher_type', 'sort']);
 
-        if (empty($filters['period'])) {
-            $previousMonth = now('America/Guayaquil')->subMonth();
-            $hasPreviousMonth = Shop::whereYear('emision', $previousMonth->year)
-                ->whereMonth('emision', $previousMonth->month)
-                ->exists();
+        $isSemiannual = company()?->type_declaration === 'semestral';
 
-            $lastEmision = $hasPreviousMonth ? null : Shop::max('emision');
-            $filters['period'] = $hasPreviousMonth
-                ? $previousMonth->format('Y-m')
-                : ($lastEmision ? substr($lastEmision, 0, 7) : now()->format('Y-m'));
+        if (empty($filters['period'])) {
+            $filters['period'] = $this->defaultPeriod(Shop::class, $isSemiannual);
         }
 
         [$sortField, $sortDirection] = match ($filters['sort'] ?? '') {
@@ -78,6 +75,7 @@ class ShopController extends Controller
             'shops' => $shops,
             'isActiveRetention' => $isActiveRetention,
             'filters' => $filters,
+            'typeDeclaration' => $company?->type_declaration ?? 'mensual',
         ]);
     }
 
@@ -147,6 +145,32 @@ class ShopController extends Controller
             ->with('success', 'Compra eliminada correctamente.');
     }
 
+    public function bulkNoDeclara(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $updated = Shop::whereIn('id', $validated['ids'])->update(['state' => 'NO_DECLARA']);
+
+        return redirect()->route('tenant.shops.index')
+            ->with('success', "{$updated} compra(s) marcadas como No declara.");
+    }
+
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $deleted = Shop::whereIn('id', $validated['ids'])->delete();
+
+        return redirect()->route('tenant.shops.index')
+            ->with('success', "{$deleted} compra(s) eliminadas correctamente.");
+    }
+
     /** @param array<string, string> $filters */
     private function filteredShopsQuery(array $filters): Builder
     {
@@ -173,10 +197,7 @@ class ShopController extends Controller
                     $q->where('shops.serie', 'ilike', "%{$s}%");
                 }
             })
-            ->when($filters['period'] ?? null, function ($q, $p) {
-                $q->whereYear('emision', substr($p, 0, 4))
-                    ->whereMonth('emision', substr($p, 5, 2));
-            })
+            ->when($filters['period'] ?? null, fn ($q, $p) => $this->applyPeriodFilter($q, $p))
             ->when($filters['retention'] ?? null, fn ($q, $r) => $r === 'with'
                 ? $q->whereNotNull('serie_retention')
                 : $q->whereNull('serie_retention')

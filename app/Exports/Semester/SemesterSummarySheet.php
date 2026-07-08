@@ -18,8 +18,7 @@ class SemesterSummarySheet implements FromArray, WithColumnWidths, WithEvents, W
     /** @param array{compras: array<string, mixed>, ventas: array<string, mixed>} $resumen */
     public function __construct(
         private readonly array $resumen,
-        private readonly int $year,
-        private readonly int $semester,
+        private readonly string $periodLabel,
         private readonly ?string $logoPath = null,
         private readonly ?string $companyName = null,
     ) {}
@@ -61,7 +60,7 @@ class SemesterSummarySheet implements FromArray, WithColumnWidths, WithEvents, W
 
     public function title(): string
     {
-        return "Resumen Semestre {$this->semester} {$this->year}";
+        return "Resumen {$this->periodLabel}";
     }
 
     /** @return array<string, int> */

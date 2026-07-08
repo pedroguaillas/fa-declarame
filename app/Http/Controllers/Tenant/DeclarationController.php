@@ -59,19 +59,30 @@ class DeclarationController extends Controller
     {
         $request->validate([
             'year' => ['required', 'integer', 'min:2000', 'max:2099'],
-            'semester' => ['required', 'integer', 'min:1', 'max:2'],
+            'semester' => ['nullable', 'required_without:month', 'integer', 'min:1', 'max:2'],
+            'month' => ['nullable', 'required_without:semester', 'integer', 'min:1', 'max:12'],
         ]);
 
         $year = (int) $request->input('year');
-        $semester = (int) $request->input('semester');
-        [$startMonth, $endMonth] = $semester === 1 ? [1, 6] : [7, 12];
+
+        if ($request->filled('semester')) {
+            $semester = (int) $request->input('semester');
+            [$startMonth, $endMonth] = $semester === 1 ? [1, 6] : [7, 12];
+            $periodLabel = "Semestre {$semester} {$year}";
+            $fileName = "reporte-declaracion-{$year}-S{$semester}.xlsx";
+        } else {
+            $month = (int) $request->input('month');
+            [$startMonth, $endMonth] = [$month, $month];
+            $periodLabel = ucfirst(Carbon::create($year, $month)->locale('es')->monthName)." {$year}";
+            $fileName = sprintf('reporte-declaracion-%d-%02d.xlsx', $year, $month);
+        }
+
         $startDate = sprintf('%d-%02d-01', $year, $startMonth);
         $endDate = Carbon::create($year, $endMonth)->endOfMonth()->format('Y-m-d');
         $companyId = (int) session('current_company_id');
 
         $export = new SemesterReportExport(
-            year: $year,
-            semester: $semester,
+            periodLabel: $periodLabel,
             resumen: [
                 'compras' => $this->comprasSummary($companyId, $year, $startMonth, $endMonth),
                 'ventas' => $this->ventasSummary($companyId, $year, $startMonth, $endMonth),
@@ -84,7 +95,7 @@ class DeclarationController extends Controller
             companyName: company()?->name,
         );
 
-        return Excel::download($export, "reporte-semestral-{$year}-S{$semester}.xlsx");
+        return Excel::download($export, $fileName);
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -94,28 +105,32 @@ class DeclarationController extends Controller
             ->where('company_id', $companyId)
             ->where('state', 'AUTORIZADO')
             ->whereBetween('emision', [$startDate, $endDate])
-            ->with(['contact:id,identification,name', 'voucherType:id,description'])
+            ->with(['contact:id,identification,name', 'voucherType:id,code,description'])
             ->orderBy('emision')
             ->get()
-            ->map(fn (Shop $shop) => [
-                'emision' => $shop->emision?->format('d-m-Y') ?? '',
-                'voucher_type' => $shop->voucherType?->description ?? '',
-                'serie' => $shop->serie ?? '',
-                'identification' => $shop->contact?->identification ?? '',
-                'name' => $shop->contact?->name ?? '',
-                'sub_total' => $shop->sub_total,
-                'no_iva' => $shop->no_iva,
-                'base0' => $shop->base0,
-                'base5' => $shop->base5,
-                'base8' => $shop->base8,
-                'base12' => $shop->base12,
-                'base15' => $shop->base15,
-                'iva5' => $shop->iva5,
-                'iva8' => $shop->iva8,
-                'iva12' => $shop->iva12,
-                'iva15' => $shop->iva15,
-                'total' => $shop->total,
-            ])
+            ->map(function (Shop $shop) {
+                $sign = $this->voucherSign($shop->voucherType?->code);
+
+                return [
+                    'emision' => $shop->emision?->format('d-m-Y') ?? '',
+                    'voucher_type' => $shop->voucherType?->description ?? '',
+                    'serie' => $shop->serie ?? '',
+                    'identification' => $shop->contact?->identification ?? '',
+                    'name' => $shop->contact?->name ?? '',
+                    'sub_total' => $sign * (float) $shop->sub_total,
+                    'no_iva' => $sign * (float) $shop->no_iva,
+                    'base0' => $sign * (float) $shop->base0,
+                    'base5' => $sign * (float) $shop->base5,
+                    'base8' => $sign * (float) $shop->base8,
+                    'base12' => $sign * (float) $shop->base12,
+                    'base15' => $sign * (float) $shop->base15,
+                    'iva5' => $sign * (float) $shop->iva5,
+                    'iva8' => $sign * (float) $shop->iva8,
+                    'iva12' => $sign * (float) $shop->iva12,
+                    'iva15' => $sign * (float) $shop->iva15,
+                    'total' => $sign * (float) $shop->total,
+                ];
+            })
             ->all();
     }
 
@@ -125,26 +140,30 @@ class DeclarationController extends Controller
         return Order::query()
             ->where('company_id', $companyId)
             ->whereBetween('emision', [$startDate, $endDate])
-            ->with(['contact:id,identification,name', 'voucherType:id,description'])
+            ->with(['contact:id,identification,name', 'voucherType:id,code,description'])
             ->orderBy('emision')
             ->get()
-            ->map(fn (Order $order) => [
-                'emision' => $order->emision?->format('d-m-Y') ?? '',
-                'voucher_type' => $order->voucherType?->description ?? '',
-                'serie' => $order->serie ?? '',
-                'identification' => $order->contact?->identification ?? '',
-                'name' => $order->contact?->name ?? '',
-                'sub_total' => $order->sub_total,
-                'no_iva' => $order->no_iva,
-                'base0' => $order->base0,
-                'base5' => $order->base5,
-                'base12' => $order->base12,
-                'base15' => $order->base15,
-                'iva5' => $order->iva5,
-                'iva12' => $order->iva12,
-                'iva15' => $order->iva15,
-                'total' => $order->total,
-            ])
+            ->map(function (Order $order) {
+                $sign = $this->voucherSign($order->voucherType?->code);
+
+                return [
+                    'emision' => $order->emision?->format('d-m-Y') ?? '',
+                    'voucher_type' => $order->voucherType?->description ?? '',
+                    'serie' => $order->serie ?? '',
+                    'identification' => $order->contact?->identification ?? '',
+                    'name' => $order->contact?->name ?? '',
+                    'sub_total' => $sign * (float) $order->sub_total,
+                    'no_iva' => $sign * (float) $order->no_iva,
+                    'base0' => $sign * (float) $order->base0,
+                    'base5' => $sign * (float) $order->base5,
+                    'base12' => $sign * (float) $order->base12,
+                    'base15' => $sign * (float) $order->base15,
+                    'iva5' => $sign * (float) $order->iva5,
+                    'iva12' => $sign * (float) $order->iva12,
+                    'iva15' => $sign * (float) $order->iva15,
+                    'total' => $sign * (float) $order->total,
+                ];
+            })
             ->all();
     }
 
@@ -218,12 +237,15 @@ class DeclarationController extends Controller
             ->where('company_id', $companyId)
             ->where('state', 'AUTORIZADO')
             ->whereBetween('emision', [$startDate, $endDate])
+            ->with('voucherType:id,code')
             ->withSum('retentionItems as total_retention', 'value')
-            ->get(['id', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total']);
+            ->get(['id', 'voucher_type_id', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total']);
 
-        $subtotal = $shops->sum(fn ($s) => (float) $s->sub_total);
-        $iva = $shops->sum(fn ($s) => (float) $s->iva5 + (float) $s->iva8 + (float) $s->iva12 + (float) $s->iva15);
-        $total = $shops->sum(fn ($s) => (float) $s->total);
+        $sign = fn ($s): int => $this->voucherSign($s->voucherType?->code);
+
+        $subtotal = $shops->sum(fn ($s) => $sign($s) * (float) $s->sub_total);
+        $iva = $shops->sum(fn ($s) => $sign($s) * ((float) $s->iva5 + (float) $s->iva8 + (float) $s->iva12 + (float) $s->iva15));
+        $total = $shops->sum(fn ($s) => $sign($s) * (float) $s->total);
         $retentions = $shops->sum(fn ($s) => (float) $s->total_retention);
 
         return [
@@ -245,12 +267,15 @@ class DeclarationController extends Controller
         $orders = Order::query()
             ->where('company_id', $companyId)
             ->whereBetween('emision', [$startDate, $endDate])
+            ->with('voucherType:id,code')
             ->withSum('retentionItems as total_retention', 'value')
-            ->get(['id', 'sub_total', 'iva5', 'iva12', 'iva15', 'total']);
+            ->get(['id', 'voucher_type_id', 'sub_total', 'iva5', 'iva12', 'iva15', 'total']);
 
-        $subtotal = $orders->sum(fn ($o) => (float) $o->sub_total);
-        $iva = $orders->sum(fn ($o) => (float) $o->iva5 + (float) $o->iva12 + (float) $o->iva15);
-        $total = $orders->sum(fn ($o) => (float) $o->total);
+        $sign = fn ($o): int => $this->voucherSign($o->voucherType?->code);
+
+        $subtotal = $orders->sum(fn ($o) => $sign($o) * (float) $o->sub_total);
+        $iva = $orders->sum(fn ($o) => $sign($o) * ((float) $o->iva5 + (float) $o->iva12 + (float) $o->iva15));
+        $total = $orders->sum(fn ($o) => $sign($o) * (float) $o->total);
         $retentions = $orders->sum(fn ($o) => (float) $o->total_retention);
 
         return [
@@ -261,6 +286,12 @@ class DeclarationController extends Controller
             'retentions' => round($retentions, 2),
             'a_cobrar' => round($total - $retentions, 2),
         ];
+    }
+
+    /** Nota de crédito (04) resta: sus valores van en negativo. */
+    private function voucherSign(?string $voucherTypeCode): int
+    {
+        return $voucherTypeCode === '04' ? -1 : 1;
     }
 
     /** @return array{int, int} */

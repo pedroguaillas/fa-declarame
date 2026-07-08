@@ -3,15 +3,7 @@ import TenantLayout from "@/layouts/TenantLayout.vue";
 import HeaderList from "@/components/Shared/HeaderList.vue";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "@inertiajs/vue3";
-import {
-    BookOpen,
-    FileText,
-    Users,
-    Percent,
-    ReceiptText,
-    UserCheck,
-    ArrowRight,
-} from "lucide-vue-next";
+import { BookOpen, FileText, Users, Percent, ReceiptText, UserCheck, ArrowRight } from "lucide-vue-next";
 
 const comprasReports = [
     {
@@ -33,7 +25,7 @@ const comprasReports = [
         route: "tenant.reports.shops-by-provider",
     },
     {
-        title: "Retenciones",
+        title: "Retenciones emitidas",
         description: "Retenciones en la fuente e IVA aplicadas a las compras por período.",
         icon: Percent,
         route: "tenant.reports.shops-by-retention",
@@ -53,6 +45,12 @@ const ventasReports = [
         icon: UserCheck,
         route: "tenant.reports.orders-by-client",
     },
+    {
+        title: "Retenciones recibidas",
+        description: "Retenciones en la fuente recibidas en las ventas por período.",
+        icon: Percent,
+        route: "tenant.reports.orders-by-retention",
+    },
 ];
 
 defineOptions({ layout: TenantLayout });
@@ -64,9 +62,7 @@ defineOptions({ layout: TenantLayout });
     <div class="mt-6 space-y-8 px-1">
         <!-- Compras -->
         <section>
-            <h2 class="text-muted-foreground mb-3 text-xs font-semibold tracking-widest uppercase">
-                Compras
-            </h2>
+            <h2 class="text-muted-foreground mb-3 text-xs font-semibold tracking-widest uppercase">Compras</h2>
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Link
                     v-for="report in comprasReports"
@@ -80,7 +76,9 @@ defineOptions({ layout: TenantLayout });
                                 <div class="bg-primary/10 text-primary rounded-lg p-2">
                                     <component :is="report.icon" class="size-5" />
                                 </div>
-                                <ArrowRight class="text-muted-foreground/40 size-4 transition-transform group-hover:translate-x-0.5 group-hover:text-current" />
+                                <ArrowRight
+                                    class="text-muted-foreground/40 size-4 transition-transform group-hover:translate-x-0.5 group-hover:text-current"
+                                />
                             </div>
                             <CardTitle class="mt-3 text-base">{{ report.title }}</CardTitle>
                         </CardHeader>
@@ -94,9 +92,7 @@ defineOptions({ layout: TenantLayout });
 
         <!-- Ventas -->
         <section>
-            <h2 class="text-muted-foreground mb-3 text-xs font-semibold tracking-widest uppercase">
-                Ventas
-            </h2>
+            <h2 class="text-muted-foreground mb-3 text-xs font-semibold tracking-widest uppercase">Ventas</h2>
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Link
                     v-for="report in ventasReports"
@@ -110,7 +106,9 @@ defineOptions({ layout: TenantLayout });
                                 <div class="bg-primary/10 text-primary rounded-lg p-2">
                                     <component :is="report.icon" class="size-5" />
                                 </div>
-                                <ArrowRight class="text-muted-foreground/40 size-4 transition-transform group-hover:translate-x-0.5 group-hover:text-current" />
+                                <ArrowRight
+                                    class="text-muted-foreground/40 size-4 transition-transform group-hover:translate-x-0.5 group-hover:text-current"
+                                />
                             </div>
                             <CardTitle class="mt-3 text-base">{{ report.title }}</CardTitle>
                         </CardHeader>

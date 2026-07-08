@@ -31,6 +31,7 @@ interface OrderFilters {
 const props = defineProps<{
     orders: Paginator<Order>;
     filters: OrderFilters;
+    typeDeclaration: string;
 }>();
 
 // ─── Table columns ──────────────────────────────────────────────────────────
@@ -130,10 +131,6 @@ function handleAction({ event, item }: ActionPayload<Order>) {
     } else if (event === "delete") {
         deleteTarget.value = item;
     }
-}
-
-function handleSelect(item: Order) {
-    router.visit(route("tenant.orders.edit", { order: item.id }));
 }
 
 function handlePageChange(page: number) {
@@ -272,7 +269,7 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
             </HeaderList>
 
             <!-- Filters -->
-            <FilterBar :filters="filters" @change="applyFilters" />
+            <FilterBar :filters="filters" :semiannual="typeDeclaration === 'semestral'" @change="applyFilters" />
 
             <!-- Hidden file inputs -->
             <input ref="importFileInput" type="file" accept=".txt,.zip,.xlsx" class="hidden" @change="handleFileSelected" />
@@ -294,7 +291,7 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
                         empty-text="No hay ventas registradas."
                         :actionsMode="'icons'"
                         :rowClass="(item) => item.serie_retention ? 'bg-green-50 dark:bg-green-950/20' : ''"
-                        @select="handleSelect"
+                        :row-click="false"
                         @action="handleAction"
                     />
                 </div>
@@ -304,7 +301,7 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
                         :items="orders.data"
                         :actions="actions"
                         empty-text="No hay ventas registradas."
-                        @select="handleSelect"
+                        :row-click="false"
                         @action="handleAction"
                     />
                 </div>

@@ -10,6 +10,13 @@ import ConfirmDialog from "@/components/Shared/ConfirmDialog.vue";
 import TenantLayout from "@/layouts/TenantLayout.vue";
 
 import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import AccountSlideOver from "./components/AccountSlideOver.vue";
 import RetentionSlideOver from "./components/RetentionSlideOver.vue";
 import FilterBar from "./components/FilterBar.vue";
@@ -18,7 +25,7 @@ import ShopExportModal from "./components/ShopExportModal.vue";
 import type { ActionDef, ActionPayload, ColumnDef } from "@/types/shared";
 import { Paginator } from "@/types";
 import { Shop } from "@/types/tenant";
-import { Download, FileText, Pencil, Receipt, Trash2, ClipboardList, Upload } from "lucide-vue-next";
+import { Ban, Download, FileText, Pencil, Receipt, Trash2, ClipboardList, Upload } from "lucide-vue-next";
 
 // ─── Props ─────────────────────────────────────────────────────────────────
 
@@ -34,6 +41,7 @@ const props = defineProps<{
     shops: Paginator<Shop>;
     isActiveRetention: boolean;
     filters: ShopFilters;
+    typeDeclaration: string;
 }>();
 
 // ─── Table columns ──────────────────────────────────────────────────────────
@@ -187,10 +195,6 @@ function handleAction({ event, item }: ActionPayload<Shop>) {
     }
 }
 
-function handleSelect(item: Shop) {
-    router.visit(route("tenant.shops.edit", { shop: item.id }));
-}
-
 function handlePageChange(page: number) {
     router.get(
         route("tenant.shops.index"),
@@ -210,6 +214,51 @@ function confirmDelete() {
         preserveScroll: true,
         onFinish: () => {
             deleteLoading.value = false;
+        },
+    });
+}
+
+// ─── Bulk actions ────────────────────────────────────────────────────────────
+
+const selectedIds = ref<Array<number | string>>([]);
+const bulkDeleteConfirmOpen = ref(false);
+const bulkLoading = ref(false);
+
+watch(
+    () => props.shops.data,
+    () => {
+        selectedIds.value = [];
+    },
+);
+
+function bulkNoDeclara() {
+    bulkLoading.value = true;
+    router.post(
+        route("tenant.shops.bulk-no-declara"),
+        { ids: selectedIds.value },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                selectedIds.value = [];
+            },
+            onFinish: () => {
+                bulkLoading.value = false;
+            },
+        },
+    );
+}
+
+function confirmBulkDelete() {
+    bulkDeleteConfirmOpen.value = false;
+    bulkLoading.value = true;
+    router.delete(route("tenant.shops.bulk-destroy"), {
+        data: { ids: selectedIds.value },
+        preserveScroll: true,
+        onSuccess: () => {
+            selectedIds.value = [];
+        },
+        onFinish: () => {
+            bulkLoading.value = false;
         },
     });
 }
@@ -307,7 +356,7 @@ watch(
                 link-label="Nueva compra"
                 :link-href="route('tenant.shops.create')"
                 :show-import="true"
-                import-label="Importar SRI"
+                import-label="Importar"
                 @click-import="importFileInput?.click()"
             >
                 <template #extra-actions>
@@ -340,7 +389,46 @@ watch(
             </HeaderList>
 
             <!-- Filters -->
-            <FilterBar :filters="filters" :show-retention="isActiveRetention" @change="applyFilters" />
+            <FilterBar
+                :filters="filters"
+                :show-retention="isActiveRetention"
+                :semiannual="typeDeclaration === 'semestral'"
+                @change="applyFilters"
+            />
+
+            <!-- Bulk actions -->
+            <div
+                v-if="selectedIds.length > 0"
+                class="border-border bg-muted/50 flex items-center justify-between rounded-lg border px-4 py-2"
+            >
+                <span class="text-muted-foreground text-sm">
+                    {{ selectedIds.length }} compra{{ selectedIds.length !== 1 ? "s" : "" }} seleccionada{{
+                        selectedIds.length !== 1 ? "s" : ""
+                    }}
+                </span>
+                <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                        <Button variant="destructive" size="sm" :disabled="bulkLoading">
+                            <Trash2 class="size-4" />
+                            {{ bulkLoading ? "Procesando…" : "Eliminar" }}
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem class="cursor-pointer" @click="bulkNoDeclara">
+                            <Ban class="mr-2 size-4 opacity-70" />
+                            <span>Pasar a No declara</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            class="text-destructive focus:text-destructive cursor-pointer"
+                            @click="bulkDeleteConfirmOpen = true"
+                        >
+                            <Trash2 class="mr-2 size-4 opacity-70" />
+                            <span>Eliminar definitivamente</span>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
 
             <!-- Hidden file inputs -->
             <input
@@ -362,16 +450,18 @@ watch(
             <div class="border-border bg-card flex-1 overflow-hidden rounded-lg border">
                 <div class="hidden h-full md:block">
                     <DataTableDesktop
+                        v-model:selected="selectedIds"
                         :columns="activeColumns"
                         :items="shops.data"
                         :actions="actions"
+                        selectable
                         empty-text="No hay compras registradas."
                         :actions-mode="'icons'"
                         :row-class="
                             (item: Shop) =>
                                 item.serie_retention ? 'bg-green-100 hover:bg-green-200 dark:bg-green-900/20' : ''
                         "
-                        @select="handleSelect"
+                        :row-click="false"
                         @action="handleAction"
                     />
                 </div>
@@ -381,7 +471,7 @@ watch(
                         :items="shops.data"
                         :actions="actions"
                         empty-text="No hay compras registradas."
-                        @select="handleSelect"
+                        :row-click="false"
                         @action="handleAction"
                     />
                 </div>
@@ -403,6 +493,17 @@ watch(
             "
             @confirm="confirmDelete"
             @cancel="deleteTarget = null"
+        />
+
+        <!-- Confirm bulk delete -->
+        <ConfirmDialog
+            :open="bulkDeleteConfirmOpen"
+            title="¿Eliminar compras seleccionadas?"
+            :description="`Se eliminarán ${selectedIds.length} compra(s) de manera definitiva. Esta acción no se puede deshacer. ¿Está seguro?`"
+            :loading="bulkLoading"
+            @update:open="(v) => (bulkDeleteConfirmOpen = v)"
+            @confirm="confirmBulkDelete"
+            @cancel="bulkDeleteConfirmOpen = false"
         />
 
         <!-- Slide-overs -->

@@ -27,6 +27,7 @@ const props = defineProps<{
     emptyText?: string;
     emptyIcon?: Component;
     actionsMode?: "menu" | "icons" | "auto";
+    rowClick?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -81,9 +82,9 @@ function visibleActions(item: T): ActionDef<T>[] {
                 <div
                     v-for="(item, idx) in items"
                     :key="idx"
-                    class="border-border hover:bg-muted/40 relative cursor-pointer p-3 transition-colors"
-                    :class="{ 'border-t': idx > 0 }"
-                    @click="emit('select', item)"
+                    class="border-border hover:bg-muted/40 relative p-3 transition-colors"
+                    :class="{ 'border-t': idx > 0, 'cursor-pointer': props.rowClick ?? true }"
+                    @click="(props.rowClick ?? true) && emit('select', item)"
                 >
                     <!-- Título + acciones -->
                     <div class="mb-1.5 flex items-start justify-between gap-2">

@@ -19,8 +19,7 @@ class SemesterReportExport implements WithMultipleSheets
      * @param  array<int, array<string, mixed>>  $retencionesEmitidas
      */
     public function __construct(
-        private readonly int $year,
-        private readonly int $semester,
+        private readonly string $periodLabel,
         private readonly array $resumen,
         private readonly array $compras,
         private readonly array $ventas,
@@ -33,12 +32,26 @@ class SemesterReportExport implements WithMultipleSheets
     /** @return array<int, object> */
     public function sheets(): array
     {
-        return [
-            new SemesterSummarySheet($this->resumen, $this->year, $this->semester, $this->logoPath, $this->companyName),
-            new SemesterComprasSheet($this->compras, $this->logoPath, $this->companyName),
-            new SemesterVentasSheet($this->ventas, $this->logoPath, $this->companyName),
-            new SemesterRetencionesRecibidasSheet($this->retencionesRecibidas, $this->logoPath, $this->companyName),
-            new SemesterRetencionesEmitidasSheet($this->retencionesEmitidas, $this->logoPath, $this->companyName),
+        $sheets = [
+            new SemesterSummarySheet($this->resumen, $this->periodLabel, $this->logoPath, $this->companyName),
         ];
+
+        if ($this->compras !== []) {
+            $sheets[] = new SemesterComprasSheet($this->compras, $this->logoPath, $this->companyName);
+        }
+
+        if ($this->ventas !== []) {
+            $sheets[] = new SemesterVentasSheet($this->ventas, $this->logoPath, $this->companyName);
+        }
+
+        if ($this->retencionesRecibidas !== []) {
+            $sheets[] = new SemesterRetencionesRecibidasSheet($this->retencionesRecibidas, $this->logoPath, $this->companyName);
+        }
+
+        if ($this->retencionesEmitidas !== []) {
+            $sheets[] = new SemesterRetencionesEmitidasSheet($this->retencionesEmitidas, $this->logoPath, $this->companyName);
+        }
+
+        return $sheets;
     }
 }

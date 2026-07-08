@@ -1,2 +1,9 @@
 ignoredBuiltDependencies:
   - vue-demi
+
+supportedArchitectures:
+  os:
+    - darwin
+    - linux
+  cpu:
+    - arm64
