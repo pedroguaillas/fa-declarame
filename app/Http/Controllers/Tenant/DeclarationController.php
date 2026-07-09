@@ -9,7 +9,9 @@ use App\Models\Tenant\OrderRetentionItem;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\ShopRetentionItem;
 use Carbon\Carbon;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
@@ -107,7 +109,7 @@ class DeclarationController extends Controller
             ->whereBetween('emision', [$startDate, $endDate])
             ->with(['contact:id,identification,name', 'voucherType:id,code,description'])
             ->orderBy('emision')
-            ->get()
+            ->get(['id', 'contact_id', 'voucher_type_id', 'emision', 'serie', 'sub_total', 'no_iva', 'base0', 'base5', 'base8', 'base12', 'base15', 'iva5', 'iva8', 'iva12', 'iva15', 'total'])
             ->map(function (Shop $shop) {
                 $sign = $this->voucherSign($shop->voucherType?->code);
 
@@ -142,7 +144,7 @@ class DeclarationController extends Controller
             ->whereBetween('emision', [$startDate, $endDate])
             ->with(['contact:id,identification,name', 'voucherType:id,code,description'])
             ->orderBy('emision')
-            ->get()
+            ->get(['id', 'contact_id', 'voucher_type_id', 'emision', 'serie', 'sub_total', 'no_iva', 'base0', 'base5', 'base12', 'base15', 'iva5', 'iva12', 'iva15', 'total'])
             ->map(function (Order $order) {
                 $sign = $this->voucherSign($order->voucherType?->code);
 
@@ -180,7 +182,7 @@ class DeclarationController extends Controller
                 $q->where('company_id', $companyId)->whereBetween('emision', [$startDate, $endDate]);
             })
             ->orderBy('order_id')
-            ->get()
+            ->get(['id', 'order_id', 'retention_id', 'base', 'percentage', 'value'])
             ->map(fn (OrderRetentionItem $item) => [
                 'date_retention' => $item->order?->date_retention?->format('d-m-Y') ?? '',
                 'serie_retention' => $item->order?->serie_retention ?? '',
@@ -210,7 +212,7 @@ class DeclarationController extends Controller
                 $q->where('company_id', $companyId)->whereBetween('emision', [$startDate, $endDate]);
             })
             ->orderBy('shop_id')
-            ->get()
+            ->get(['id', 'shop_id', 'retention_id', 'base', 'percentage', 'value'])
             ->map(fn (ShopRetentionItem $item) => [
                 'date_retention' => $item->shop?->date_retention?->format('d-m-Y') ?? '',
                 'serie_retention' => $item->shop?->serie_retention ?? '',
@@ -232,26 +234,30 @@ class DeclarationController extends Controller
     {
         $startDate = sprintf('%d-%02d-01', $year, $startMonth);
         $endDate = Carbon::create($year, $endMonth)->endOfMonth()->format('Y-m-d');
+        $sign = $this->signSql();
 
-        $shops = Shop::query()
-            ->where('company_id', $companyId)
-            ->where('state', 'AUTORIZADO')
-            ->whereBetween('emision', [$startDate, $endDate])
-            ->with('voucherType:id,code')
-            ->withSum('retentionItems as total_retention', 'value')
-            ->get(['id', 'voucher_type_id', 'sub_total', 'iva5', 'iva8', 'iva12', 'iva15', 'total']);
+        $row = Shop::query()
+            ->join('voucher_types AS vt', 'vt.id', 'shops.voucher_type_id')
+            ->leftJoinSub($this->retentionTotalsSub('shop_retention_items', 'shop_id'), 'ret', 'ret.shop_id', 'shops.id')
+            ->where('shops.company_id', $companyId)
+            ->where('shops.state', 'AUTORIZADO')
+            ->whereBetween('shops.emision', [$startDate, $endDate])
+            ->selectRaw("
+                COUNT(*) AS doc_count,
+                SUM({$sign} * shops.sub_total) AS subtotal,
+                SUM({$sign} * (shops.iva5 + shops.iva8 + shops.iva12 + shops.iva15)) AS iva,
+                SUM({$sign} * shops.total) AS total,
+                SUM(COALESCE(ret.total_retention, 0)) AS retentions
+            ")
+            ->first();
 
-        $sign = fn ($s): int => $this->voucherSign($s->voucherType?->code);
-
-        $subtotal = $shops->sum(fn ($s) => $sign($s) * (float) $s->sub_total);
-        $iva = $shops->sum(fn ($s) => $sign($s) * ((float) $s->iva5 + (float) $s->iva8 + (float) $s->iva12 + (float) $s->iva15));
-        $total = $shops->sum(fn ($s) => $sign($s) * (float) $s->total);
-        $retentions = $shops->sum(fn ($s) => (float) $s->total_retention);
+        $total = (float) $row->total;
+        $retentions = (float) $row->retentions;
 
         return [
-            'count' => $shops->count(),
-            'subtotal' => round($subtotal, 2),
-            'iva' => round($iva, 2),
+            'count' => (int) $row->doc_count,
+            'subtotal' => round((float) $row->subtotal, 2),
+            'iva' => round((float) $row->iva, 2),
             'total' => round($total, 2),
             'retentions' => round($retentions, 2),
             'a_pagar' => round($total - $retentions, 2),
@@ -263,29 +269,47 @@ class DeclarationController extends Controller
     {
         $startDate = sprintf('%d-%02d-01', $year, $startMonth);
         $endDate = Carbon::create($year, $endMonth)->endOfMonth()->format('Y-m-d');
+        $sign = $this->signSql();
 
-        $orders = Order::query()
-            ->where('company_id', $companyId)
-            ->whereBetween('emision', [$startDate, $endDate])
-            ->with('voucherType:id,code')
-            ->withSum('retentionItems as total_retention', 'value')
-            ->get(['id', 'voucher_type_id', 'sub_total', 'iva5', 'iva12', 'iva15', 'total']);
+        $row = Order::query()
+            ->join('voucher_types AS vt', 'vt.id', 'orders.voucher_type_id')
+            ->leftJoinSub($this->retentionTotalsSub('order_retention_items', 'order_id'), 'ret', 'ret.order_id', 'orders.id')
+            ->where('orders.company_id', $companyId)
+            ->whereBetween('orders.emision', [$startDate, $endDate])
+            ->selectRaw("
+                COUNT(*) AS doc_count,
+                SUM({$sign} * orders.sub_total) AS subtotal,
+                SUM({$sign} * (orders.iva5 + orders.iva12 + orders.iva15)) AS iva,
+                SUM({$sign} * orders.total) AS total,
+                SUM(COALESCE(ret.total_retention, 0)) AS retentions
+            ")
+            ->first();
 
-        $sign = fn ($o): int => $this->voucherSign($o->voucherType?->code);
-
-        $subtotal = $orders->sum(fn ($o) => $sign($o) * (float) $o->sub_total);
-        $iva = $orders->sum(fn ($o) => $sign($o) * ((float) $o->iva5 + (float) $o->iva12 + (float) $o->iva15));
-        $total = $orders->sum(fn ($o) => $sign($o) * (float) $o->total);
-        $retentions = $orders->sum(fn ($o) => (float) $o->total_retention);
+        $total = (float) $row->total;
+        $retentions = (float) $row->retentions;
 
         return [
-            'count' => $orders->count(),
-            'subtotal' => round($subtotal, 2),
-            'iva' => round($iva, 2),
+            'count' => (int) $row->doc_count,
+            'subtotal' => round((float) $row->subtotal, 2),
+            'iva' => round((float) $row->iva, 2),
             'total' => round($total, 2),
             'retentions' => round($retentions, 2),
             'a_cobrar' => round($total - $retentions, 2),
         ];
+    }
+
+    /** Expresión de signo: nota de crédito (04) resta. */
+    private function signSql(): string
+    {
+        return "(CASE WHEN vt.code = '04' THEN -1 ELSE 1 END)";
+    }
+
+    /** Totales de retención por documento, agregables en el GROUP BY externo. */
+    private function retentionTotalsSub(string $table, string $foreignKey): QueryBuilder
+    {
+        return DB::table($table)
+            ->selectRaw("{$foreignKey}, SUM(value) AS total_retention")
+            ->groupBy($foreignKey);
     }
 
     /** Nota de crédito (04) resta: sus valores van en negativo. */

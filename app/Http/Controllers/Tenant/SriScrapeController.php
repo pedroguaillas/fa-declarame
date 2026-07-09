@@ -75,6 +75,18 @@ class SriScrapeController extends Controller
             return back()->with('error', 'Ya existe una descarga en progreso para este tipo.');
         }
 
+        $previousJobs = SriScrapeJob::forPeriod(
+            $company->id,
+            $validated['type'],
+            $validated['year'],
+            $validated['month'],
+            $validated['day'] ?? null,
+        )->whereIn('status', ['completed', 'failed'])->get(['status', 'result']);
+
+        if ($blockReason = SriScrapeJob::blockReason($previousJobs)) {
+            return back()->with('error', $blockReason);
+        }
+
         $scrapeJob = SriScrapeJob::create([
             'company_id' => $company->id,
             'type' => $validated['type'],

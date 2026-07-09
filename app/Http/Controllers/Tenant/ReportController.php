@@ -12,14 +12,13 @@ use App\Exports\ShopsByVoucherTypeExport;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\Company;
 use App\Models\Tenant\Order;
-use App\Models\Tenant\OrderRetentionItem;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\ShopItem;
-use App\Models\Tenant\ShopRetentionItem;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
@@ -193,37 +192,38 @@ class ReportController extends Controller
      */
     private function ordersByVoucherTypeRows(int $companyId, array $filters): Collection
     {
-        $orders = Order::query()
+        $sign = $this->signSql();
+
+        $rows = Order::query()
             ->join('voucher_types AS vt', 'vt.id', 'orders.voucher_type_id')
-            ->select(['orders.id', 'orders.voucher_type_id', 'vt.code as vt_code', 'vt.description as vt_description', 'sub_total', 'iva5', 'iva12', 'iva15', 'total'])
-            ->withSum('retentionItems as total_retention', 'value')
-            ->where('company_id', $companyId)
-            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
-            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
+            ->leftJoinSub($this->retentionTotalsSub('order_retention_items', 'order_id'), 'ret', 'ret.order_id', 'orders.id')
+            ->where('orders.company_id', $companyId)
+            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->where('orders.emision', '>=', $d))
+            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->where('orders.emision', '<=', $d))
             ->when($filters['only_authorized'] ?? true, fn ($q) => $q->where('orders.state', 'AUTORIZADO'))
+            ->groupBy('orders.voucher_type_id', 'vt.code', 'vt.description')
+            ->selectRaw("
+                vt.code AS vt_code,
+                vt.description AS vt_description,
+                COUNT(*) AS doc_count,
+                SUM({$sign} * orders.sub_total) AS subtotal,
+                SUM({$sign} * (orders.iva5 + orders.iva12 + orders.iva15)) AS iva,
+                SUM({$sign} * orders.total) AS total,
+                SUM(COALESCE(ret.total_retention, 0)) AS retentions
+            ")
             ->get();
 
-        return $orders
-            ->groupBy('voucher_type_id')
-            ->map(function ($group) {
-                $first = $group->first();
-                $sign = $first->vt_code === '04' ? -1 : 1;
-                $subtotal = $group->sum(fn ($o) => (float) $o->sub_total);
-                $iva = $group->sum(fn ($o) => (float) $o->iva5 + (float) $o->iva12 + (float) $o->iva15);
-                $total = $group->sum(fn ($o) => (float) $o->total);
-                $retentions = $group->sum(fn ($o) => (float) $o->total_retention);
-
-                return [
-                    'code' => $first->vt_code,
-                    'description' => $first->vt_description,
-                    'count' => $group->count(),
-                    'subtotal' => round($sign * $subtotal, 2),
-                    'iva' => round($sign * $iva, 2),
-                    'total' => round($sign * $total, 2),
-                    'retentions' => round($retentions, 2),
-                    'a_cobrar' => round($sign * $total - $retentions, 2),
-                ];
-            })
+        return $rows
+            ->map(fn ($r) => [
+                'code' => $r->vt_code,
+                'description' => $r->vt_description,
+                'count' => (int) $r->doc_count,
+                'subtotal' => round((float) $r->subtotal, 2),
+                'iva' => round((float) $r->iva, 2),
+                'total' => round((float) $r->total, 2),
+                'retentions' => round((float) $r->retentions, 2),
+                'a_cobrar' => round((float) $r->total - (float) $r->retentions, 2),
+            ])
             ->sortBy('code')
             ->values();
     }
@@ -234,54 +234,54 @@ class ReportController extends Controller
      */
     private function ordersByClientRows(int $companyId, array $filters): Collection
     {
-        $orders = Order::query()
+        $sign = $this->signSql();
+
+        $rows = Order::query()
             ->join('voucher_types AS vt', 'vt.id', 'orders.voucher_type_id')
-            ->select(['orders.id', 'orders.contact_id', 'vt.code as vt_code', 'sub_total', 'no_iva', 'exempt', 'base0', 'base5', 'base12', 'base15', 'iva5', 'iva12', 'iva15', 'total'])
-            ->with('contact:id,identification,name')
-            ->withSum('retentionItems as total_retention', 'value')
-            ->where('company_id', $companyId)
-            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
-            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
+            ->join('contacts AS c', 'c.id', 'orders.contact_id')
+            ->leftJoinSub($this->retentionTotalsSub('order_retention_items', 'order_id'), 'ret', 'ret.order_id', 'orders.id')
+            ->where('orders.company_id', $companyId)
+            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->where('orders.emision', '>=', $d))
+            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->where('orders.emision', '<=', $d))
             ->when($filters['only_authorized'] ?? true, fn ($q) => $q->where('orders.state', 'AUTORIZADO'))
+            ->groupBy('orders.contact_id', 'c.identification', 'c.name')
+            ->selectRaw("
+                c.identification AS identification,
+                c.name AS name,
+                SUM({$sign} * orders.sub_total) AS subtotal,
+                SUM({$sign} * orders.no_iva) AS no_iva,
+                SUM({$sign} * orders.exempt) AS exempt,
+                SUM({$sign} * orders.base0) AS base0,
+                SUM({$sign} * orders.base5) AS base5,
+                SUM({$sign} * orders.base12) AS base12,
+                SUM({$sign} * orders.base15) AS base15,
+                SUM({$sign} * orders.iva5) AS iva5,
+                SUM({$sign} * orders.iva12) AS iva12,
+                SUM({$sign} * orders.iva15) AS iva15,
+                SUM({$sign} * orders.total) AS total,
+                SUM(COALESCE(ret.total_retention, 0)) AS retentions
+            ")
             ->get();
 
-        return $orders
-            ->groupBy('contact_id')
-            ->map(function ($group) {
-                $first = $group->first();
-                $sign = fn ($o) => $o->vt_code === '04' ? -1 : 1;
-                $subtotal = $group->sum(fn ($o) => $sign($o) * (float) $o->sub_total);
-                $noIva = $group->sum(fn ($o) => $sign($o) * (float) $o->no_iva);
-                $exempt = $group->sum(fn ($o) => $sign($o) * (float) $o->exempt);
-                $base0 = $group->sum(fn ($o) => $sign($o) * (float) $o->base0);
-                $base5 = $group->sum(fn ($o) => $sign($o) * (float) $o->base5);
-                $base12 = $group->sum(fn ($o) => $sign($o) * (float) $o->base12);
-                $base15 = $group->sum(fn ($o) => $sign($o) * (float) $o->base15);
-                $iva5 = $group->sum(fn ($o) => $sign($o) * (float) $o->iva5);
-                $iva12 = $group->sum(fn ($o) => $sign($o) * (float) $o->iva12);
-                $iva15 = $group->sum(fn ($o) => $sign($o) * (float) $o->iva15);
-                $total = $group->sum(fn ($o) => $sign($o) * (float) $o->total);
-                $retentions = $group->sum(fn ($o) => (float) $o->total_retention);
-
-                return [
-                    'identification' => $first->contact?->identification ?? '—',
-                    'name' => $first->contact?->name ?? 'Sin cliente',
-                    'subtotal' => round($subtotal, 2),
-                    'iva' => round($iva5 + $iva12 + $iva15, 2),
-                    'no_iva' => round($noIva, 2),
-                    'exempt' => round($exempt, 2),
-                    'base0' => round($base0, 2),
-                    'base5' => round($base5, 2),
-                    'base12' => round($base12, 2),
-                    'base15' => round($base15, 2),
-                    'iva5' => round($iva5, 2),
-                    'iva12' => round($iva12, 2),
-                    'iva15' => round($iva15, 2),
-                    'total' => round($total, 2),
-                    'retentions' => round($retentions, 2),
-                    'a_cobrar' => round($total - $retentions, 2),
-                ];
-            })
+        return $rows
+            ->map(fn ($r) => [
+                'identification' => $r->identification ?? '—',
+                'name' => $r->name ?? 'Sin cliente',
+                'subtotal' => round((float) $r->subtotal, 2),
+                'iva' => round((float) $r->iva5 + (float) $r->iva12 + (float) $r->iva15, 2),
+                'no_iva' => round((float) $r->no_iva, 2),
+                'exempt' => round((float) $r->exempt, 2),
+                'base0' => round((float) $r->base0, 2),
+                'base5' => round((float) $r->base5, 2),
+                'base12' => round((float) $r->base12, 2),
+                'base15' => round((float) $r->base15, 2),
+                'iva5' => round((float) $r->iva5, 2),
+                'iva12' => round((float) $r->iva12, 2),
+                'iva15' => round((float) $r->iva15, 2),
+                'total' => round((float) $r->total, 2),
+                'retentions' => round((float) $r->retentions, 2),
+                'a_cobrar' => round((float) $r->total - (float) $r->retentions, 2),
+            ])
             ->sortBy('name')
             ->values();
     }
@@ -316,16 +316,10 @@ class ReportController extends Controller
      */
     private function shopsByAccountRows(int $companyId, array $filters): Collection
     {
-        $items = ShopItem::query()
-            ->select([
-                'pa.account_id',
-                'shop_items.total',
-                'shop_items.tax_value',
-                'shop_items.tax_percentage',
-                'vt.code as vt_code',
-                'acc.code as account_code',
-                'acc.name as account_name',
-            ])
+        $sign = $this->signSql();
+        $bucket = fn (string $column, int $pct): string => "SUM(CASE WHEN shop_items.tax_percentage = {$pct} THEN {$sign} * shop_items.{$column} ELSE 0 END)";
+
+        $rows = ShopItem::query()
             ->join('shops', 'shops.id', '=', 'shop_items.shop_id')
             ->join('voucher_types AS vt', 'vt.id', '=', 'shops.voucher_type_id')
             ->join('product_accounts AS pa', function ($join) use ($companyId) {
@@ -335,41 +329,45 @@ class ReportController extends Controller
             ->join('accounts AS acc', 'acc.id', '=', 'pa.account_id')
             ->where('shop_items.total', '>', 0)
             ->where('shops.company_id', $companyId)
-            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('shops.emision', '>=', $d))
-            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('shops.emision', '<=', $d))
+            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->where('shops.emision', '>=', $d))
+            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->where('shops.emision', '<=', $d))
             ->when($filters['only_authorized'] ?? true, fn ($q) => $q->where('shops.state', 'AUTORIZADO'))
+            ->groupBy('pa.account_id', 'acc.code', 'acc.name')
+            ->selectRaw(implode(', ', [
+                'acc.code AS account_code',
+                'acc.name AS account_name',
+                "SUM({$sign} * shop_items.total) AS subtotal",
+                "SUM({$sign} * shop_items.tax_value) AS iva",
+                $bucket('total', 0).' AS base0',
+                $bucket('total', 5).' AS base5',
+                $bucket('total', 8).' AS base8',
+                $bucket('total', 12).' AS base12',
+                $bucket('total', 15).' AS base15',
+                $bucket('tax_value', 5).' AS iva5',
+                $bucket('tax_value', 8).' AS iva8',
+                $bucket('tax_value', 12).' AS iva12',
+                $bucket('tax_value', 15).' AS iva15',
+            ]))
             ->get();
 
-        return $items
-            ->groupBy('account_id')
-            ->map(function ($group) {
-                $first = $group->first();
-                $sign = fn ($i) => $i->vt_code === '04' ? -1 : 1;
-
-                $base = fn (float $pct) => $group
-                    ->filter(fn ($i) => (float) $i->tax_percentage === $pct)
-                    ->sum(fn ($i) => $sign($i) * (float) $i->total);
-
-                $ivaRate = fn (float $pct) => $group
-                    ->filter(fn ($i) => (float) $i->tax_percentage === $pct)
-                    ->sum(fn ($i) => $sign($i) * (float) $i->tax_value);
-
-                $subtotal = round($group->sum(fn ($i) => $sign($i) * (float) $i->total), 2);
-                $iva = round($group->sum(fn ($i) => $sign($i) * (float) $i->tax_value), 2);
+        return $rows
+            ->map(function ($r) {
+                $subtotal = round((float) $r->subtotal, 2);
+                $iva = round((float) $r->iva, 2);
 
                 return [
-                    'account_code' => $first->account_code,
-                    'account_name' => $first->account_name,
+                    'account_code' => $r->account_code,
+                    'account_name' => $r->account_name,
                     'subtotal' => $subtotal,
-                    'base0' => round($base(0), 2),
-                    'base5' => round($base(5), 2),
-                    'base8' => round($base(8), 2),
-                    'base12' => round($base(12), 2),
-                    'base15' => round($base(15), 2),
-                    'iva5' => round($ivaRate(5), 2),
-                    'iva8' => round($ivaRate(8), 2),
-                    'iva12' => round($ivaRate(12), 2),
-                    'iva15' => round($ivaRate(15), 2),
+                    'base0' => round((float) $r->base0, 2),
+                    'base5' => round((float) $r->base5, 2),
+                    'base8' => round((float) $r->base8, 2),
+                    'base12' => round((float) $r->base12, 2),
+                    'base15' => round((float) $r->base15, 2),
+                    'iva5' => round((float) $r->iva5, 2),
+                    'iva8' => round((float) $r->iva8, 2),
+                    'iva12' => round((float) $r->iva12, 2),
+                    'iva15' => round((float) $r->iva15, 2),
                     'iva' => $iva,
                     'total' => round($subtotal + $iva, 2),
                 ];
@@ -384,57 +382,58 @@ class ReportController extends Controller
      */
     private function shopsByVoucherTypeRows(int $companyId, array $filters): Collection
     {
-        $shops = Shop::query()
+        $sign = $this->signSql();
+
+        $rows = Shop::query()
             ->join('voucher_types AS vt', 'vt.id', 'shops.voucher_type_id')
-            ->select(['shops.id', 'shops.voucher_type_id', 'vt.code as vt_code', 'vt.description as vt_description', 'sub_total', 'no_iva', 'exempt', 'base0', 'base5', 'base8', 'base12', 'base15', 'iva5', 'iva8', 'iva12', 'iva15', 'total'])
-            ->withSum('retentionItems as total_retention', 'value')
-            ->where('company_id', $companyId)
-            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
-            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
+            ->leftJoinSub($this->retentionTotalsSub('shop_retention_items', 'shop_id'), 'ret', 'ret.shop_id', 'shops.id')
+            ->where('shops.company_id', $companyId)
+            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->where('shops.emision', '>=', $d))
+            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->where('shops.emision', '<=', $d))
             ->when($filters['only_authorized'] ?? true, fn ($q) => $q->where('shops.state', 'AUTORIZADO'))
+            ->groupBy('shops.voucher_type_id', 'vt.code', 'vt.description')
+            ->selectRaw("
+                vt.code AS vt_code,
+                vt.description AS vt_description,
+                COUNT(*) AS doc_count,
+                SUM({$sign} * shops.sub_total) AS subtotal,
+                SUM({$sign} * shops.no_iva) AS no_iva,
+                SUM({$sign} * shops.exempt) AS exempt,
+                SUM({$sign} * shops.base0) AS base0,
+                SUM({$sign} * shops.base5) AS base5,
+                SUM({$sign} * shops.base8) AS base8,
+                SUM({$sign} * shops.base12) AS base12,
+                SUM({$sign} * shops.base15) AS base15,
+                SUM({$sign} * shops.iva5) AS iva5,
+                SUM({$sign} * shops.iva8) AS iva8,
+                SUM({$sign} * shops.iva12) AS iva12,
+                SUM({$sign} * shops.iva15) AS iva15,
+                SUM({$sign} * shops.total) AS total,
+                SUM(COALESCE(ret.total_retention, 0)) AS retentions
+            ")
             ->get();
 
-        return $shops
-            ->groupBy('voucher_type_id')
-            ->map(function ($group) {
-                $first = $group->first();
-                $sign = $first->vt_code === '04' ? -1 : 1;
-                $subtotal = $group->sum(fn ($s) => (float) $s->sub_total);
-                $noIva = $group->sum(fn ($s) => (float) $s->no_iva);
-                $exempt = $group->sum(fn ($s) => (float) $s->exempt);
-                $base0 = $group->sum(fn ($s) => (float) $s->base0);
-                $base5 = $group->sum(fn ($s) => (float) $s->base5);
-                $base8 = $group->sum(fn ($s) => (float) $s->base8);
-                $base12 = $group->sum(fn ($s) => (float) $s->base12);
-                $base15 = $group->sum(fn ($s) => (float) $s->base15);
-                $iva5 = $group->sum(fn ($s) => (float) $s->iva5);
-                $iva8 = $group->sum(fn ($s) => (float) $s->iva8);
-                $iva12 = $group->sum(fn ($s) => (float) $s->iva12);
-                $iva15 = $group->sum(fn ($s) => (float) $s->iva15);
-                $total = $group->sum(fn ($s) => (float) $s->total);
-                $retentions = $group->sum(fn ($s) => (float) $s->total_retention);
-
-                return [
-                    'code' => $first->vt_code,
-                    'description' => $first->vt_description,
-                    'count' => $group->count(),
-                    'subtotal' => round($sign * $subtotal, 2),
-                    'no_iva' => round($sign * $noIva, 2),
-                    'exempt' => round($sign * $exempt, 2),
-                    'base0' => round($sign * $base0, 2),
-                    'base5' => round($sign * $base5, 2),
-                    'base8' => round($sign * $base8, 2),
-                    'base12' => round($sign * $base12, 2),
-                    'base15' => round($sign * $base15, 2),
-                    'iva5' => round($sign * $iva5, 2),
-                    'iva8' => round($sign * $iva8, 2),
-                    'iva12' => round($sign * $iva12, 2),
-                    'iva15' => round($sign * $iva15, 2),
-                    'total' => round($sign * $total, 2),
-                    'retentions' => round($retentions, 2),
-                    'a_pagar' => round($sign * $total - $retentions, 2),
-                ];
-            })
+        return $rows
+            ->map(fn ($r) => [
+                'code' => $r->vt_code,
+                'description' => $r->vt_description,
+                'count' => (int) $r->doc_count,
+                'subtotal' => round((float) $r->subtotal, 2),
+                'no_iva' => round((float) $r->no_iva, 2),
+                'exempt' => round((float) $r->exempt, 2),
+                'base0' => round((float) $r->base0, 2),
+                'base5' => round((float) $r->base5, 2),
+                'base8' => round((float) $r->base8, 2),
+                'base12' => round((float) $r->base12, 2),
+                'base15' => round((float) $r->base15, 2),
+                'iva5' => round((float) $r->iva5, 2),
+                'iva8' => round((float) $r->iva8, 2),
+                'iva12' => round((float) $r->iva12, 2),
+                'iva15' => round((float) $r->iva15, 2),
+                'total' => round((float) $r->total, 2),
+                'retentions' => round((float) $r->retentions, 2),
+                'a_pagar' => round((float) $r->total - (float) $r->retentions, 2),
+            ])
             ->sortBy('code')
             ->values();
     }
@@ -445,58 +444,58 @@ class ReportController extends Controller
      */
     private function shopsByProviderRows(int $companyId, array $filters): Collection
     {
-        $shops = Shop::query()
+        $sign = $this->signSql();
+
+        $rows = Shop::query()
             ->join('voucher_types AS vt', 'vt.id', 'shops.voucher_type_id')
-            ->select(['shops.id', 'shops.contact_id', 'vt.code as vt_code', 'sub_total', 'no_iva', 'exempt', 'base0', 'base5', 'base8', 'base12', 'base15', 'iva5', 'iva8', 'iva12', 'iva15', 'total'])
-            ->with('contact:id,identification,name')
-            ->withSum('retentionItems as total_retention', 'value')
-            ->where('company_id', $companyId)
-            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
-            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
+            ->join('contacts AS c', 'c.id', 'shops.contact_id')
+            ->leftJoinSub($this->retentionTotalsSub('shop_retention_items', 'shop_id'), 'ret', 'ret.shop_id', 'shops.id')
+            ->where('shops.company_id', $companyId)
+            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->where('shops.emision', '>=', $d))
+            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->where('shops.emision', '<=', $d))
             ->when($filters['only_authorized'] ?? true, fn ($q) => $q->where('shops.state', 'AUTORIZADO'))
+            ->groupBy('shops.contact_id', 'c.identification', 'c.name')
+            ->selectRaw("
+                c.identification AS identification,
+                c.name AS name,
+                SUM({$sign} * shops.sub_total) AS subtotal,
+                SUM({$sign} * shops.no_iva) AS no_iva,
+                SUM({$sign} * shops.exempt) AS exempt,
+                SUM({$sign} * shops.base0) AS base0,
+                SUM({$sign} * shops.base5) AS base5,
+                SUM({$sign} * shops.base8) AS base8,
+                SUM({$sign} * shops.base12) AS base12,
+                SUM({$sign} * shops.base15) AS base15,
+                SUM({$sign} * shops.iva5) AS iva5,
+                SUM({$sign} * shops.iva8) AS iva8,
+                SUM({$sign} * shops.iva12) AS iva12,
+                SUM({$sign} * shops.iva15) AS iva15,
+                SUM({$sign} * shops.total) AS total,
+                SUM(COALESCE(ret.total_retention, 0)) AS retentions
+            ")
             ->get();
 
-        return $shops
-            ->groupBy('contact_id')
-            ->map(function ($group) {
-                $first = $group->first();
-                $sign = fn ($s) => $s->vt_code === '04' ? -1 : 1;
-                $subtotal = $group->sum(fn ($s) => $sign($s) * (float) $s->sub_total);
-                $noIva = $group->sum(fn ($s) => $sign($s) * (float) $s->no_iva);
-                $exempt = $group->sum(fn ($s) => $sign($s) * (float) $s->exempt);
-                $base0 = $group->sum(fn ($s) => $sign($s) * (float) $s->base0);
-                $base5 = $group->sum(fn ($s) => $sign($s) * (float) $s->base5);
-                $base8 = $group->sum(fn ($s) => $sign($s) * (float) $s->base8);
-                $base12 = $group->sum(fn ($s) => $sign($s) * (float) $s->base12);
-                $base15 = $group->sum(fn ($s) => $sign($s) * (float) $s->base15);
-                $iva5 = $group->sum(fn ($s) => $sign($s) * (float) $s->iva5);
-                $iva8 = $group->sum(fn ($s) => $sign($s) * (float) $s->iva8);
-                $iva12 = $group->sum(fn ($s) => $sign($s) * (float) $s->iva12);
-                $iva15 = $group->sum(fn ($s) => $sign($s) * (float) $s->iva15);
-                $total = $group->sum(fn ($s) => $sign($s) * (float) $s->total);
-                $retentions = $group->sum(fn ($s) => (float) $s->total_retention);
-
-                return [
-                    'identification' => $first->contact?->identification ?? '—',
-                    'name' => $first->contact?->name ?? 'Sin proveedor',
-                    'subtotal' => round($subtotal, 2),
-                    'iva' => round($iva5 + $iva8 + $iva12 + $iva15, 2),
-                    'no_iva' => round($noIva, 2),
-                    'exempt' => round($exempt, 2),
-                    'base0' => round($base0, 2),
-                    'base5' => round($base5, 2),
-                    'base8' => round($base8, 2),
-                    'base12' => round($base12, 2),
-                    'base15' => round($base15, 2),
-                    'iva5' => round($iva5, 2),
-                    'iva8' => round($iva8, 2),
-                    'iva12' => round($iva12, 2),
-                    'iva15' => round($iva15, 2),
-                    'total' => round($total, 2),
-                    'retentions' => round($retentions, 2),
-                    'a_pagar' => round($total - $retentions, 2),
-                ];
-            })
+        return $rows
+            ->map(fn ($r) => [
+                'identification' => $r->identification ?? '—',
+                'name' => $r->name ?? 'Sin proveedor',
+                'subtotal' => round((float) $r->subtotal, 2),
+                'iva' => round((float) $r->iva5 + (float) $r->iva8 + (float) $r->iva12 + (float) $r->iva15, 2),
+                'no_iva' => round((float) $r->no_iva, 2),
+                'exempt' => round((float) $r->exempt, 2),
+                'base0' => round((float) $r->base0, 2),
+                'base5' => round((float) $r->base5, 2),
+                'base8' => round((float) $r->base8, 2),
+                'base12' => round((float) $r->base12, 2),
+                'base15' => round((float) $r->base15, 2),
+                'iva5' => round((float) $r->iva5, 2),
+                'iva8' => round((float) $r->iva8, 2),
+                'iva12' => round((float) $r->iva12, 2),
+                'iva15' => round((float) $r->iva15, 2),
+                'total' => round((float) $r->total, 2),
+                'retentions' => round((float) $r->retentions, 2),
+                'a_pagar' => round((float) $r->total - (float) $r->retentions, 2),
+            ])
             ->sortBy('name')
             ->values();
     }
@@ -507,7 +506,7 @@ class ReportController extends Controller
      */
     private function shopsByRetentionRows(int $companyId, array $filters): Collection
     {
-        return $this->retentionRows(ShopRetentionItem::query(), 'shop', $companyId, $filters);
+        return $this->retentionRows('shop_retention_items', 'shops', 'shop_id', $companyId, $filters);
     }
 
     /**
@@ -516,41 +515,56 @@ class ReportController extends Controller
      */
     private function ordersByRetentionRows(int $companyId, array $filters): Collection
     {
-        return $this->retentionRows(OrderRetentionItem::query(), 'order', $companyId, $filters);
+        return $this->retentionRows('order_retention_items', 'orders', 'order_id', $companyId, $filters);
     }
 
     /**
-     * @param  Builder<ShopRetentionItem|OrderRetentionItem>  $query
      * @param  array{start_date?: string|null, end_date?: string|null, only_authorized?: bool}  $filters
      * @return Collection<int, array<string, mixed>>
      */
-    private function retentionRows($query, string $documentRelation, int $companyId, array $filters): Collection
+    private function retentionRows(string $itemTable, string $documentTable, string $documentKey, int $companyId, array $filters): Collection
     {
-        $items = $query
-            ->with('retention:id,code,description,percentage')
-            ->whereHas('retention', fn ($q) => $q->where('type', 'RENTA'))
-            ->whereHas($documentRelation, function ($q) use ($companyId, $filters) {
-                $q->where('company_id', $companyId)
-                    ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '>=', $d))
-                    ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->whereDate('emision', '<=', $d))
-                    ->when($filters['only_authorized'] ?? true, fn ($q) => $q->where('state', 'AUTORIZADO'));
-            })
-            ->get(['id', 'retention_id', 'base', 'percentage', 'value']);
+        $rows = DB::table($itemTable.' AS items')
+            ->join('retentions AS r', 'r.id', '=', 'items.retention_id')
+            ->join($documentTable.' AS d', 'd.id', '=', 'items.'.$documentKey)
+            ->where('r.type', 'RENTA')
+            ->where('d.company_id', $companyId)
+            ->when($filters['start_date'] ?? null, fn ($q, $d) => $q->where('d.emision', '>=', $d))
+            ->when($filters['end_date'] ?? null, fn ($q, $d) => $q->where('d.emision', '<=', $d))
+            ->when($filters['only_authorized'] ?? true, fn ($q) => $q->where('d.state', 'AUTORIZADO'))
+            ->groupBy('items.retention_id', 'r.code', 'r.description', 'r.percentage')
+            ->selectRaw('
+                r.code AS code,
+                r.description AS description,
+                r.percentage AS percentage,
+                SUM(items.base) AS base,
+                SUM(items.value) AS value
+            ')
+            ->get();
 
-        return $items
-            ->groupBy('retention_id')
-            ->map(function ($group) {
-                $first = $group->first();
-
-                return [
-                    'code' => $first->retention?->code,
-                    'description' => $first->retention?->description,
-                    'percentage' => (float) $first->retention?->percentage,
-                    'base' => round($group->sum(fn ($i) => (float) $i->base), 2),
-                    'value' => round($group->sum(fn ($i) => (float) $i->value), 2),
-                ];
-            })
+        return $rows
+            ->map(fn ($r) => [
+                'code' => $r->code,
+                'description' => $r->description,
+                'percentage' => (float) $r->percentage,
+                'base' => round((float) $r->base, 2),
+                'value' => round((float) $r->value, 2),
+            ])
             ->sortBy('code')
             ->values();
+    }
+
+    /** Expresión de signo: nota de crédito (04) resta. */
+    private function signSql(): string
+    {
+        return "(CASE WHEN vt.code = '04' THEN -1 ELSE 1 END)";
+    }
+
+    /** Totales de retención por documento, agregables en el GROUP BY externo. */
+    private function retentionTotalsSub(string $table, string $foreignKey): QueryBuilder
+    {
+        return DB::table($table)
+            ->selectRaw("{$foreignKey}, SUM(value) AS total_retention")
+            ->groupBy($foreignKey);
     }
 }
