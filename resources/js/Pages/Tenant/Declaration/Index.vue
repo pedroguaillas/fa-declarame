@@ -30,6 +30,8 @@ import {
     CheckCircle2,
     XCircle,
 } from "lucide-vue-next";
+import FormCasilleros, { type FormPayload } from "./partials/FormCasilleros.vue";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Summary {
     count: number;
@@ -48,6 +50,8 @@ const props = defineProps<{
     typeDeclaration: string;
     compras: Summary;
     ventas: Summary;
+    f104?: FormPayload;
+    f103?: FormPayload;
 }>();
 
 const page = usePage();
@@ -91,20 +95,82 @@ const periodLabel = computed(() =>
 );
 
 function applyPeriod() {
-    if (isSemiannual.value) {
-        router.get(
-            route("tenant.declaration.index"),
-            { year: selectedYear.value, semester: selectedSemester.value },
-            { preserveState: true },
-        );
-    } else {
-        router.get(
-            route("tenant.declaration.index"),
-            { year: selectedYear.value, month: selectedMonth.value },
-            { preserveState: true },
-        );
+    const params = isSemiannual.value
+        ? { year: selectedYear.value, semester: selectedSemester.value }
+        : { year: selectedYear.value, month: selectedMonth.value };
+
+    router.get(route("tenant.declaration.index"), params, {
+        preserveState: true,
+        onSuccess: () => {
+            if (activeTab.value !== "resumen") {
+                router.reload({ only: [activeTab.value] });
+            }
+        },
+    });
+}
+
+// ─── Tabs Resumen / F104 / F103 ─────────────────────────────────────────────
+
+const activeTab = ref<"resumen" | "f104" | "f103">("resumen");
+
+const tabs = [
+    { value: "resumen", label: "Resumen" },
+    { value: "f104", label: "Formulario 104 (IVA)" },
+    { value: "f103", label: "Formulario 103 (Retenciones)" },
+] as const;
+
+function selectTab(tab: "resumen" | "f104" | "f103") {
+    activeTab.value = tab;
+
+    if (tab !== "resumen" && props[tab] === undefined) {
+        router.reload({ only: [tab] });
     }
 }
+
+const periodParams = computed<Record<string, string | number>>(() =>
+    isSemiannual.value
+        ? { year: props.year, semester: props.semester ?? 1 }
+        : { year: props.year, month: props.month ?? 1 },
+);
+
+const sum = (get: (c: string) => number, casilleros: string[]) =>
+    casilleros.reduce((total, c) => total + get(c), 0);
+
+const f103Formulas: Record<string, (get: (c: string) => number) => number> = {
+    "349": (g) => sum(g, ["302", "303", "3030", "304", "307", "308", "309", "310", "311", "312", "322", "3120", "3121", "3430", "343", "344", "332", "314", "3140", "319", "320", "323", "324", "3230", "325", "326", "327", "328", "329", "330", "333", "334", "335", "3481", "336", "337", "3370", "350", "3440", "346", "3400", "3380", "3480"]),
+    "399": (g) => sum(g, ["352", "353", "3530", "354", "357", "358", "359", "360", "361", "362", "372", "3620", "3621", "3450", "393", "394", "364", "3640", "369", "370", "373", "374", "375", "376", "377", "378", "379", "380", "383", "384", "385", "3981", "386", "387", "3870", "400", "3940", "396", "3900", "3880", "3980"]),
+    "498": (g) => sum(g, ["402", "410", "411", "412"]),
+    "499": (g) => g("399") + sum(g, ["424", "431", "432", "433"]),
+    "501": (g) => g("499") - g("500"),
+    "902": (g) => g("501"),
+    "905": (g) => g("902") + g("903") + g("904"),
+};
+
+const f104Formulas: Record<string, (get: (c: string) => number) => number> = {
+    "409": (g) => sum(g, ["401", "402", "403", "405", "407", "408", "425"]),
+    "419": (g) => sum(g, ["411", "413", "435"]),
+    "429": (g) => g("421") + g("445"),
+    "480": (g) => g("411") + g("435") - g("481"),
+    "482": (g) => g("429"),
+    "484": (g) => g("482") + g("483"),
+    "499": (g) => g("484"),
+    "509": (g) => sum(g, ["500", "501", "502", "503", "504", "505", "507", "508", "540"]),
+    "519": (g) => sum(g, ["510", "511", "512", "517", "518", "550"]),
+    "529": (g) => sum(g, ["520", "521", "522", "523", "524", "525", "560"]),
+    "564": (g) => (g("520") + g("521") + g("523") + g("524") + g("525") + g("560")) * g("563"),
+    "565": (g) => g("520") + g("521") + g("523") + g("524") + g("525") + g("560") - g("564"),
+    "601": (g) => Math.max(0, g("499") - g("564")),
+    "602": (g) => Math.max(0, g("564") - g("499")),
+    "615": (g) => g("602") + Math.max(0, g("605") - g("601")),
+    "617": (g) => Math.max(0, g("606") + g("609") - Math.max(0, g("601") - g("605"))),
+    "620": (g) => Math.max(0, g("601") - g("605") - g("606") - g("609")),
+    "699": (g) => g("620") + g("621"),
+    "799": (g) => sum(g, ["721", "723", "725", "727", "729", "731"]),
+    "801": (g) => g("799"),
+    "859": (g) => g("699") + g("801"),
+    "902": (g) => g("859"),
+    "905": (g) => g("902") + g("903") + g("904"),
+};
 
 function downloadAts() {
     if (isSemiannual.value) {
@@ -258,6 +324,58 @@ defineOptions({ layout: TenantLayout });
             </Button>
         </div>
 
+        <!-- Tabs -->
+        <div class="border-border inline-flex items-center gap-1 rounded-lg border p-1">
+            <button
+                v-for="tab in tabs"
+                :key="tab.value"
+                type="button"
+                class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+                :class="activeTab === tab.value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted'"
+                @click="selectTab(tab.value)"
+            >
+                {{ tab.label }}
+            </button>
+        </div>
+
+        <!-- Tab: F104 -->
+        <template v-if="activeTab === 'f104'">
+            <FormCasilleros
+                v-if="f104"
+                :title="`Formulario 104 — IVA · ${periodLabel}`"
+                :payload="f104"
+                :formulas="f104Formulas"
+                export-route="tenant.declaration.export-f104"
+                :period-params="periodParams"
+            />
+            <div v-else class="space-y-3">
+                <Skeleton class="h-8 w-1/3" />
+                <Skeleton class="h-64 w-full" />
+                <Skeleton class="h-64 w-full" />
+            </div>
+        </template>
+
+        <!-- Tab: F103 -->
+        <template v-else-if="activeTab === 'f103'">
+            <FormCasilleros
+                v-if="f103"
+                :title="`Formulario 103 — Retenciones en la Fuente · ${periodLabel}`"
+                :payload="f103"
+                :formulas="f103Formulas"
+                export-route="tenant.declaration.export-f103"
+                :period-params="periodParams"
+            />
+            <div v-else class="space-y-3">
+                <Skeleton class="h-8 w-1/3" />
+                <Skeleton class="h-64 w-full" />
+                <Skeleton class="h-64 w-full" />
+            </div>
+        </template>
+
+        <!-- Tab: Resumen -->
+        <div v-show="activeTab === 'resumen'" class="space-y-6">
         <!-- Summary cards -->
         <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <!-- Compras -->
@@ -444,5 +562,6 @@ defineOptions({ layout: TenantLayout });
                 </Link>
             </div>
         </section>
+        </div>
     </div>
 </template>

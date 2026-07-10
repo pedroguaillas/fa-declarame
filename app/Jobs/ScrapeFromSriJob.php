@@ -12,7 +12,9 @@ class ScrapeFromSriJob implements ShouldQueue
 {
     use Queueable;
 
-    public int $timeout = 600;
+    public const DEFAULT_TIMEOUT = 600;
+
+    public int $timeout = self::DEFAULT_TIMEOUT;
 
     public int $tries = 1;
 
@@ -20,7 +22,10 @@ class ScrapeFromSriJob implements ShouldQueue
         public readonly int $scrapeJobId,
         public readonly int $companyId,
         public readonly string $tenantId,
-    ) {}
+        int $timeout = self::DEFAULT_TIMEOUT,
+    ) {
+        $this->timeout = $timeout;
+    }
 
     public function handle(SriScraperService $scraperService): void
     {

@@ -304,6 +304,8 @@ def handle_scrape(config: dict) -> dict:
     tipo = config.get("type", "compras")
     year = config.get("year", 2026)
     month = config.get("month", 5)
+    # Descarga semestral: lista de meses en una sola sesión (fallback: mes único)
+    months = config.get("months") or [month]
     day = config.get("day") or 0  # 0 = todos los días, 1-31 = día específico
     mode = config.get("mode", "txt_download")
     download_dir = Path(config.get("downloadDir", "/tmp/sri-scrape-py"))
@@ -328,55 +330,64 @@ def handle_scrape(config: dict) -> dict:
         selected_values = set(config.get("voucherTypes") or ["1", "3", "4"])
         sections = ["compras", "ventas"] if tipo == "ambos" else [tipo]
 
-        for section in sections:
-            if tipo == "ambos":
-                scraper.navigate_to_comprobantes(page, section)
+        for month_index, current_month in enumerate(months):
+            if len(months) > 1:
+                scraper.progress(
+                    "mes",
+                    f"Mes {month_index + 1}/{len(months)}: {current_month:02d}/{year}",
+                )
 
-            base_types = scraper.COMPRAS_VOUCHER_TYPES if section == "compras" else scraper.VOUCHER_TYPES
-            voucher_types = [vt for vt in base_types if vt["value"] in selected_values]
+            for section in sections:
+                if tipo == "ambos":
+                    scraper.navigate_to_comprobantes(page, section)
 
-            # ventas mes completo: día-por-día (el portal solo expone un día a la vez)
-            use_day_by_day = (day == 0 and section == "ventas")
+                base_types = scraper.COMPRAS_VOUCHER_TYPES if section == "compras" else scraper.VOUCHER_TYPES
+                voucher_types = [vt for vt in base_types if vt["value"] in selected_values]
 
-            day_str = f"día {day}" if day > 0 else "mes completo"
-            scraper.progress(
-                "server",
-                f"[{section}] Estrategia: {'dia-por-dia' if use_day_by_day else day_str} "
-                f"(año={year}, mes={month})",
-            )
+                # ventas mes completo: día-por-día (el portal solo expone un día a la vez)
+                use_day_by_day = (day == 0 and section == "ventas")
 
-            for i, vt in enumerate(voucher_types):
-                try:
-                    if use_day_by_day:
-                        result = scraper.download_for_voucher_type_by_day(
-                            page, vt, year, month, download_dir, section,
-                            skip_claves=skip_claves,
+                day_str = f"día {day}" if day > 0 else "mes completo"
+                scraper.progress(
+                    "server",
+                    f"[{section}] Estrategia: {'dia-por-dia' if use_day_by_day else day_str} "
+                    f"(año={year}, mes={current_month})",
+                )
+
+                for i, vt in enumerate(voucher_types):
+                    try:
+                        if use_day_by_day:
+                            result = scraper.download_for_voucher_type_by_day(
+                                page, vt, year, current_month, download_dir, section,
+                                skip_claves=skip_claves,
+                            )
+                        else:
+                            result = scraper.download_for_voucher_type(
+                                page, vt, year, current_month, download_dir, section,
+                                day=day,
+                                skip_claves=skip_claves,
+                            )
+                        result["section"] = section
+                        result["month"] = current_month
+                        files.append(result)
+                        content_len = len(result.get("content") or "")
+                        scraper.progress(
+                            "summary",
+                            f"[{section}] {current_month:02d}/{year} {vt['label']}: status={result['status']}, content={content_len} bytes, rows={result.get('rows', 0)}",
                         )
-                    else:
-                        result = scraper.download_for_voucher_type(
-                            page, vt, year, month, download_dir, section,
-                            day=day,
-                            skip_claves=skip_claves,
+                    except Exception as e:
+                        scraper.progress(vt["label"], f"[{section}] Error: {e}")
+                        files.append(
+                            {
+                                "type": vt["label"],
+                                "section": section,
+                                "month": current_month,
+                                "status": "error",
+                                "content": None,
+                                "error": str(e),
+                            }
                         )
-                    result["section"] = section
-                    files.append(result)
-                    content_len = len(result.get("content") or "")
-                    scraper.progress(
-                        "summary",
-                        f"[{section}] {vt['label']}: status={result['status']}, content={content_len} bytes, rows={result.get('rows', 0)}",
-                    )
-                except Exception as e:
-                    scraper.progress(vt["label"], f"[{section}] Error: {e}")
-                    files.append(
-                        {
-                            "type": vt["label"],
-                            "section": section,
-                            "status": "error",
-                            "content": None,
-                            "error": str(e),
-                        }
-                    )
-                scraper.random_delay(1, 3)
+                    scraper.random_delay(1, 3)
 
         # Log resumen antes de enviar a Laravel
         scraper.progress("response", f"Enviando {len(files)} archivos a Laravel")

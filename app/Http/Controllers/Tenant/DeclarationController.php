@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Tenant;
 
+use App\Exports\F103DraftExport;
+use App\Exports\F104DraftExport;
 use App\Exports\SemesterReportExport;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\OrderRetentionItem;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\ShopRetentionItem;
+use App\Services\F103FormService;
+use App\Services\F104FormService;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\Request;
@@ -34,27 +38,115 @@ class DeclarationController extends Controller
         if ($isSemiannual) {
             [$year, $semester] = $this->resolvedSemester($request);
             [$startMonth, $endMonth] = $semester === 1 ? [1, 6] : [7, 12];
-
-            return Inertia::render('Tenant/Declaration/Index', [
-                'year' => $year,
-                'month' => null,
-                'semester' => $semester,
-                'typeDeclaration' => $company->type_declaration,
-                'compras' => $this->comprasSummary($companyId, $year, $startMonth, $endMonth),
-                'ventas' => $this->ventasSummary($companyId, $year, $startMonth, $endMonth),
-            ]);
+            $month = null;
+        } else {
+            [$year, $month] = $this->resolvedPeriod($request);
+            [$startMonth, $endMonth] = [$month, $month];
+            $semester = null;
         }
-
-        [$year, $month] = $this->resolvedPeriod($request);
 
         return Inertia::render('Tenant/Declaration/Index', [
             'year' => $year,
             'month' => $month,
-            'semester' => null,
+            'semester' => $semester,
             'typeDeclaration' => $company->type_declaration,
-            'compras' => $this->comprasSummary($companyId, $year, $month, $month),
-            'ventas' => $this->ventasSummary($companyId, $year, $month, $month),
+            'compras' => $this->comprasSummary($companyId, $year, $startMonth, $endMonth),
+            'ventas' => $this->ventasSummary($companyId, $year, $startMonth, $endMonth),
+            'f104' => Inertia::optional(fn () => app(F104FormService::class)->build($companyId, $year, $startMonth, $endMonth)),
+            'f103' => Inertia::optional(fn () => app(F103FormService::class)->build($companyId, $year, $startMonth, $endMonth)),
         ]);
+    }
+
+    public function exportF103(Request $request): BinaryFileResponse
+    {
+        [$year, $startMonth, $endMonth, $periodLabel, $suffix] = $this->exportPeriod($request);
+        $companyId = (int) session('current_company_id');
+
+        $form = app(F103FormService::class)->build($companyId, $year, $startMonth, $endMonth);
+        $sections = $this->applyOverrides($form['sections'], $request->input('values', []));
+
+        $export = new F103DraftExport(
+            sections: $sections,
+            unmapped: $form['unmapped'],
+            periodLabel: $periodLabel,
+            ruc: company()?->ruc ?? '',
+            companyName: company()?->name,
+        );
+
+        return Excel::download($export, "F103-Borrador-{$suffix}.xlsx");
+    }
+
+    public function exportF104(Request $request): BinaryFileResponse
+    {
+        [$year, $startMonth, $endMonth, $periodLabel, $suffix] = $this->exportPeriod($request);
+        $companyId = (int) session('current_company_id');
+
+        $form = app(F104FormService::class)->build($companyId, $year, $startMonth, $endMonth);
+        $sections = $this->applyOverrides($form['sections'], $request->input('values', []));
+
+        $export = new F104DraftExport(
+            sections: $sections,
+            unmapped: [],
+            periodLabel: $periodLabel,
+            ruc: company()?->ruc ?? '',
+            companyName: company()?->name,
+        );
+
+        return Excel::download($export, "F104-Borrador-{$suffix}.xlsx");
+    }
+
+    /**
+     * Sobrescribe valores enviados desde la página (manuales y fórmulas
+     * recalculadas en el cliente) sobre las secciones calculadas.
+     *
+     * @param  array<int, array{section: string, rows: array<int, array{c: string, d: string, v: float|int|string|null, t: string}>}>  $sections
+     * @param  array<string, mixed>  $overrides
+     * @return array<int, array{section: string, rows: array<int, array{c: string, d: string, v: float|int|string|null, t: string}>}>
+     */
+    private function applyOverrides(array $sections, array $overrides): array
+    {
+        foreach ($sections as &$section) {
+            foreach ($section['rows'] as &$row) {
+                if (array_key_exists($row['c'], $overrides) && in_array($row['t'], ['manual', 'formula'], true)) {
+                    $row['v'] = is_numeric($overrides[$row['c']]) ? round((float) $overrides[$row['c']], 2) : $overrides[$row['c']];
+                }
+            }
+        }
+
+        return $sections;
+    }
+
+    /**
+     * Resuelve el período del export (mes o semestre) desde el request.
+     *
+     * @return array{int, int, int, string, string}
+     */
+    private function exportPeriod(Request $request): array
+    {
+        $request->validate([
+            'year' => ['required', 'integer', 'min:2000', 'max:2099'],
+            'semester' => ['nullable', 'required_without:month', 'integer', 'min:1', 'max:2'],
+            'month' => ['nullable', 'required_without:semester', 'integer', 'min:1', 'max:12'],
+            'values' => ['nullable', 'array'],
+        ]);
+
+        $year = (int) $request->input('year');
+        $ruc = company()?->ruc ?? '';
+
+        if ($request->filled('semester')) {
+            $semester = (int) $request->input('semester');
+            [$startMonth, $endMonth] = $semester === 1 ? [1, 6] : [7, 12];
+            $periodLabel = "SEMESTRE {$semester} {$year}";
+            $suffix = "{$year}-S{$semester}-{$ruc}";
+        } else {
+            $month = (int) $request->input('month');
+            [$startMonth, $endMonth] = [$month, $month];
+            $monthName = mb_strtoupper(Carbon::create($year, $month)->locale('es')->monthName);
+            $periodLabel = "{$monthName} {$year}";
+            $suffix = sprintf('%s-%d-%s', $monthName, $year, $ruc);
+        }
+
+        return [$year, $startMonth, $endMonth, $periodLabel, $suffix];
     }
 
     public function exportSemester(Request $request): BinaryFileResponse

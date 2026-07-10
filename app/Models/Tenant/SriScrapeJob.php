@@ -16,6 +16,7 @@ class SriScrapeJob extends Model
         'type',
         'year',
         'month',
+        'end_month',
         'day',
         'mode',
         'source',
@@ -33,6 +34,7 @@ class SriScrapeJob extends Model
         return [
             'year' => 'integer',
             'month' => 'integer',
+            'end_month' => 'integer',
             'day' => 'integer',
             'voucher_types' => 'array',
             'progress' => 'array',
@@ -47,17 +49,32 @@ class SriScrapeJob extends Model
         return $this->belongsTo(Company::class);
     }
 
-    public function scopeForPeriod(Builder $query, int $companyId, string $type, int $year, int $month, ?int $day): Builder
+    public function scopeForPeriod(Builder $query, int $companyId, string $type, int $year, int $month, ?int $day, ?int $endMonth = null): Builder
     {
         return $query->where('company_id', $companyId)
             ->where('type', $type)
             ->where('year', $year)
             ->where('month', $month)
             ->when(
+                $endMonth !== null,
+                fn (Builder $q) => $q->where('end_month', $endMonth),
+                fn (Builder $q) => $q->whereNull('end_month'),
+            )
+            ->when(
                 $day !== null,
                 fn (Builder $q) => $q->where('day', $day),
                 fn (Builder $q) => $q->whereNull('day'),
             );
+    }
+
+    /**
+     * Meses cubiertos por el job: uno solo, o el rango month..end_month si es semestral.
+     *
+     * @return array<int, int>
+     */
+    public function months(): array
+    {
+        return range($this->month, $this->end_month ?? $this->month);
     }
 
     /**

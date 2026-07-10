@@ -14,8 +14,11 @@ use Inertia\Response;
 
 class SriScrapeController extends Controller
 {
+    /** Timeout del job semestral: 6 meses en una sola sesión puede tardar hasta ~30 min. */
+    private const SEMESTER_JOB_TIMEOUT = 3600;
+
     private const SELECT_COLUMNS = [
-        'id', 'type', 'year', 'month', 'day', 'mode', 'source',
+        'id', 'type', 'year', 'month', 'end_month', 'day', 'mode', 'source',
         'voucher_types', 'status', 'progress', 'result', 'error_message',
         'created_at', 'completed_at',
     ];
@@ -40,6 +43,7 @@ class SriScrapeController extends Controller
             'hasPassword' => $hasPassword,
             'hasCaptchaKey' => true,
             'isRetentionAgent' => (bool) $company->retention_agent,
+            'typeDeclaration' => $company->type_declaration,
         ]);
     }
 
@@ -52,7 +56,20 @@ class SriScrapeController extends Controller
             'day' => ['nullable', 'integer', 'min:1', 'max:31'],
             'voucher_types' => ['required', 'array', 'min:1'],
             'voucher_types.*' => ['in:1,3,4,6'],
+            'full_semester' => ['nullable', 'boolean'],
         ]);
+
+        $fullSemester = (bool) ($validated['full_semester'] ?? false);
+
+        if ($fullSemester && $validated['type'] !== 'compras') {
+            return back()->with('error', 'La descarga semestral solo está disponible para comprobantes recibidos.');
+        }
+
+        [$month, $endMonth] = $fullSemester
+            ? self::resolveSemesterRange((int) $validated['year'], (int) $validated['month'])
+            : [(int) $validated['month'], null];
+
+        $day = $fullSemester ? null : ($validated['day'] ?? null);
 
         $company = company();
 
@@ -79,8 +96,9 @@ class SriScrapeController extends Controller
             $company->id,
             $validated['type'],
             $validated['year'],
-            $validated['month'],
-            $validated['day'] ?? null,
+            $month,
+            $day,
+            $endMonth,
         )->whereIn('status', ['completed', 'failed'])->get(['status', 'result']);
 
         if ($blockReason = SriScrapeJob::blockReason($previousJobs)) {
@@ -91,17 +109,41 @@ class SriScrapeController extends Controller
             'company_id' => $company->id,
             'type' => $validated['type'],
             'year' => $validated['year'],
-            'month' => $validated['month'],
-            'day' => $validated['day'] ?? null,
+            'month' => $month,
+            'end_month' => $endMonth,
+            'day' => $day,
             'mode' => 'txt_download',
             'source' => 'manual',
             'voucher_types' => $validated['voucher_types'],
             'status' => 'pending',
         ]);
 
-        ScrapeFromSriJob::dispatch($scrapeJob->id, $company->id, tenancy()->tenant->getTenantKey());
+        ScrapeFromSriJob::dispatch(
+            $scrapeJob->id,
+            $company->id,
+            tenancy()->tenant->getTenantKey(),
+            $fullSemester ? self::SEMESTER_JOB_TIMEOUT : ScrapeFromSriJob::DEFAULT_TIMEOUT,
+        );
 
         return back()->with('success', 'Descarga del SRI iniciada. Se actualizará el estado automáticamente.');
+    }
+
+    /**
+     * Deriva el rango del semestre desde el mes elegido (1-6 → S1, 7-12 → S2),
+     * capado al mes actual cuando es el año en curso.
+     *
+     * @return array{int, int}
+     */
+    public static function resolveSemesterRange(int $year, int $month): array
+    {
+        $startMonth = $month <= 6 ? 1 : 7;
+        $endMonth = $month <= 6 ? 6 : 12;
+
+        if ($year === now()->year) {
+            $endMonth = min($endMonth, now()->month);
+        }
+
+        return [$startMonth, $endMonth];
     }
 
     public function status(): JsonResponse

@@ -2034,6 +2034,8 @@ def main():
     tipo = config.get("type", "compras")
     year = config.get("year", 2026)
     month = config.get("month", 4)
+    # Descarga semestral: lista de meses a recorrer en una sola sesión (fallback: mes único)
+    months = config.get("months") or [month]
     day = config.get("day", 0) or 0
     mode = config.get("mode", "txt_download")
     download_dir = Path(config.get("downloadDir", "/tmp/sri-scrape-py"))
@@ -2149,63 +2151,72 @@ def main():
 
                 sections = ["compras", "ventas"] if tipo == "ambos" else [tipo]
 
-                for section in sections:
-                    if tipo == "ambos":
-                        navigate_to_comprobantes(page, section)
+                for month_index, current_month in enumerate(months):
+                    if len(months) > 1:
+                        progress(
+                            "mes",
+                            f"Mes {month_index + 1}/{len(months)}: {current_month:02d}/{year}",
+                        )
 
-                    base_types = (
-                        COMPRAS_VOUCHER_TYPES if section == "compras" else VOUCHER_TYPES
-                    )
-                    active_voucher_types = [
-                        vt
-                        for vt in base_types
-                        if vt["value"] in selected_voucher_values
-                    ]
-                    skip_set = skip_claves_set or None
-
-                    for i, vt in enumerate(active_voucher_types):
-                        # Para ventas, recargar entre tipos de comprobante para resetear el formulario.
-                        if i > 0 and section == "ventas":
+                    for section in sections:
+                        if tipo == "ambos":
                             navigate_to_comprobantes(page, section)
 
-                        try:
-                            result = download_for_voucher_type(
-                                page,
-                                vt,
-                                year,
-                                month,
-                                download_dir,
-                                section,
-                                day,
-                                skip_set,
-                            )
-                            result["section"] = section
-                            files.append(result)
+                        base_types = (
+                            COMPRAS_VOUCHER_TYPES if section == "compras" else VOUCHER_TYPES
+                        )
+                        active_voucher_types = [
+                            vt
+                            for vt in base_types
+                            if vt["value"] in selected_voucher_values
+                        ]
+                        skip_set = skip_claves_set or None
 
-                            if result["status"] == "downloaded":
-                                progress(
-                                    "summary",
-                                    f"[{section}] {vt['label']}: {result['rows']} registros descargados",
+                        for i, vt in enumerate(active_voucher_types):
+                            # Para ventas, recargar entre tipos de comprobante para resetear el formulario.
+                            if i > 0 and section == "ventas":
+                                navigate_to_comprobantes(page, section)
+
+                            try:
+                                result = download_for_voucher_type(
+                                    page,
+                                    vt,
+                                    year,
+                                    current_month,
+                                    download_dir,
+                                    section,
+                                    day,
+                                    skip_set,
                                 )
-                            else:
-                                progress(
-                                    "summary",
-                                    f"[{section}] {vt['label']}: {result['status']}",
+                                result["section"] = section
+                                result["month"] = current_month
+                                files.append(result)
+
+                                if result["status"] == "downloaded":
+                                    progress(
+                                        "summary",
+                                        f"[{section}] {current_month:02d}/{year} {vt['label']}: {result['rows']} registros descargados",
+                                    )
+                                else:
+                                    progress(
+                                        "summary",
+                                        f"[{section}] {current_month:02d}/{year} {vt['label']}: {result['status']}",
+                                    )
+
+                            except Exception as e:
+                                progress(vt["label"], f"[{section}] Error: {e}")
+                                files.append(
+                                    {
+                                        "type": vt["label"],
+                                        "section": section,
+                                        "month": current_month,
+                                        "status": "error",
+                                        "content": None,
+                                        "error": str(e),
+                                    }
                                 )
 
-                        except Exception as e:
-                            progress(vt["label"], f"[{section}] Error: {e}")
-                            files.append(
-                                {
-                                    "type": vt["label"],
-                                    "section": section,
-                                    "status": "error",
-                                    "content": None,
-                                    "error": str(e),
-                                }
-                            )
-
-                        random_delay(1, 3)
+                            random_delay(1, 3)
 
                 emit("result", {"mode": "txt_download", "files": files})
 

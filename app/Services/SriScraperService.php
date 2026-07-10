@@ -68,6 +68,11 @@ class SriScraperService
                 $config['day'] = $scrapeJob->day;
             }
 
+            // Job semestral: el scraper recorre todos los meses en una sola sesión
+            if ($scrapeJob->end_month !== null) {
+                $config['months'] = $scrapeJob->months();
+            }
+
             // Only pass downloadDir when running locally (not via external server)
             if (! $serverUrl) {
                 $config['downloadDir'] = $downloadDir;
@@ -907,30 +912,32 @@ class SriScraperService
         $types = $scrapeJob->type === 'ambos' ? ['ventas', 'compras'] : [$scrapeJob->type];
         $year = $scrapeJob->year;
         $month = $scrapeJob->month;
+        // Job semestral: el rango cubre month..end_month para no re-procesar meses ya importados
+        $endMonth = $scrapeJob->end_month ?? $scrapeJob->month;
         $day = $scrapeJob->day;
         $claves = [];
 
+        $monthRange = function ($query, string $column) use ($year, $month, $endMonth, $day) {
+            $query->whereYear($column, $year)
+                ->whereMonth($column, '>=', $month)
+                ->whereMonth($column, '<=', $endMonth);
+
+            if ($day !== null) {
+                $query->whereDay($column, $day);
+            }
+
+            return $query;
+        };
+
         foreach ($types as $type) {
             if ($type === 'ventas') {
-                $orderQuery = Order::withoutGlobalScope(CompanyScope::class)
+                $orderQuery = $monthRange(Order::withoutGlobalScope(CompanyScope::class)
                     ->where('company_id', $company->id)
-                    ->whereYear('emision', $year)
-                    ->whereMonth('emision', $month)
-                    ->whereNotNull('autorization');
+                    ->whereNotNull('autorization'), 'emision');
 
-                if ($day !== null) {
-                    $orderQuery->whereDay('emision', $day);
-                }
-
-                $retentionQuery = Shop::withoutGlobalScope(CompanyScope::class)
+                $retentionQuery = $monthRange(Shop::withoutGlobalScope(CompanyScope::class)
                     ->where('company_id', $company->id)
-                    ->whereYear('date_retention', $year)
-                    ->whereMonth('date_retention', $month)
-                    ->whereNotNull('autorization_retention');
-
-                if ($day !== null) {
-                    $retentionQuery->whereDay('date_retention', $day);
-                }
+                    ->whereNotNull('autorization_retention'), 'date_retention');
 
                 $claves = array_merge(
                     $claves,
@@ -939,25 +946,13 @@ class SriScraperService
                 );
             } else {
                 // compras: facturas/NC/ND recibidas (Shop) + retenciones recibidas (Order)
-                $shopQuery = Shop::withoutGlobalScope(CompanyScope::class)
+                $shopQuery = $monthRange(Shop::withoutGlobalScope(CompanyScope::class)
                     ->where('company_id', $company->id)
-                    ->whereYear('emision', $year)
-                    ->whereMonth('emision', $month)
-                    ->whereNotNull('autorization');
+                    ->whereNotNull('autorization'), 'emision');
 
-                if ($day !== null) {
-                    $shopQuery->whereDay('emision', $day);
-                }
-
-                $orderRetentionQuery = Order::withoutGlobalScope(CompanyScope::class)
+                $orderRetentionQuery = $monthRange(Order::withoutGlobalScope(CompanyScope::class)
                     ->where('company_id', $company->id)
-                    ->whereYear('emision', $year)
-                    ->whereMonth('emision', $month)
-                    ->whereNotNull('autorization_retention');
-
-                if ($day !== null) {
-                    $orderRetentionQuery->whereDay('emision', $day);
-                }
+                    ->whereNotNull('autorization_retention'), 'emision');
 
                 $claves = array_merge(
                     $claves,

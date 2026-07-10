@@ -40,6 +40,7 @@ interface ScrapeJob {
     type: string;
     year: number;
     month: number;
+    end_month: number | null;
     day: number | null;
     mode: string;
     source: string;
@@ -59,6 +60,7 @@ const props = defineProps<{
     hasPassword: boolean;
     hasCaptchaKey: boolean;
     isRetentionAgent: boolean;
+    typeDeclaration: string | null;
 }>();
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -74,6 +76,7 @@ const form = useForm({
     month: previousMonth,
     day: null as number | null,
     voucher_types: ["1", "3", "4"] as string[],
+    full_semester: false,
 });
 
 const selectedVoucherTypes = ref<string[]>(["1"]);
@@ -128,6 +131,25 @@ function toggleVoucherType(value: string) {
 
 watch(() => form.type, () => {
     selectedVoucherTypes.value = ["1"];
+    if (form.type !== "compras") {
+        form.full_semester = false;
+    }
+});
+
+// ─── Descarga semestral (solo compras + contribuyente semestral) ───────────
+
+const canFullSemester = computed(
+    () => form.type === "compras" && props.typeDeclaration === "semestral"
+);
+
+const semesterLabel = computed(() =>
+    form.month <= 6 ? `1er semestre (Ene – Jun ${form.year})` : `2do semestre (Jul – Dic ${form.year})`
+);
+
+watch(() => form.full_semester, (enabled) => {
+    if (enabled) {
+        form.day = null;
+    }
 });
 
 // ─── Years, Months & Days ───────────────────────────────────────────────────
@@ -195,6 +217,9 @@ const statusConfig: Record<
 const monthName = (m: number) => months.find((mo) => mo.value === m)?.label ?? m;
 
 function jobDateLabel(job: ScrapeJob): string {
+    if (job.end_month !== null && job.end_month !== job.month) {
+        return `${monthName(job.month)} – ${monthName(job.end_month)} ${job.year}`;
+    }
     if (job.day !== null) {
         return `${job.day} de ${monthName(job.month)} ${job.year}`;
     }
@@ -398,6 +423,7 @@ defineOptions({ layout: TenantLayout });
                             <label class="text-sm font-medium">Día</label>
                             <Select
                                 :model-value="form.day !== null ? String(form.day) : 'all'"
+                                :disabled="form.full_semester"
                                 @update:model-value="(v) => form.day = v === 'all' ? null : Number(v)"
                             >
                                 <SelectTrigger class="w-[140px]">
@@ -425,6 +451,17 @@ defineOptions({ layout: TenantLayout });
                             <CloudDownload v-else class="size-4" />
                             Descargar del SRI
                         </Button>
+                    </div>
+
+                    <!-- Descarga semestral (contribuyentes con declaración semestral) -->
+                    <div v-if="canFullSemester" class="flex flex-col gap-1.5">
+                        <label class="flex cursor-pointer items-center gap-2">
+                            <Switch v-model="form.full_semester" />
+                            <span class="text-sm font-medium">Descargar todo el semestre</span>
+                        </label>
+                        <p v-if="form.full_semester" class="text-muted-foreground text-xs">
+                            Se descargará el {{ semesterLabel }} en una sola sesión del SRI.
+                        </p>
                     </div>
 
                     <!-- Voucher type switches -->
