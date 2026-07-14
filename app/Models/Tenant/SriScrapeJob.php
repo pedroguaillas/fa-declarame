@@ -80,11 +80,22 @@ class SriScrapeJob extends Model
     /**
      * Determina si se debe bloquear una nueva descarga del período según los jobs previos.
      *
+     * Cuando se especifica $requestedVoucherTypes, solo se consideran jobs que compartan
+     * al menos un tipo de comprobante con la nueva solicitud (evita bloqueos cruzados
+     * entre [1,3,4] y [6], que son siempre grupos excluyentes).
+     *
      * @param  Collection<int, self>  $previousJobs  Jobs completed/failed del mismo período
+     * @param  array<int, string>  $requestedVoucherTypes
      */
-    public static function blockReason(Collection $previousJobs): ?string
+    public static function blockReason(Collection $previousJobs, array $requestedVoucherTypes = []): ?string
     {
-        $satisfactory = $previousJobs->first(
+        $relevant = $requestedVoucherTypes
+            ? $previousJobs->filter(
+                fn (self $job) => ! empty(array_intersect($job->voucher_types ?? [], $requestedVoucherTypes))
+            )
+            : $previousJobs;
+
+        $satisfactory = $relevant->first(
             fn (self $job) => $job->status === 'completed' && (int) ($job->result['errors'] ?? 0) === 0
         );
 
@@ -95,7 +106,7 @@ class SriScrapeJob extends Model
             return "Este período ya fue descargado satisfactoriamente ({$imported} importados, {$skipped} omitidos). No se permite volver a descargarlo.";
         }
 
-        $failedAttempts = $previousJobs->filter(
+        $failedAttempts = $relevant->filter(
             fn (self $job) => $job->status === 'failed'
                 || ($job->status === 'completed' && (int) ($job->result['errors'] ?? 0) > 0)
         )->count();

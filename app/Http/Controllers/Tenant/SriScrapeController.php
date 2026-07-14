@@ -59,6 +59,10 @@ class SriScrapeController extends Controller
             'full_semester' => ['nullable', 'boolean'],
         ]);
 
+        if (in_array('6', $validated['voucher_types']) && count($validated['voucher_types']) > 1) {
+            return back()->with('error', 'Las retenciones no pueden combinarse con otros tipos de comprobante.');
+        }
+
         $fullSemester = (bool) ($validated['full_semester'] ?? false);
 
         if ($fullSemester && $validated['type'] !== 'compras') {
@@ -99,9 +103,9 @@ class SriScrapeController extends Controller
             $month,
             $day,
             $endMonth,
-        )->whereIn('status', ['completed', 'failed'])->get(['status', 'result']);
+        )->whereIn('status', ['completed', 'failed'])->get(['status', 'result', 'voucher_types']);
 
-        if ($blockReason = SriScrapeJob::blockReason($previousJobs)) {
+        if ($blockReason = SriScrapeJob::blockReason($previousJobs, $validated['voucher_types'])) {
             return back()->with('error', $blockReason);
         }
 
