@@ -193,16 +193,18 @@ class OrderController extends Controller
     public function importRetentions(Request $request, OrderRetentionImportService $service): RedirectResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'max:5120'],
+            'file' => ['required', 'file', 'max:5120', 'mimes:txt,xml'],
         ]);
 
         $company = company();
+        $uploaded = $request->file('file');
+        $content = file_get_contents($uploaded->getRealPath());
 
-        $content = file_get_contents(
-            $request->file('file')->getRealPath()
-        );
+        $result = strtolower($uploaded->getClientOriginalExtension()) === 'xml'
+            ? $service->importFromXml($content, $company->ruc)
+            : $service->import($content, $company->ruc);
 
-        ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors, 'failedKeys' => $failedKeys] = $service->import($content, $company->ruc);
+        ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors, 'failedKeys' => $failedKeys] = $result;
 
         $redirect = redirect()->route('tenant.orders.index')
             ->with($skipped > 0 || $errors > 0 ? 'error' : 'success', "Retenciones importadas: {$imported} procesadas, {$skipped} omitidas, {$errors} errores.");

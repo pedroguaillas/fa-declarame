@@ -25,42 +25,23 @@ class SriScrapeJobBlockReasonTest extends TestCase
         $this->assertNull(SriScrapeJob::blockReason(new Collection));
     }
 
-    public function test_blocks_when_completed_without_errors_and_with_records(): void
+    public function test_allows_retry_after_single_satisfactory_completion(): void
     {
         $jobs = new Collection([
             $this->makeJob('completed', ['imported' => 380, 'skipped' => 20, 'errors' => 0]),
         ]);
 
-        $reason = SriScrapeJob::blockReason($jobs);
-
-        $this->assertNotNull($reason);
-        $this->assertStringContainsString('satisfactoriamente', $reason);
-        $this->assertStringContainsString('380 importados', $reason);
-        $this->assertStringContainsString('20 omitidos', $reason);
+        $this->assertNull(SriScrapeJob::blockReason($jobs));
     }
 
-    public function test_blocks_when_completed_with_all_zero_counters(): void
+    public function test_allows_retry_after_two_satisfactory_completions(): void
     {
         $jobs = new Collection([
-            $this->makeJob('completed', ['imported' => 0, 'skipped' => 0, 'errors' => 0]),
+            $this->makeJob('completed', ['imported' => 264, 'skipped' => 0, 'errors' => 0]),
+            $this->makeJob('completed', ['imported' => 38, 'skipped' => 264, 'errors' => 0]),
         ]);
 
-        $reason = SriScrapeJob::blockReason($jobs);
-
-        $this->assertNotNull($reason);
-        $this->assertStringContainsString('satisfactoriamente', $reason);
-    }
-
-    public function test_blocks_when_completed_with_null_result(): void
-    {
-        $jobs = new Collection([
-            $this->makeJob('completed', null),
-        ]);
-
-        $reason = SriScrapeJob::blockReason($jobs);
-
-        $this->assertNotNull($reason);
-        $this->assertStringContainsString('satisfactoriamente', $reason);
+        $this->assertNull(SriScrapeJob::blockReason($jobs));
     }
 
     public function test_allows_retry_with_two_failed_attempts(): void
@@ -108,5 +89,37 @@ class SriScrapeJobBlockReasonTest extends TestCase
         ]);
 
         $this->assertNull(SriScrapeJob::blockReason($jobs));
+    }
+
+    public function test_blocks_after_five_total_attempts(): void
+    {
+        $jobs = new Collection([
+            $this->makeJob('failed', null),
+            $this->makeJob('completed', ['imported' => 200, 'skipped' => 0, 'errors' => 0]),
+            $this->makeJob('completed', ['imported' => 50, 'skipped' => 200, 'errors' => 0]),
+            $this->makeJob('completed', ['imported' => 10, 'skipped' => 250, 'errors' => 0]),
+            $this->makeJob('completed', ['imported' => 5, 'skipped' => 260, 'errors' => 0]),
+        ]);
+
+        $reason = SriScrapeJob::blockReason($jobs);
+
+        $this->assertNotNull($reason);
+        $this->assertStringContainsString('5 intentos', $reason);
+    }
+
+    public function test_blocks_takes_precedence_when_both_limits_hit(): void
+    {
+        $jobs = new Collection([
+            $this->makeJob('failed', null),
+            $this->makeJob('failed', null),
+            $this->makeJob('failed', null),
+            $this->makeJob('completed', ['imported' => 10, 'skipped' => 0, 'errors' => 0]),
+            $this->makeJob('completed', ['imported' => 5, 'skipped' => 10, 'errors' => 0]),
+        ]);
+
+        $reason = SriScrapeJob::blockReason($jobs);
+
+        $this->assertNotNull($reason);
+        $this->assertStringContainsString('5 intentos', $reason);
     }
 }

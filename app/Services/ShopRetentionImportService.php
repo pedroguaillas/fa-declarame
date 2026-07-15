@@ -133,6 +133,63 @@ class ShopRetentionImportService
     }
 
     /**
+     * Import a retention directly from a raw SRI XML string (autorizacion wrapper).
+     *
+     * @return array{imported: int, skipped: int, errors: int, failedKeys: array<string>}
+     */
+    public function importFromXml(string $xmlContent, string $companyRuc): array
+    {
+        if (! mb_check_encoding($xmlContent, 'UTF-8')) {
+            $xmlContent = mb_convert_encoding($xmlContent, 'UTF-8', 'ISO-8859-1');
+        }
+
+        try {
+            $root = new SimpleXMLElement($xmlContent, LIBXML_NONET);
+        } catch (\Throwable) {
+            return ['imported' => 0, 'skipped' => 0, 'errors' => 1, 'failedKeys' => ['XML inválido']];
+        }
+
+        // Handle <autorizaciones><autorizacion> wrapper or bare <autorizacion>
+        $nodes = $root->getName() === 'autorizacion'
+            ? [$root]
+            : ($root->autorizacion ?? []);
+
+        $imported = 0;
+        $skipped = 0;
+        $errors = 0;
+        $failedKeys = [];
+
+        foreach ($nodes as $authEl) {
+            if (! isset($authEl->comprobante)) {
+                $skipped++;
+
+                continue;
+            }
+
+            $autorizacion = (object) [
+                'comprobante' => (string) $authEl->comprobante,
+                'numeroAutorizacion' => (string) ($authEl->numeroAutorizacion ?? ''),
+                'fechaAutorizacion' => (string) ($authEl->fechaAutorizacion ?? now()->toIso8601String()),
+            ];
+
+            try {
+                $result = $this->processRetention($autorizacion, $companyRuc);
+                $imported += $result['imported'];
+                $skipped += $result['skipped'];
+
+                if ($result['imported'] === 0) {
+                    $failedKeys[] = (string) ($authEl->numeroAutorizacion ?? 'sin-clave');
+                }
+            } catch (\Throwable $e) {
+                $errors++;
+                $failedKeys[] = (string) ($authEl->numeroAutorizacion ?? 'sin-clave');
+            }
+        }
+
+        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors, 'failedKeys' => $failedKeys];
+    }
+
+    /**
      * Process v1.0.0: impuestos/impuesto — each item carries its own document reference.
      * Groups items by numDocSustento so all retentions for the same document are applied together.
      *

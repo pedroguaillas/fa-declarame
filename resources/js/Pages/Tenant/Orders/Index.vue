@@ -276,7 +276,7 @@ const orderExportModal = ref<InstanceType<typeof OrderExportModal> | null>(null)
             <input
                 ref="importRetentionsFileInput"
                 type="file"
-                accept=".txt"
+                accept=".txt,.xml"
                 class="hidden"
                 @change="handleRetentionsFileSelected"
             />

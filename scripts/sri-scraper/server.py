@@ -280,7 +280,7 @@ def _post_callback(url: str, body: dict) -> None:
             headers={"Content-Type": "application/json; charset=utf-8"},
             method="POST",
         )
-        urllib.request.urlopen(req, timeout=60)
+        urllib.request.urlopen(req, timeout=300)
     except Exception as e:
         scraper.progress("callback", f"Error al enviar callback: {e}")
 

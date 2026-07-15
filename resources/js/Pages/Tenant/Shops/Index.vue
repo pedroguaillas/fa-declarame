@@ -441,7 +441,7 @@ watch(
             <input
                 ref="importRetentionsFileInput"
                 type="file"
-                accept=".txt,.zip"
+                accept=".txt,.xml,.zip"
                 class="hidden"
                 @change="handleRetentionsFileSelected"
             />

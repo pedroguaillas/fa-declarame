@@ -242,11 +242,12 @@ class ShopController extends Controller
     public function importRetentions(Request $request, ShopRetentionImportService $service): RedirectResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'max:20480', 'mimes:txt,zip'],
+            'file' => ['required', 'file', 'max:20480', 'mimes:txt,zip,xml'],
         ]);
 
         $company = company();
         $uploaded = $request->file('file');
+        $ext = strtolower($uploaded->getClientOriginalExtension());
 
         $imported = 0;
         $skipped = 0;
@@ -254,7 +255,7 @@ class ShopController extends Controller
 
         $failedKeys = [];
 
-        if ($uploaded->getClientOriginalExtension() === 'zip') {
+        if ($ext === 'zip') {
             $zip = new \ZipArchive;
 
             if ($zip->open($uploaded->getRealPath()) !== true) {
@@ -264,10 +265,7 @@ class ShopController extends Controller
 
             for ($i = 0; $i < $zip->numFiles; $i++) {
                 $name = $zip->getNameIndex($i);
-
-                if (strtolower(pathinfo($name, PATHINFO_EXTENSION)) !== 'txt') {
-                    continue;
-                }
+                $fileExt = strtolower(pathinfo($name, PATHINFO_EXTENSION));
 
                 $content = $zip->getFromIndex($i);
 
@@ -275,7 +273,14 @@ class ShopController extends Controller
                     continue;
                 }
 
-                $result = $service->import($content, $company->ruc);
+                if ($fileExt === 'xml') {
+                    $result = $service->importFromXml($content, $company->ruc);
+                } elseif ($fileExt === 'txt') {
+                    $result = $service->import($content, $company->ruc);
+                } else {
+                    continue;
+                }
+
                 $imported += $result['imported'];
                 $skipped += $result['skipped'];
                 $errors += $result['errors'];
@@ -283,6 +288,13 @@ class ShopController extends Controller
             }
 
             $zip->close();
+        } elseif ($ext === 'xml') {
+            $content = file_get_contents($uploaded->getRealPath());
+            $result = $service->importFromXml($content, $company->ruc);
+            $imported = $result['imported'];
+            $skipped = $result['skipped'];
+            $errors = $result['errors'];
+            $failedKeys = $result['failedKeys'];
         } else {
             $content = file_get_contents($uploaded->getRealPath());
             $result = $service->import($content, $company->ruc);

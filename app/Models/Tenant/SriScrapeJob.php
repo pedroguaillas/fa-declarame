@@ -11,6 +11,8 @@ class SriScrapeJob extends Model
 {
     public const MAX_FAILED_ATTEMPTS = 3;
 
+    public const MAX_TOTAL_ATTEMPTS = 5;
+
     protected $fillable = [
         'company_id',
         'type',
@@ -95,24 +97,23 @@ class SriScrapeJob extends Model
             )
             : $previousJobs;
 
-        $satisfactory = $relevant->first(
-            fn (self $job) => $job->status === 'completed' && (int) ($job->result['errors'] ?? 0) === 0
+        $finished = $relevant->filter(
+            fn (self $job) => in_array($job->status, ['completed', 'failed'], true)
         );
 
-        if ($satisfactory) {
-            $imported = (int) ($satisfactory->result['imported'] ?? 0);
-            $skipped = (int) ($satisfactory->result['skipped'] ?? 0);
+        $totalAttempts = $finished->count();
 
-            return "Este período ya fue descargado satisfactoriamente ({$imported} importados, {$skipped} omitidos). No se permite volver a descargarlo.";
+        if ($totalAttempts >= self::MAX_TOTAL_ATTEMPTS) {
+            return 'Se alcanzó el máximo de '.self::MAX_TOTAL_ATTEMPTS.' intentos para este período.';
         }
 
-        $failedAttempts = $relevant->filter(
+        $failedAttempts = $finished->filter(
             fn (self $job) => $job->status === 'failed'
                 || ($job->status === 'completed' && (int) ($job->result['errors'] ?? 0) > 0)
         )->count();
 
         if ($failedAttempts >= self::MAX_FAILED_ATTEMPTS) {
-            return 'Se alcanzó el máximo de '.self::MAX_FAILED_ATTEMPTS.' intentos para este período.';
+            return 'Se alcanzó el máximo de '.self::MAX_FAILED_ATTEMPTS.' intentos fallidos para este período.';
         }
 
         return null;

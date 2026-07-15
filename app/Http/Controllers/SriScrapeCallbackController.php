@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessScrapeCallbackJob;
 use App\Models\Tenant;
-use App\Models\Tenant\Company;
 use App\Models\Tenant\SriScrapeJob;
-use App\Services\SriScraperService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class SriScrapeCallbackController extends Controller
 {
-    public function handle(Request $request, SriScraperService $scraperService): JsonResponse
+    public function handle(Request $request): JsonResponse
     {
         $jobId = (int) $request->query('job');
         $tenantId = (string) $request->query('tenant');
@@ -23,30 +23,41 @@ class SriScrapeCallbackController extends Controller
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
-        $tenant = Tenant::findOrFail($tenantId);
-        tenancy()->initialize($tenant);
+        $body = $request->json()->all();
 
-        try {
-            $scrapeJob = SriScrapeJob::findOrFail($jobId);
-            $company = Company::findOrFail($scrapeJob->company_id);
+        if (($body['event'] ?? null) === 'error') {
+            $tenant = Tenant::findOrFail($tenantId);
+            tenancy()->initialize($tenant);
 
-            $body = $request->json()->all();
-
-            if (($body['event'] ?? null) === 'error') {
+            try {
+                $scrapeJob = SriScrapeJob::findOrFail($jobId);
                 $scrapeJob->update([
                     'status' => 'failed',
                     'error_message' => $body['data']['message'] ?? 'Error desconocido',
                     'completed_at' => now(),
                 ]);
-
-                return response()->json(['ok' => true]);
+            } finally {
+                tenancy()->end();
             }
 
-            $scraperService->processResult($body['data'] ?? [], $scrapeJob, $company);
-
             return response()->json(['ok' => true]);
+        }
+
+        $payloadPath = "private/sri-scrape/callbacks/{$jobId}_".time().'.json';
+        Storage::disk('local')->put($payloadPath, json_encode($body['data'] ?? [], JSON_UNESCAPED_UNICODE));
+
+        $tenant = Tenant::findOrFail($tenantId);
+        tenancy()->initialize($tenant);
+
+        try {
+            $scrapeJob = SriScrapeJob::findOrFail($jobId);
+            $companyId = $scrapeJob->company_id;
         } finally {
             tenancy()->end();
         }
+
+        ProcessScrapeCallbackJob::dispatch($jobId, $companyId, $tenantId, $payloadPath);
+
+        return response()->json(['ok' => true]);
     }
 }
