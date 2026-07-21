@@ -814,7 +814,7 @@ def search_with_captcha(
         # reCAPTCHA v3 needs enough session history to assign a good score.
         # Session already carries login + navigation signals, so the first
         # attempt only needs a short warm-up; retries warm up a bit longer.
-        warmup = random.uniform(1.0, 2.0) if attempt == 1 else random.uniform(0.5, 1.5)
+        warmup = random.uniform(6.0, 10.0) if attempt == 1 else random.uniform(4.0, 6.0)
         progress(label, f"Warm-up reCAPTCHA: {warmup:.0f}s...")
         simulate_human_presence(page, duration_s=warmup)
 
