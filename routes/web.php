@@ -18,6 +18,13 @@ use Inertia\Inertia;
 Route::post('/scrape-callback', [SriScrapeCallbackController::class, 'handle'])
     ->name('scrape.callback');
 
+// Desktop agent distribution — serves scripts and version manifest
+Route::get('/agent/version.json', fn () => response()->file(public_path('agent/version.json'), ['Content-Type' => 'application/json']));
+Route::get('/agent/install.sh', fn () => response()->file(base_path('scripts/sri-agent/install.sh'), ['Content-Type' => 'text/plain']));
+Route::get('/agent/install.ps1', fn () => response()->file(base_path('scripts/sri-agent/install.ps1'), ['Content-Type' => 'text/plain']));
+Route::get('/agent/server.py', fn () => response()->file(base_path('scripts/sri-agent/server.py'), ['Content-Type' => 'text/plain']));
+Route::get('/agent/test-scraper.py', fn () => response()->file(base_path('scripts/sri-agent/test-scraper.py'), ['Content-Type' => 'text/plain']));
+
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),

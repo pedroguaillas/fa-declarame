@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Jobs\ScrapeFromSriJob;
 use App\Models\Tenant\SriScrapeJob;
+use App\Services\SriScraperService;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -148,6 +149,96 @@ class SriScrapeController extends Controller
         }
 
         return [$startMonth, $endMonth];
+    }
+
+    /**
+     * Create a SriScrapeJob for the desktop agent and return the signed config payload.
+     * The frontend passes this config to localhost:8765/scrape; the agent POSTs results
+     * back to /scrape-callback using the signed callbackUrl included in the config.
+     */
+    public function agentDispatch(Request $request, SriScraperService $scraperService): JsonResponse
+    {
+        $validated = $request->validate([
+            'type' => ['required', 'in:compras,ventas'],
+            'year' => ['required', 'integer', 'min:2022', 'max:'.now()->year],
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'day' => ['nullable', 'integer', 'min:1', 'max:31'],
+            'voucher_types' => ['required', 'array', 'min:1'],
+            'voucher_types.*' => ['in:1,3,4,6'],
+            'full_semester' => ['nullable', 'boolean'],
+        ]);
+
+        if (in_array('6', $validated['voucher_types']) && count($validated['voucher_types']) > 1) {
+            return response()->json(['error' => 'Las retenciones no pueden combinarse con otros tipos de comprobante.'], 422);
+        }
+
+        $fullSemester = (bool) ($validated['full_semester'] ?? false);
+
+        if ($fullSemester && $validated['type'] !== 'compras') {
+            return response()->json(['error' => 'La descarga semestral solo está disponible para comprobantes recibidos.'], 422);
+        }
+
+        [$month, $endMonth] = $fullSemester
+            ? self::resolveSemesterRange((int) $validated['year'], (int) $validated['month'])
+            : [(int) $validated['month'], null];
+
+        $day = $fullSemester ? null : ($validated['day'] ?? null);
+
+        $company = company();
+
+        try {
+            $passSri = $company->pass_sri;
+        } catch (DecryptException) {
+            $passSri = null;
+        }
+
+        if (empty($passSri)) {
+            return response()->json(['error' => 'Configure la clave SRI de la empresa primero.'], 422);
+        }
+
+        $existing = SriScrapeJob::where('company_id', $company->id)
+            ->where('type', $validated['type'])
+            ->whereIn('status', ['pending', 'running'])
+            ->exists();
+
+        if ($existing) {
+            return response()->json(['error' => 'Ya existe una descarga en progreso para este tipo.'], 409);
+        }
+
+        $previousJobs = SriScrapeJob::forPeriod(
+            $company->id,
+            $validated['type'],
+            $validated['year'],
+            $month,
+            $day,
+            $endMonth,
+        )->whereIn('status', ['completed', 'failed'])->get(['status', 'result', 'voucher_types']);
+
+        if ($blockReason = SriScrapeJob::blockReason($previousJobs, $validated['voucher_types'])) {
+            return response()->json(['error' => $blockReason], 422);
+        }
+
+        $scrapeJob = SriScrapeJob::create([
+            'company_id' => $company->id,
+            'type' => $validated['type'],
+            'year' => $validated['year'],
+            'month' => $month,
+            'end_month' => $endMonth,
+            'day' => $day,
+            'mode' => 'txt_download',
+            'source' => 'agent',
+            'voucher_types' => $validated['voucher_types'],
+            'status' => 'pending',
+        ]);
+
+        $tenantId = tenancy()->tenant->getTenantKey();
+
+        $config = $scraperService->buildAgentConfig($scrapeJob, $company, $tenantId);
+
+        return response()->json([
+            'jobId' => $scrapeJob->id,
+            'config' => $config,
+        ]);
     }
 
     public function status(): JsonResponse

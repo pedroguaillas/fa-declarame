@@ -907,7 +907,7 @@ class SriScraperService
      *
      * @return array<int, string>
      */
-    private function getExistingClavesForPeriod(SriScrapeJob $scrapeJob, Company $company): array
+    public function getExistingClavesForPeriod(SriScrapeJob $scrapeJob, Company $company): array
     {
         $types = $scrapeJob->type === 'ambos' ? ['ventas', 'compras'] : [$scrapeJob->type];
         $year = $scrapeJob->year;
@@ -963,6 +963,42 @@ class SriScraperService
         }
 
         return array_values(array_unique($claves));
+    }
+
+    /**
+     * Build the config payload for the desktop agent (localhost:8765).
+     * Includes a signed callbackUrl so the agent can POST results back to Laravel.
+     *
+     * @return array<string, mixed>
+     */
+    public function buildAgentConfig(SriScrapeJob $scrapeJob, Company $company, string $tenantId): array
+    {
+        $token = hash_hmac('sha256', "{$scrapeJob->id}:{$tenantId}", config('app.key'));
+        $callbackBase = config('sri.scraper.callback_url', config('app.url'));
+        $callbackUrl = rtrim($callbackBase, '/')
+            ."/scrape-callback?job={$scrapeJob->id}&tenant={$tenantId}&token={$token}";
+
+        $config = [
+            'ruc' => $company->ruc,
+            'password' => $company->pass_sri,
+            'type' => $scrapeJob->type,
+            'year' => $scrapeJob->year,
+            'month' => $scrapeJob->month,
+            'mode' => $scrapeJob->mode,
+            'voucherTypes' => $scrapeJob->voucher_types ?? ['1', '3', '4'],
+            'callbackUrl' => $callbackUrl,
+            'skipClaves' => $this->getExistingClavesForPeriod($scrapeJob, $company),
+        ];
+
+        if ($scrapeJob->day !== null) {
+            $config['day'] = $scrapeJob->day;
+        }
+
+        if ($scrapeJob->end_month !== null) {
+            $config['months'] = $scrapeJob->months();
+        }
+
+        return $config;
     }
 
     /**

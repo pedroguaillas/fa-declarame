@@ -31,3 +31,10 @@ Thumbs.db
 # Scraper sessions & temporary data
 scripts/sri-scraper/browser-session/
 scripts/sri-scraper/__pycache__/
+
+# SRI Agent (desktop) — runtime artifacts
+scripts/sri-agent/browser-session/
+scripts/sri-agent/__pycache__/
+scripts/sri-agent/venv/
+scripts/sri-agent/.venv/
+scripts/sri-agent/screenshots/

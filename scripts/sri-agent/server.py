@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 """
-SRI Scraper HTTP Server — opens a visible browser and waits for scrape
-requests from Laravel. All parameters (ruc, password, type, year, month)
-come in each POST request — no credentials needed at startup.
+SRI Scraper HTTP Server — keeps a visible Chrome open in the background and
+navigates to the SRI portal only when a scrape request arrives.
+
+Browser lifecycle: Chrome launches once at startup and stays open (on a blank
+page) between jobs. When a job arrives it navigates → logs in (if needed) →
+scrapes → returns to idle. Chrome is only closed when the agent stops.
 
 Usage:
     # Install dependencies (first time only):
     pip install playwright playwright-stealth requests
     playwright install chromium
 
-    # Start the server (just opens browser, no login yet):
+    # Start the agent:
     python server.py
     python server.py --port=8765
 
@@ -23,6 +26,7 @@ import json
 import os
 import queue
 import random
+import sys
 import threading
 import time
 import traceback
@@ -32,6 +36,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from threading import Event, Lock
+
+AGENT_VERSION = "1.0.0"
 
 # ─── Load test-scraper.py as module ──────────────────────────────────────────
 
@@ -61,6 +67,66 @@ _scrape_lock = Lock()
 
 # Tracks how many jobs have completed to apply incremental cooldowns.
 _job_counter = 0
+
+
+# ─── Browser Close ────────────────────────────────────────────────────────────
+
+
+def _close_browser() -> None:
+    """Close the browser and reset all state. Safe to call even if not open."""
+    try:
+        if _browser_state["context"]:
+            _browser_state["context"].close()
+    except Exception as e:
+        scraper.progress("server", f"Advertencia al cerrar context: {e}")
+    try:
+        if _browser_state["browser"]:
+            _browser_state["browser"].close()
+    except Exception as e:
+        scraper.progress("server", f"Advertencia al cerrar browser: {e}")
+    try:
+        if _browser_state["pw_cm"]:
+            _browser_state["pw_cm"].__exit__(None, None, None)
+    except Exception as e:
+        scraper.progress("server", f"Advertencia al cerrar playwright: {e}")
+
+    _browser_state["pw"] = None
+    _browser_state["pw_cm"] = None
+    _browser_state["context"] = None
+    _browser_state["browser"] = None
+    _browser_state["page"] = None
+    _browser_state["logged_in_ruc"] = None
+    scraper.progress("server", "Navegador cerrado.")
+
+
+# ─── Auto-Update ─────────────────────────────────────────────────────────────
+
+
+def _check_for_updates(update_url: str) -> None:
+    """Check remote version.json; if newer, download updated .py files and restart."""
+    try:
+        scraper.progress("update", f"Verificando actualizaciones en {update_url} ...")
+        req = urllib.request.Request(
+            update_url.rstrip("/") + "/version.json",
+            headers={"User-Agent": f"SRI-Agent/{AGENT_VERSION}"},
+        )
+        resp = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(resp.read())
+        remote_version = data.get("version", "")
+        if not remote_version or remote_version == AGENT_VERSION:
+            scraper.progress("update", f"Versión {AGENT_VERSION} al día.")
+            return
+        scraper.progress("update", f"Nueva versión {remote_version} disponible. Actualizando...")
+        agent_dir = Path(__file__).parent
+        base_url = update_url.rstrip("/")
+        for filename in ("server.py", "test-scraper.py"):
+            dest = agent_dir / filename
+            urllib.request.urlretrieve(f"{base_url}/{filename}", dest)
+            scraper.progress("update", f"  {filename} actualizado.")
+        scraper.progress("update", "Reiniciando agente con nueva versión...")
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    except Exception as e:
+        scraper.progress("update", f"Advertencia: no se pudo verificar actualización: {e}")
 
 
 # ─── Browser Lifecycle ──────────────────────────────────────────────────────
@@ -201,12 +267,16 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
 def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> None:
     """Dedicated thread that owns the browser and processes all scrape work.
 
+    Persistent browser: Chrome launches once at startup and stays open between
+    jobs. Each job navigates to SRI, logs in if needed, scrapes, then the
+    browser returns to idle on whatever page it last visited.
+
     Playwright's sync API uses greenlets and is NOT thread-safe — all browser
     operations must happen in this single thread. The HTTP handlers communicate
     via _work_queue using concurrent.futures.Future objects.
     """
     start_browser(user_data_dir, headless=headless)
-    _browser_ready.set()  # Unblock the HTTP server startup
+    _browser_ready.set()
 
     while True:
         work = _work_queue.get()
@@ -223,49 +293,12 @@ def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> N
             global _job_counter
             _job_counter += 1
 
-            # Clear SRI session after each job (different RUCs must not share login state).
-            # Strategy: save Google/reCAPTCHA cookies → clear ALL → restore Google cookies.
-            # This avoids Keycloak partial-state issues while keeping the reCAPTCHA score warm.
-            try:
-                context = _browser_state["context"]
-                pages = context.pages
-                for p in pages[1:]:
-                    try:
-                        p.close()
-                    except Exception:
-                        pass
-                main_page = pages[0] if pages else context.new_page()
-
-                # Save reCAPTCHA/Google cookies before wiping everything.
-                google_domains = ("google.com", "gstatic.com", "googleapis.com", "recaptcha.net")
-                all_cookies = context.cookies()
-                google_cookies = [
-                    c for c in all_cookies
-                    if any(c.get("domain", "").lstrip(".").endswith(d) for d in google_domains)
-                ]
-
-                # Clear ALL cookies — gives SRI/Keycloak a completely clean slate.
-                context.clear_cookies()
-                main_page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
-
-                # Restore Google/reCAPTCHA cookies so captcha score survives between jobs.
-                if google_cookies:
-                    context.add_cookies(google_cookies)
-                    scraper.progress("server", f"Restauradas {len(google_cookies)} cookies Google/reCAPTCHA.")
-
-                main_page.goto("about:blank", wait_until="commit", timeout=10000)
-                _browser_state["page"] = main_page
-                _browser_state["logged_in_ruc"] = None
-                scraper.progress("server", f"Sesión limpiada ({len(pages)} tabs, {len(google_cookies)} cookies Google preservadas).")
-            except Exception as e:
-                scraper.progress("server", f"Advertencia al limpiar sesión: {e}")
-
-            # Cooldown only when another job is already queued.
+            # Brief pause between consecutive queued jobs.
             if not _work_queue.empty():
-                cooldown = random.uniform(180, 600)  # 3–10 min
+                cooldown = random.uniform(3, 8)
                 scraper.progress(
                     "server",
-                    f"Cooldown {cooldown:.0f}s antes del siguiente job (job #{_job_counter})...",
+                    f"Pausa {cooldown:.0f}s antes del siguiente job (job #{_job_counter})...",
                 )
                 time.sleep(cooldown)
 
@@ -389,7 +422,7 @@ def handle_scrape(config: dict) -> dict:
                                 "error": str(e),
                             }
                         )
-                    scraper.random_delay(1, 3)
+                    scraper.random_delay(0.2, 0.5)
 
         # Log resumen antes de enviar a Laravel
         scraper.progress("response", f"Enviando {len(files)} archivos a Laravel")
@@ -429,7 +462,7 @@ def handle_scrape(config: dict) -> dict:
                         all_claves.extend(claves)
                 except Exception as e:
                     scraper.progress(vt["label"], f"Error: {e}")
-                scraper.random_delay(1, 3)
+                scraper.random_delay(0.2, 0.5)
 
         unique_claves = list(dict.fromkeys(all_claves))
         return {
@@ -447,12 +480,19 @@ def handle_scrape(config: dict) -> dict:
 
 
 class ScrapeRequestHandler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        """Handle CORS preflight from browser (fetch from HTTPS page → localhost)."""
+        self.send_response(204)
+        self._add_cors_headers()
+        self.end_headers()
+
     def do_GET(self):
         if self.path == "/health":
             self._json_response(
                 200,
                 {
                     "status": "ok",
+                    "version": AGENT_VERSION,
                     "logged_in_ruc": _browser_state["logged_in_ruc"],
                 },
             )
@@ -519,9 +559,16 @@ class ScrapeRequestHandler(BaseHTTPRequestHandler):
         finally:
             _scrape_lock.release()
 
+    def _add_cors_headers(self) -> None:
+        # Localhost only binds to 127.0.0.1 so wildcard origin is safe here.
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
     def _json_response(self, status: int, data: dict):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
+        self._add_cors_headers()
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -552,13 +599,31 @@ def main():
         default=False,
         help="Ejecutar el navegador en modo headless (sin ventana)",
     )
+    parser.add_argument(
+        "--update-url",
+        dest="update_url",
+        default=None,
+        help="URL base donde se publican server.py, test-scraper.py y version.json para auto-update",
+    )
+    parser.add_argument(
+        "--no-update",
+        dest="no_update",
+        action="store_true",
+        default=False,
+        help="Saltar verificación de actualizaciones al arrancar",
+    )
     args = parser.parse_args()
 
+    scraper.progress("server", f"SRI Agent v{AGENT_VERSION}")
     scraper.progress(
         "server",
         f"Stealth: {'v' + str(scraper.STEALTH_VERSION) if scraper.STEALTH_VERSION else 'NO'}",
     )
-    scraper.progress("server", f"Iniciando navegador {'headless' if args.headless else 'visible'}...")
+
+    if args.update_url and not args.no_update:
+        _check_for_updates(args.update_url)
+
+    scraper.progress("server", f"Abriendo Chrome {'headless' if args.headless else 'visible'} (permanece abierto entre jobs)...")
 
     # Start the dedicated scraper thread — it owns the browser and all Playwright calls.
     scraper_thread = threading.Thread(
@@ -582,9 +647,7 @@ def main():
         scraper.progress("server", "Apagando servidor...")
         server.shutdown()
         _work_queue.put(None)  # Signal scraper thread to stop
-        _browser_state["context"].close()
-        if _browser_state.get("browser"):
-            _browser_state["browser"].close()
+        _close_browser()
 
 
 if __name__ == "__main__":

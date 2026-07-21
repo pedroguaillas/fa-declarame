@@ -75,7 +75,18 @@ if [[ "$UPDATE_ONLY" == true ]]; then
         "$SCRIPT_DIR/server.py" \
         "$SCRIPT_DIR/test-scraper.py" \
         "$VPS_USER@$VPS_HOST:$REMOTE_DIR/"
-    ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" "supervisorctl restart sri-scraper && sleep 3 && curl -s http://127.0.0.1:8765/health"
+    ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" bash <<'REMOTE_UPDATE'
+supervisorctl stop sri-scraper 2>/dev/null || true
+fuser -k 8765/tcp 2>/dev/null || true
+rm -f /opt/sri-scraper/browser-session/Singleton*
+for i in $(seq 1 15); do
+    ss -tlnp | grep -q ':8765' || break
+    sleep 2
+done
+supervisorctl start sri-scraper
+sleep 5
+curl -s http://127.0.0.1:8765/health || echo "[update] Servidor no responde aún"
+REMOTE_UPDATE
     info "Actualización completada."
     exit 0
 fi

@@ -20,6 +20,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     CloudDownload,
+    HardDriveDownload,
     Loader2,
     CheckCircle2,
     XCircle,
@@ -299,6 +300,7 @@ onMounted(() => {
     if (hasActiveJobs.value) {
         startPolling();
     }
+    checkAgent();
 });
 
 onUnmounted(() => {
@@ -321,6 +323,99 @@ function handlePageChange(page: number) {
         preserveScroll: true,
         only: ["jobs"],
     });
+}
+
+// ─── Local Agent ─────────────────────────────────────────────────────────────
+
+const MIN_AGENT_VERSION = "1.0.0";
+
+type AgentStatus = "checking" | "available" | "outdated" | "unavailable";
+const agentStatus = ref<AgentStatus>("checking");
+const agentVersion = ref<string | null>(null);
+const agentDispatching = ref(false);
+const agentError = ref<string | null>(null);
+
+function readXsrfToken(): string {
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : "";
+}
+
+function compareVersion(a: string | null, b: string): number {
+    if (!a) return -1;
+    const pa = a.split(".").map(Number);
+    const pb = b.split(".").map(Number);
+    for (let i = 0; i < 3; i++) {
+        if ((pa[i] ?? 0) > (pb[i] ?? 0)) return 1;
+        if ((pa[i] ?? 0) < (pb[i] ?? 0)) return -1;
+    }
+    return 0;
+}
+
+async function checkAgent(): Promise<void> {
+    try {
+        const resp = await fetch("http://localhost:8765/health", {
+            signal: AbortSignal.timeout(3000),
+        });
+        if (!resp.ok) { agentStatus.value = "unavailable"; return; }
+        const data = await resp.json();
+        agentVersion.value = data.version ?? null;
+        agentStatus.value =
+            compareVersion(agentVersion.value, MIN_AGENT_VERSION) >= 0
+                ? "available"
+                : "outdated";
+    } catch {
+        agentStatus.value = "unavailable";
+    }
+}
+
+async function submitAgent(): Promise<void> {
+    agentDispatching.value = true;
+    agentError.value = null;
+    try {
+        const dispatchResp = await fetch(route("tenant.sri-scrape.agent-dispatch"), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                "X-XSRF-TOKEN": readXsrfToken(),
+            },
+            body: JSON.stringify({
+                type: form.type,
+                year: form.year,
+                month: form.month,
+                day: form.day,
+                voucher_types: selectedVoucherTypes.value,
+                full_semester: form.full_semester,
+            }),
+        });
+
+        const dispatchData = await dispatchResp.json();
+
+        if (!dispatchResp.ok) {
+            agentError.value = dispatchData.error ?? "Error al preparar la descarga.";
+            return;
+        }
+
+        const agentResp = await fetch("http://localhost:8765/scrape", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(dispatchData.config),
+        });
+
+        if (!agentResp.ok) {
+            const agentData = await agentResp.json();
+            agentError.value = agentData.error ?? "Error al comunicar con el agente local.";
+            return;
+        }
+
+        // Agent accepted the job (async with callbackUrl) — start polling for updates
+        pollStatus();
+        startPolling();
+    } catch {
+        agentError.value = "No se pudo conectar con el agente local. ¿Está corriendo?";
+    } finally {
+        agentDispatching.value = false;
+    }
 }
 
 // ─── Submit ─────────────────────────────────────────────────────────────────
@@ -360,6 +455,11 @@ defineOptions({ layout: TenantLayout });
         <Alert v-if="flash?.error" variant="destructive">
             <XCircle class="size-4" />
             <AlertDescription>{{ flash.error }}</AlertDescription>
+        </Alert>
+
+        <Alert v-if="agentError" variant="destructive">
+            <XCircle class="size-4" />
+            <AlertDescription>{{ agentError }}</AlertDescription>
         </Alert>
 
         <!-- Form -->
@@ -451,6 +551,38 @@ defineOptions({ layout: TenantLayout });
                             <CloudDownload v-else class="size-4" />
                             Descargar del SRI
                         </Button>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            :disabled="agentDispatching || !hasPassword || !hasSelectedVouchers || agentStatus !== 'available'"
+                            class="font-bold"
+                            @click="submitAgent"
+                        >
+                            <Loader2 v-if="agentDispatching" class="size-4 animate-spin" />
+                            <HardDriveDownload v-else class="size-4" />
+                            Agente Local
+                        </Button>
+                    </div>
+
+                    <!-- Agent status indicator -->
+                    <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                        <template v-if="agentStatus === 'checking'">
+                            <Loader2 class="size-3 animate-spin" />
+                            Detectando agente local...
+                        </template>
+                        <template v-else-if="agentStatus === 'available'">
+                            <span class="inline-block size-2 rounded-full bg-green-500" />
+                            Agente local v{{ agentVersion }} detectado
+                        </template>
+                        <template v-else-if="agentStatus === 'outdated'">
+                            <span class="inline-block size-2 rounded-full bg-yellow-500" />
+                            Agente desactualizado (v{{ agentVersion }}) — actualiza el agente para usar esta función
+                        </template>
+                        <template v-else>
+                            <span class="inline-block size-2 rounded-full bg-gray-400" />
+                            Sin agente local instalado
+                        </template>
                     </div>
 
                     <!-- Descarga semestral (contribuyentes con declaración semestral) -->
@@ -524,6 +656,10 @@ defineOptions({ layout: TenantLayout });
                                 <Badge v-if="job.source === 'automatic'" class="gap-1 border-0 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
                                     <Bot class="size-3" />
                                     Auto
+                                </Badge>
+                                <Badge v-else-if="job.source === 'agent'" class="gap-1 border-0 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                    <HardDriveDownload class="size-3" />
+                                    Local
                                 </Badge>
                             </div>
 

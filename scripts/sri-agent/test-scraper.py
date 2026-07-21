@@ -383,10 +383,10 @@ def login(page: Page, ruc: str, password: str) -> bool:
                 )
                 return False
             progress("login", f"Intento {attempt} falló, reintentando...")
-            random_delay(2, 5)
+            random_delay(0.5, 1.0)
 
-    # Human-like: look around the page before filling the form
-    simulate_human_presence(page, duration_s=random.uniform(2, 4))
+    # Brief pause before filling the form
+    simulate_human_presence(page, duration_s=0.5)
 
     username_el = page.query_selector("#usuario")
     password_el = page.query_selector("#password")
@@ -489,9 +489,9 @@ def _navigate_compras(page: Page) -> None:
             if attempt == 3:
                 raise
             progress("navigate", f"Intento {attempt} falló, reintentando...")
-            random_delay(2, 5)
+            random_delay(0.5, 1.0)
 
-    simulate_human_presence(page, duration_s=random.uniform(1, 2))
+    simulate_human_presence(page, duration_s=0.3)
     progress("navigate", "Página de Comprobantes Recibidos cargada")
 
 
@@ -507,9 +507,9 @@ def _navigate_ventas(page: Page) -> None:
             if attempt == 3:
                 raise
             progress("navigate", f"Intento {attempt} falló, reintentando...")
-            random_delay(2, 5)
+            random_delay(0.5, 1.0)
 
-    simulate_human_presence(page, duration_s=random.uniform(2, 3))
+    simulate_human_presence(page, duration_s=0.3)
 
     # Click en "Comprobantes electrónicos emitidos" via mojarra JSF
     progress("navigate", "Ejecutando click en 'Comprobantes electrónicos emitidos'...")
@@ -519,13 +519,13 @@ def _navigate_ventas(page: Page) -> None:
     }""")
 
     # Esperar que cargue el formulario
-    time.sleep(3)
+    time.sleep(0.8)
     try:
         page.wait_for_load_state("networkidle", timeout=15000)
     except Exception:
         pass
 
-    simulate_human_presence(page, duration_s=random.uniform(1, 2))
+    simulate_human_presence(page, duration_s=0.3)
     progress("navigate", "Página de Comprobantes Emitidos cargada")
 
 
@@ -650,7 +650,7 @@ def search_direct(
     }""")
 
     # Esperar respuesta
-    random_delay(3, 5)
+    random_delay(0.5, 1.0)
     try:
         page.wait_for_load_state("networkidle", timeout=15000)
     except Exception:
@@ -759,7 +759,7 @@ def _human_click_buscar(page: Page, label: str) -> bool:
 
 def wait_for_search_results(page: Page, tipo: str, label: str) -> bool:
     """Wait for AJAX search results to appear after clicking search."""
-    random_delay(3, 6)
+    random_delay(0.5, 1.0)
 
     # Wait for any PrimeFaces AJAX to finish
     try:
@@ -775,7 +775,7 @@ def wait_for_search_results(page: Page, tipo: str, label: str) -> bool:
 
     if result["state"] == "unknown":
         progress(label, "Estado desconocido, esperando más...")
-        random_delay(4, 7)
+        random_delay(1.0, 2.0)
         retry = check_page_state(page, tipo)
         progress(label, f"Segundo chequeo: {retry['state']} ({retry['detail']})")
         if retry["state"] in ("has_results", "no_results"):
@@ -814,7 +814,7 @@ def search_with_captcha(
         # reCAPTCHA v3 needs enough session history to assign a good score.
         # Session already carries login + navigation signals, so the first
         # attempt only needs a short warm-up; retries warm up a bit longer.
-        warmup = random.uniform(10, 15) if attempt == 1 else random.uniform(6, 11)
+        warmup = random.uniform(1.0, 2.0) if attempt == 1 else random.uniform(0.5, 1.5)
         progress(label, f"Warm-up reCAPTCHA: {warmup:.0f}s...")
         simulate_human_presence(page, duration_s=warmup)
 
@@ -1342,7 +1342,7 @@ def scrape_modals_from_table(
             break
 
         page.click(".ui-paginator-next:not(.ui-state-disabled)")
-        random_delay(2, 4)
+        random_delay(0.5, 1.0)
         page_num += 1
 
     progress(
@@ -1444,7 +1444,7 @@ def _click_and_scrape_modal(
     }""")
 
     # Wait for PrimeFaces to show the NEW dialog (display != 'none', has content rows)
-    random_delay(1.0, 2.0)
+    random_delay(0.3, 0.5)
     try:
         page.wait_for_function(
             """() => {
@@ -1836,7 +1836,7 @@ def download_xmls_from_table(page: Page, tipo: str, old_claves: set[str]) -> lis
             break
 
         page.click(".ui-paginator-next:not(.ui-state-disabled)")
-        random_delay(2, 4)
+        random_delay(0.5, 1.0)
         page_num += 1
 
     progress(
@@ -1958,7 +1958,7 @@ def scrape_table_data(page: Page, tipo: str) -> list[str]:
             break
 
         page.click(".ui-paginator-next:not(.ui-state-disabled)")
-        random_delay(2, 4)
+        random_delay(0.5, 1.0)
         page_num += 1
 
     unique_claves = list(dict.fromkeys(all_claves))
@@ -2218,7 +2218,7 @@ def main():
                                     }
                                 )
 
-                            random_delay(1, 3)
+                            random_delay(0.2, 0.5)
 
                 emit("result", {"mode": "txt_download", "files": files})
 
@@ -2254,7 +2254,7 @@ def main():
                         except Exception as e:
                             progress(vt["label"], f"Error: {e}")
 
-                        random_delay(1, 3)
+                        random_delay(0.2, 0.5)
 
                 unique_claves = list(dict.fromkeys(all_claves))
                 emit("result", {"mode": "table_scrape", "clavesAcceso": unique_claves})
