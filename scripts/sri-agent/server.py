@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 """
-SRI Scraper HTTP Server — keeps a visible Chrome open in the background and
-navigates to the SRI portal only when a scrape request arrives.
+SRI Scraper HTTP Server — opens Chrome only when a scrape job arrives,
+then closes it when the job finishes.
 
-Browser lifecycle: Chrome launches once at startup and stays open (on a blank
-page) between jobs. When a job arrives it navigates → logs in (if needed) →
-scrapes → returns to idle. Chrome is only closed when the agent stops.
+Browser lifecycle: Chrome is closed at rest. When a job arrives it launches,
+logs in to SRI, scrapes, sends callback, and closes. The next job opens a
+fresh browser.
 
 Usage:
     # Install dependencies (first time only):
@@ -267,16 +267,14 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
 def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> None:
     """Dedicated thread that owns the browser and processes all scrape work.
 
-    Persistent browser: Chrome launches once at startup and stays open between
-    jobs. Each job navigates to SRI, logs in if needed, scrapes, then the
-    browser returns to idle on whatever page it last visited.
+    Open-on-demand: browser opens when a job arrives and closes when the job
+    finishes. Chrome is not running at rest — only while actively scraping.
 
     Playwright's sync API uses greenlets and is NOT thread-safe — all browser
     operations must happen in this single thread. The HTTP handlers communicate
     via _work_queue using concurrent.futures.Future objects.
     """
-    start_browser(user_data_dir, headless=headless)
-    _browser_ready.set()
+    _browser_ready.set()  # Ready to accept requests immediately (no pre-launch)
 
     while True:
         work = _work_queue.get()
@@ -284,6 +282,8 @@ def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> N
             break  # Shutdown signal
         config, future = work
         try:
+            scraper.progress("server", "Abriendo Chrome para este job...")
+            start_browser(user_data_dir, headless=headless)
             result = handle_scrape(config)
             future.set_result(result)
         except Exception as e:
@@ -292,6 +292,7 @@ def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> N
         finally:
             global _job_counter
             _job_counter += 1
+            _close_browser()
 
             # Brief pause between consecutive queued jobs.
             if not _work_queue.empty():
@@ -623,7 +624,7 @@ def main():
     if args.update_url and not args.no_update:
         _check_for_updates(args.update_url)
 
-    scraper.progress("server", f"Abriendo Chrome {'headless' if args.headless else 'visible'} (permanece abierto entre jobs)...")
+    scraper.progress("server", f"Agente listo. Chrome abrira solo cuando llegue un job ({'headless' if args.headless else 'visible'}).")
 
     # Start the dedicated scraper thread — it owns the browser and all Playwright calls.
     scraper_thread = threading.Thread(
