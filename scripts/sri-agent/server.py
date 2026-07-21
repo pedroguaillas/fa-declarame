@@ -229,10 +229,10 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
 
 
 def ensure_logged_in(ruc: str, password: str) -> bool:
-    """Login or re-login if needed. Handles switching between different RUCs."""
+    """Login or re-login if needed. Handles persistent context with saved cookies."""
     page = _browser_state["page"]
 
-    # Different RUC than current session — clear cookies to force a clean login
+    # Different RUC — clear cookies to force a clean login
     if _browser_state["logged_in_ruc"] and _browser_state["logged_in_ruc"] != ruc:
         scraper.progress(
             "server", f"Cambiando de RUC {_browser_state['logged_in_ruc']} → {ruc}, limpiando sesion..."
@@ -243,18 +243,19 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
             scraper.progress("server", f"Advertencia al limpiar cookies: {e}")
         _browser_state["logged_in_ruc"] = None
 
-    # Already logged in with this RUC — check if session is still valid
-    if _browser_state["logged_in_ruc"] == ruc:
-        try:
-            # Navigate to portal to verify session is actually alive
-            page.goto(scraper.SRI_URLS["portal"], wait_until="networkidle", timeout=30000)
-            current_url = page.url
-            if "/auth/" not in current_url and "about:blank" not in current_url:
-                scraper.progress("server", "Sesion activa verificada")
-                return True
-            scraper.progress("server", "Sesion expirada, re-logueando...")
-        except Exception:
-            scraper.progress("server", "Sesion perdida, re-logueando...")
+    # Always verify session first — covers both in-memory flag and persistent
+    # context cookies saved from a previous run (open-on-demand restores cookies
+    # from user-data-dir, so the browser may already be logged in without us knowing).
+    try:
+        page.goto(scraper.SRI_URLS["portal"], wait_until="networkidle", timeout=30000)
+        current_url = page.url
+        if "/auth/" not in current_url and "about:blank" not in current_url:
+            scraper.progress("server", f"Sesion activa detectada para RUC {ruc}")
+            _browser_state["logged_in_ruc"] = ruc
+            return True
+        scraper.progress("server", "Sin sesion activa, logueando...")
+    except Exception as e:
+        scraper.progress("server", f"Error verificando sesion ({e}), logueando...")
 
     # Login
     logged_in = scraper.login(page, ruc, password)
