@@ -195,6 +195,12 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
     if user_data_dir:
         scraper.progress("server", f"Contexto persistente: {user_data_dir}")
         Path(user_data_dir).mkdir(parents=True, exist_ok=True)
+        # Clear Chromium Singleton locks left by any previous crashed session
+        for lock in Path(user_data_dir).glob("Singleton*"):
+            try:
+                lock.unlink()
+            except Exception:
+                pass
         context = pw.chromium.launch_persistent_context(
             user_data_dir,
             headless=pw_headless,
