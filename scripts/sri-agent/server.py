@@ -68,6 +68,13 @@ _scrape_lock = Lock()
 # Tracks how many jobs have completed to apply incremental cooldowns.
 _job_counter = 0
 
+# Minutos sin jobs tras los cuales el navegador se cierra solo (keep-alive).
+# Mientras vive, la sesión reCAPTCHA queda caliente → captcha pasa a la primera.
+IDLE_TIMEOUT_S = 900  # 15 min
+
+# Dominios cuyas cookies se preservan entre jobs para mantener el score reCAPTCHA v3.
+GOOGLE_COOKIE_DOMAINS = ("google.com", "gstatic.com", "googleapis.com", "recaptcha.net")
+
 
 # ─── Browser Close ────────────────────────────────────────────────────────────
 
@@ -97,6 +104,88 @@ def _close_browser() -> None:
     _browser_state["page"] = None
     _browser_state["logged_in_ruc"] = None
     scraper.progress("server", "Navegador cerrado.")
+
+
+def _browser_is_open() -> bool:
+    return _browser_state["context"] is not None
+
+
+# ─── Cookie Persistence (reCAPTCHA warmth) ────────────────────────────────────
+
+
+def _recaptcha_cookie_path(user_data_dir: str | None) -> Path:
+    base = Path(user_data_dir) if user_data_dir else Path(__file__).parent
+    return base / "recaptcha_cookies.json"
+
+
+def _filter_google_cookies(cookies: list[dict]) -> list[dict]:
+    return [
+        c
+        for c in cookies
+        if any(c.get("domain", "").lstrip(".").endswith(d) for d in GOOGLE_COOKIE_DOMAINS)
+    ]
+
+
+def _save_recaptcha_cookies(user_data_dir: str | None) -> None:
+    """Volcar cookies Google/reCAPTCHA a JSON antes de cerrar el navegador."""
+    ctx = _browser_state["context"]
+    if not ctx:
+        return
+    try:
+        google = _filter_google_cookies(ctx.cookies())
+        _recaptcha_cookie_path(user_data_dir).write_text(
+            json.dumps(google), encoding="utf-8"
+        )
+        scraper.progress("server", f"Guardadas {len(google)} cookies Google/reCAPTCHA.")
+    except Exception as e:
+        scraper.progress("server", f"Advertencia guardando cookies: {e}")
+
+
+def _restore_recaptcha_cookies(user_data_dir: str | None) -> None:
+    """Restaurar cookies Google/reCAPTCHA al abrir un navegador fresco."""
+    ctx = _browser_state["context"]
+    path = _recaptcha_cookie_path(user_data_dir)
+    if not ctx or not path.exists():
+        return
+    try:
+        cookies = json.loads(path.read_text(encoding="utf-8"))
+        if cookies:
+            ctx.add_cookies(cookies)
+            scraper.progress(
+                "server", f"Restauradas {len(cookies)} cookies Google/reCAPTCHA."
+            )
+    except Exception as e:
+        scraper.progress("server", f"Advertencia restaurando cookies: {e}")
+
+
+def _clear_sri_session() -> None:
+    """Limpiar sesión SRI/Keycloak entre jobs, preservando cookies Google/reCAPTCHA.
+
+    Mantiene el navegador vivo y caliente para el siguiente job sin filtrar el
+    login de un RUC al siguiente."""
+    ctx = _browser_state["context"]
+    page = _browser_state["page"]
+    if not ctx:
+        return
+    try:
+        google = _filter_google_cookies(ctx.cookies())
+        ctx.clear_cookies()
+        if google:
+            ctx.add_cookies(google)
+        if page:
+            try:
+                page.goto("about:blank", wait_until="commit", timeout=10000)
+                page.evaluate(
+                    "() => { try { localStorage.clear(); sessionStorage.clear(); } catch(e){} }"
+                )
+            except Exception:
+                pass
+        _browser_state["logged_in_ruc"] = None
+        scraper.progress(
+            "server", f"Sesión SRI limpiada ({len(google)} cookies Google preservadas)."
+        )
+    except Exception as e:
+        scraper.progress("server", f"Advertencia limpiando sesión SRI: {e}")
 
 
 # ─── Auto-Update ─────────────────────────────────────────────────────────────
@@ -132,9 +221,14 @@ def _check_for_updates(update_url: str) -> None:
 # ─── Browser Lifecycle ──────────────────────────────────────────────────────
 
 
-def start_browser(user_data_dir: str | None = None, headless: bool = False) -> None:
+def start_browser(user_data_dir: str | None = None, headless: bool = False, channel: str = "chromium") -> None:
     """Launch the browser (headless or visible), ready to receive requests.
-    Must be called from the scraper thread — Playwright is not thread-safe."""
+    Must be called from the scraper thread — Playwright is not thread-safe.
+
+    channel="chrome"    — use the real Chrome installed on the system (best reCAPTCHA score)
+    channel="chromium"  — use Playwright's bundled Chromium (required when Chrome not installed)
+    """
+    use_real_chrome = channel != "chromium"
 
     launch_args = [
         "--no-sandbox",
@@ -146,17 +240,20 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
         "--window-position=0,0",
     ]
 
-    # Disable GPU acceleration in all modes — on headless Linux servers there is no
-    # real GPU, and without this Chrome crashes with SIGTRAP trying to init the GPU stack.
-    launch_args.append("--disable-gpu")
-    launch_args.append("--disable-software-rasterizer")
+    # Disable GPU on Linux headless servers — no real GPU, Chrome crashes without this.
+    # On macOS with real Chrome leave GPU enabled for authentic fingerprint signals.
+    if not use_real_chrome or headless:
+        launch_args.append("--disable-gpu")
+        launch_args.append("--disable-software-rasterizer")
 
     if headless:
         # Use Chrome's new headless mode — shares the same rendering engine as the
         # visible browser, making it far harder to detect than the classic headless.
         launch_args.append("--headless=new")
 
-    if scraper.STEALTH_VERSION == 2:
+    # playwright-stealth wrapper: only apply for Playwright Chromium.
+    # Real Chrome already has authentic fingerprints — stealth patches would conflict.
+    if scraper.STEALTH_VERSION == 2 and not use_real_chrome:
         stealth = scraper.Stealth(navigator_languages_override=("es-419", "es"))
         pw_cm = stealth.use_sync(scraper.sync_playwright())
     else:
@@ -166,31 +263,39 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
     _browser_state["pw_cm"] = pw_cm
     _browser_state["pw"] = pw
 
-    # Present the latest STABLE consumer Chrome (fetched at runtime) and derive the
-    # entire fingerprint from it. reCAPTCHA v3 penalizes outdated browsers, so we
-    # must NOT claim the bundled Chromium-for-Testing version (which lags stable);
-    # a stale version tanks the score and the SRI rejects the captcha.
-    fp = scraper.build_chrome_fingerprint(scraper.fetch_latest_chrome_version())
-    scraper.progress("server", f"Fingerprint Chrome {fp['full_version']} (última estable)")
-
-    context_opts = {
+    context_opts: dict = {
         "viewport": {"width": 1366, "height": 768},
         "locale": "es-419",
         "timezone_id": "America/Guayaquil",
-        "user_agent": fp["user_agent"],
         "accept_downloads": True,
         "extra_http_headers": {
             "Accept-Language": "es-419,es;q=0.9",
+        },
+    }
+
+    if use_real_chrome:
+        # Real Chrome reports its own authentic UA, sec-ch-ua, and all fingerprint
+        # signals natively — overriding them would create detectable mismatches.
+        scraper.progress("server", f"Chrome real ({channel}) — fingerprints nativos")
+        fp = None
+    else:
+        # Playwright Chromium needs spoofed fingerprints: its bundled version lags
+        # stable Chrome and reCAPTCHA penalizes the version mismatch.
+        fp = scraper.build_chrome_fingerprint(scraper.fetch_latest_chrome_version())
+        scraper.progress("server", f"Fingerprint Chrome {fp['full_version']} (última estable)")
+        context_opts["user_agent"] = fp["user_agent"]
+        context_opts["extra_http_headers"].update({
             "sec-ch-ua": fp["sec_ch_ua"],
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": fp["platform"],
             "sec-ch-ua-full-version-list": fp["sec_ch_ua_full"],
-        },
-    }
+        })
 
     # When using --headless=new we pass headless=False to Playwright so it does not
     # add its own --headless flag (which would downgrade to the detectable old mode).
-    pw_headless = False if headless else False  # always False; new headless via arg above
+    pw_headless = False  # always False; new headless via arg above
+
+    launch_kwargs = {"channel": channel} if use_real_chrome else {}
 
     if user_data_dir:
         scraper.progress("server", f"Contexto persistente: {user_data_dir}")
@@ -205,22 +310,26 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False) -> N
             user_data_dir,
             headless=pw_headless,
             args=launch_args,
+            **launch_kwargs,
             **context_opts,
         )
         page = context.pages[0] if context.pages else context.new_page()
     else:
-        browser = pw.chromium.launch(headless=pw_headless, args=launch_args)
+        browser = pw.chromium.launch(headless=pw_headless, args=launch_args, **launch_kwargs)
         _browser_state["browser"] = browser
         context = browser.new_context(**context_opts)
         page = context.new_page()
 
-    # Belt-and-suspenders: patch remaining headless/automation indicators that
-    # reCAPTCHA v3 checks, regardless of what playwright-stealth already covers.
-    # userAgentData version is derived from the detected engine version (fp).
-    context.add_init_script(scraper.build_stealth_init_script(fp))
-
-    if scraper.STEALTH_VERSION == 1:
-        scraper.stealth_sync(page)
+    if use_real_chrome:
+        # Only patch webdriver flag — real Chrome already has correct native fingerprints.
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
+        )
+    else:
+        # Full stealth init: patches userAgentData, plugins, permissions, etc.
+        context.add_init_script(scraper.build_stealth_init_script(fp))
+        if scraper.STEALTH_VERSION == 1:
+            scraper.stealth_sync(page)
 
     _browser_state["context"] = context
     _browser_state["page"] = page
@@ -242,6 +351,24 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
         except Exception as e:
             scraper.progress("server", f"Advertencia al limpiar cookies: {e}")
         _browser_state["logged_in_ruc"] = None
+
+    # Google warmup: navigate briefly to google.com before SRI so reCAPTCHA sees
+    # prior same-session Google interaction (boosts v3 score). Also tests whether
+    # Google account cookies are accessible to this Playwright-controlled session.
+    try:
+        page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=15000)
+        # Check if Google account is accessible (cookie encryption test)
+        google_logged_in = page.evaluate(
+            "() => !!document.querySelector('a[aria-label*=\"Google Account\"], "
+            "a[aria-label*=\"Cuenta de Google\"], #gb_70, [data-ogsr-up]')"
+        )
+        scraper.progress(
+            "server",
+            f"Google warmup: cuenta={'SI' if google_logged_in else 'NO (sin cuenta o cookies no accesibles)'}",
+        )
+        time.sleep(random.uniform(8, 12))
+    except Exception as e:
+        scraper.progress("server", f"Google warmup: error ({e}), continuando...")
 
     # Always verify session first — covers both in-memory flag and persistent
     # context cookies saved from a previous run (open-on-demand restores cookies
@@ -271,44 +398,79 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
 # ─── Scraper Thread ───────────────────────────────────────────────────────────
 
 
-def _scraper_thread_main(user_data_dir: str | None, headless: bool = False) -> None:
+def _scraper_thread_main(
+    user_data_dir: str | None,
+    headless: bool = False,
+    channel: str = "chromium",
+    idle_timeout_s: int = IDLE_TIMEOUT_S,
+) -> None:
     """Dedicated thread that owns the browser and processes all scrape work.
 
-    Open-on-demand: browser opens when a job arrives and closes when the job
-    finishes. Chrome is not running at rest — only while actively scraping.
+    Keep-alive con idle timeout: el navegador se abre con el primer job y se
+    mantiene VIVO entre jobs (sesión reCAPTCHA caliente → captcha pasa a la
+    primera). Tras `idle_timeout_s` segundos sin jobs se cierra solo, así en
+    días sin uso no queda ninguna ventana abierta molestando al usuario.
 
     Playwright's sync API uses greenlets and is NOT thread-safe — all browser
     operations must happen in this single thread. The HTTP handlers communicate
     via _work_queue using concurrent.futures.Future objects.
     """
     _browser_ready.set()  # Ready to accept requests immediately (no pre-launch)
+    global _job_counter
 
     while True:
-        work = _work_queue.get()
+        try:
+            work = _work_queue.get(timeout=idle_timeout_s)
+        except queue.Empty:
+            # Sin jobs durante el timeout → cerrar navegador preservando cookies.
+            if _browser_is_open():
+                scraper.progress(
+                    "server",
+                    f"Sin jobs {idle_timeout_s // 60} min → cerrando navegador (cookies reCAPTCHA preservadas).",
+                )
+                _save_recaptcha_cookies(user_data_dir)
+                _close_browser()
+            continue
+
         if work is None:
             break  # Shutdown signal
         config, future = work
+
+        job_ok = False
         try:
-            scraper.progress("server", "Abriendo Chrome para este job...")
-            start_browser(user_data_dir, headless=headless)
+            if not _browser_is_open():
+                browser_label = "Chrome real" if channel != "chromium" else "Chromium"
+                scraper.progress("server", f"Abriendo {browser_label} para este job...")
+                start_browser(user_data_dir, headless=headless, channel=channel)
+                _restore_recaptcha_cookies(user_data_dir)
+            else:
+                scraper.progress("server", "Reusando navegador caliente (sesión viva).")
             result = handle_scrape(config)
             future.set_result(result)
+            job_ok = True
         except Exception as e:
             traceback.print_exc()
             future.set_exception(e)
         finally:
-            global _job_counter
             _job_counter += 1
+
+        if job_ok:
+            # Mantener navegador vivo; limpiar solo sesión SRI para el próximo RUC.
+            _clear_sri_session()
+        else:
+            # Error → recuperar estado limpio para el próximo job, guardando cookies.
+            _save_recaptcha_cookies(user_data_dir)
             _close_browser()
 
-            # Brief pause between consecutive queued jobs.
-            if not _work_queue.empty():
-                cooldown = random.uniform(3, 8)
-                scraper.progress(
-                    "server",
-                    f"Pausa {cooldown:.0f}s antes del siguiente job (job #{_job_counter})...",
-                )
-                time.sleep(cooldown)
+        # Brief pause between consecutive queued jobs.
+        if _work_queue.empty():
+            continue
+        cooldown = random.uniform(3, 8)
+        scraper.progress(
+            "server",
+            f"Pausa {cooldown:.0f}s antes del siguiente job (job #{_job_counter})...",
+        )
+        time.sleep(cooldown)
 
 
 # ─── Scrape Handler ──────────────────────────────────────────────────────────
@@ -620,6 +782,21 @@ def main():
         default=False,
         help="Saltar verificación de actualizaciones al arrancar",
     )
+    import sys as _sys
+    _default_channel = "chrome" if _sys.platform == "darwin" else "chromium"
+    parser.add_argument(
+        "--channel",
+        default=_default_channel,
+        help="Canal del navegador: 'chrome' para Chrome real del sistema (default en macOS), "
+             "'chromium' para Playwright Chromium (default en Linux/VPS)",
+    )
+    parser.add_argument(
+        "--idle-timeout",
+        dest="idle_timeout",
+        type=int,
+        default=IDLE_TIMEOUT_S,
+        help=f"Segundos sin jobs antes de cerrar el navegador (default: {IDLE_TIMEOUT_S})",
+    )
     args = parser.parse_args()
 
     scraper.progress("server", f"SRI Agent v{AGENT_VERSION}")
@@ -631,11 +808,18 @@ def main():
     if args.update_url and not args.no_update:
         _check_for_updates(args.update_url)
 
-    scraper.progress("server", f"Agente listo. Chrome abrira solo cuando llegue un job ({'headless' if args.headless else 'visible'}).")
+    channel_label = f"Chrome real ({args.channel})" if args.channel != "chromium" else "Playwright Chromium"
+    scraper.progress(
+        "server",
+        f"Agente listo. {channel_label} abre con el primer job y se mantiene vivo "
+        f"{args.idle_timeout // 60} min tras el último ({'headless' if args.headless else 'visible'}).",
+    )
 
     # Start the dedicated scraper thread — it owns the browser and all Playwright calls.
     scraper_thread = threading.Thread(
-        target=_scraper_thread_main, args=(args.user_data_dir, args.headless), daemon=True
+        target=_scraper_thread_main,
+        args=(args.user_data_dir, args.headless, args.channel, args.idle_timeout),
+        daemon=True,
     )
     scraper_thread.start()
 

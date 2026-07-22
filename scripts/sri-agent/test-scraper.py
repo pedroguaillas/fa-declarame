@@ -772,14 +772,23 @@ def wait_for_search_results(page: Page, tipo: str, label: str) -> bool:
 
     if result["state"] in ("has_results", "no_results"):
         return True
+    if result["state"] == "captcha_failed":
+        return False
 
     if result["state"] == "unknown":
-        progress(label, "Estado desconocido, esperando más...")
-        random_delay(1.0, 2.0)
-        retry = check_page_state(page, tipo)
-        progress(label, f"Segundo chequeo: {retry['state']} ({retry['detail']})")
-        if retry["state"] in ("has_results", "no_results"):
-            return True
+        # Captcha may have passed and server is querying SRI database (can take 30-60s
+        # for large document sets). Keep polling until resolved or AJAX completes.
+        for check_num in range(12):  # up to ~60 seconds total
+            random_delay(4.0, 6.0)
+            retry = check_page_state(page, tipo)
+            progress(label, f"Chequeo {check_num + 2}: {retry['state']} ({retry['detail']})")
+            if retry["state"] in ("has_results", "no_results"):
+                return True
+            if retry["state"] == "captcha_failed":
+                return False
+            # If AJAX finished but still unknown, server returned nothing useful
+            if "ajaxBusy=false" in retry["detail"] and "blockUI=false" in retry["detail"]:
+                break
 
     return False
 
@@ -1821,13 +1830,22 @@ def download_xmls_from_table(page: Page, tipo: str, old_claves: set[str]) -> lis
             progress("xml-tabla", f"Click en {link_id} (clave ...{clave[-10:]})...")
             xml_content = _capture_xml_by_link_id(page, link_id)
 
+            if not xml_content:
+                # Un reintento: el postback JSF a veces no dispara la descarga al
+                # primer click. Sin esto la clave se perdería del run.
+                progress("xml-tabla", f"Reintentando XML ...{clave[-10:]}...")
+                random_delay(0.4, 0.8)
+                xml_content = _capture_xml_by_link_id(page, link_id)
+
             if xml_content:
                 results.append({"clave": clave, "xml": xml_content})
                 progress("xml-tabla", f"XML capturado ({len(xml_content)} bytes)")
             else:
                 progress("xml-tabla", f"No se pudo capturar XML para ...{clave[-10:]}")
 
-            random_delay(0.5, 1.5)
+            # Post-consulta la descarga NO pasa captcha → no se necesita pacing
+            # anti-bot. Pausa mínima solo para no saturar el postback JSF.
+            random_delay(0.1, 0.25)
 
         has_next = page.evaluate(
             """() => !!document.querySelector('.ui-paginator-next:not(.ui-state-disabled)')"""

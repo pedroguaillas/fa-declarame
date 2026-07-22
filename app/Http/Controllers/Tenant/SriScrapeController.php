@@ -252,4 +252,24 @@ class SriScrapeController extends Controller
 
         return response()->json(['jobs' => $jobs]);
     }
+
+    /**
+     * Marca un job como "running" cuando el agente local lo acepta. El agente
+     * solo hace callback al final, así que sin esto el job quedaría en "pending"
+     * durante todo el procesamiento.
+     */
+    public function markRunning(SriScrapeJob $job): JsonResponse
+    {
+        $company = company();
+
+        if ($job->company_id !== $company->id) {
+            return response()->json(['error' => 'No autorizado.'], 403);
+        }
+
+        if ($job->status === 'pending') {
+            $job->update(['status' => 'running']);
+        }
+
+        return response()->json(['ok' => true]);
+    }
 }

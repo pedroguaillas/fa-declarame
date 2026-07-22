@@ -1,0 +1,106 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/theme.css.jsf?ln=primefaces-barcelona-blue" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/sri.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/tablas.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/dataScroller.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/formularios.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/listas.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/calendar.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/modalPanel.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/aplicacion.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/tuportal.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/comprobantes.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/simpleTogglePanel.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/nuevasclases.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/sri-en-linea-cargando.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/menuNoLogeado.css.jsf?ln=css" /><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/javax.faces.resource/celtablas.css.jsf?ln=css" /><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/comun.js.jsf?ln=js"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/util.js.jsf?ln=js"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/ajax.js.jsf?ln=js"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/bottonManejo.js.jsf?ln=js"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/jsf.js.jsf?ln=javax.faces"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/jquery.js.jsf"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/richfaces.js.jsf"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/richfaces-queue.js.jsf"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/richfaces-base-component.js.jsf"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/status.js.jsf?ln=org.richfaces"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/richfaces-event.js.jsf"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/message.js.jsf?ln=org.richfaces"></script><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/rfRes/msg.ecss.jsf?db=eAG7ELb5HwAGqgLY&amp;ln=org.richfaces" /><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/popupPanel.js.jsf?ln=org.richfaces"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/popupPanelBorders.js.jsf?ln=org.richfaces"></script><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/popupPanelSizer.js.jsf?ln=org.richfaces"></script><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/rfRes/popupPanel.ecss.jsf?db=eAG7ELb5HwAGqgLY&amp;ln=org.richfaces" /><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/datatable.js.jsf?ln=org.richfaces"></script><link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/rfRes/datatable.ecss.jsf?db=eAG7ELb5HwAGqgLY&amp;ln=org.richfaces" />
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="format-detection" content="telephone=no" />
+	<title>SRI - SISTEMA DE COMPROBANTES ELECTRONICOS</title>
+	<link rel="stylesheet" href="/recursos-tpi/css/menu.css" type="text/css" />
+	<link type="text/css" rel="stylesheet" href="/comprobantes-electronicos-internet/resources/css/sri-cel-reconstruccion.css?v1.0_25062018_1448" />
+	<link rel="stylesheet" href="/recursos-tpi/css/sri-reconstruccion.css" type="text/css" media="screen" />
+	<link rel="stylesheet" href="/recursos-tpi/css/animate.min.css" type="text/css" />
+	<link type="text/css" rel="stylesheet" href="/recursos-sri/iconos/sri-menu-icon/sri-menu-icon-fuentes.min.css" />
+	<link type="text/css" rel="stylesheet" href="/recursos-sri/iconos/sri-icon/sri-icono-fuentes.min.css" />
+	<link type="text/css" rel="stylesheet" href="/recursos-sri/css/sri.min.css" />
+	<link type="text/css" rel="stylesheet" href="/recursos-sri/css/barcelona-layout/nanoscroller.css" />
+	<link type="text/css" rel="stylesheet" href="/recursos-sri/css/barcelona-layout/layout-blue.css" /><script type="text/javascript" src="/comprobantes-electronicos-internet/javax.faces.resource/calendar_es.js.jsf?ln=js"></script>
+
+	<script type="text/javascript" src="/recursos-tpi/js/chat.js"></script>
+	<!-- JS PARA LAS FUNCIONALIDADES DEL MEN&Uacute; -->
+	<script type="text/javascript" src="/recursos-tpi/js/sri.js"></script></head><body id="contenidoPrincipal" class="main-body">
+	<div id="pnlBody" class="layout-wrapper sri-header">
+		<div class="topbar clearfix">
+			<div class="div-boton-legado sri-tooltip">
+				<span class="tooltiptext-derecha sri-tooltip-menu">Mostrar-Ocultar
+					Menú</span> <a class="top-icono-menu" href="#" onclick="mostrarOcultaSidebar()" onkeypress="mostrarOcultaSidebar()"> <span class="topbar-icon-sri sri-flex-centrado sri-menu-icon-menu-hamburguesa sri-size-hamburguesa"></span>
+					<span class="sri-salirOutputLinkText">sri-menu-icon-menu-hamburguesa</span>
+				</a>
+			</div>
+
+			<a> <img id="imgLogo" alt="Logo SRI" tabindex="0" class="app-name" src="/comprobantes-electronicos-internet/../recursos-sri/imagenes/logo/sri-en-linea.svg" />
+			</a> <a id="topbar-menu-button" href="javascript:mostrarOcultarToolbar();"> <span class="menu-icono-responsive material-icons">more_vert</span>
+			</a> <span class="nombre-aplicacion"> </span>
+				<ul class="topbar-menu fadeInDown ubicacion-iconos-barra" id="topbar-menu_ul">
+					<li tabindex="0">
+						<div class="area-usuario-blue">
+							<span>1105167694001</span> <br /> <span id="id_nombre_razon_social">GUAILLAS GUAILLAS PEDRO HUMBERTO</span>
+						</div>
+					</li>
+					<li><span class="separador-menu-legado"> </span></li>
+					<li><a tooltip="Perfil" tooltip-position="left" href="/sri-en-linea/contribuyente/perfil" class="boton-perfil-legado" id="btnPerfil"> <span class="topbar-icon sri-icon sri-icon-perfil"></span> <span class="topbar-item-name">Perfil</span>
+					</a></li>
+					<li><a tooltip="Alertas y avisos" tooltip-position="left" class="boton-generico-legado" href="/sri-en-linea/SriBuzon/Contribuyente/notificaciones"> <span class="topbar-icon sri-icon sri-icon-buzon"></span>
+							<span class="topbar-item-name">Alertas y avisos</span>
+					</a></li>
+					<li><a tooltip="Inicio" tooltip-position="left" href="/sri-en-linea/" aria-expanded="false" class="boton-generico-legado"> <span class="topbar-icon sri-icon sri-icon-home"></span> <span class="topbar-item-name">Inicio</span>
+					</a></li>
+					<li><a tooltip="Cerrar sesión" tooltip-position="left" href="javascript:location.replace('https://srienlinea.sri.gob.ec/tuportal-internet/salir.jspa')" aria-expanded="false" class="boton-cerrar-legado"> <span class="topbar-icon sri-icon sri-icon-cerrar-sesion"></span> <span class="topbar-item-name">Cerrar sesión</span>
+					</a></li>
+					<li><span class="separador-menu-legado"> </span></li>
+					<li><a tooltip="Accesibilidad" tooltip-position="left" href="/sri-en-linea/accesibilidad" aria-expanded="false" class="boton-accesibilidad-legado"> <span class="topbar-icon sri-icon sri-icon-accesibilidad"></span> <span class="topbar-item-name">Accesibilidad</span>
+					</a></li>
+				</ul>
+		</div>
+
+	</div><div id="contenedorPrincipal" class="sri-principal-c"><div id="cuadroAplicacion"><div id="menuMPT"></div></div><div id="contenedorCentro" class=" expandido"><div id="path"></div><div id="tituloPagina"><div class="sri-textoTitulo"><span style="float:left;margin-right:5px;">Consulta de comprobantes electrónicos</span><span id="generalStatus"><span style="display:none" class="rf-st-start"></span><span class="rf-st-stop"></span><script type="text/javascript">new RichFaces.ui.Status("generalStatus")</script></span></div></div>
+
+			<!-- Inicio contenido --><div class="contenido sri-contenido"><div id="messages_"><table id="messagesGrid_" class="messages-hidden" cellpadding="0" cellspacing="0">
+<tbody>
+<tr>
+<td class="messages-icon"><span class="rf-msgs " id="messagesText_"></span></td>
+</tr>
+</tbody>
+</table>
+</div>
+		<br /><label class="sri-subtitulos">Recupere y/o consulte información referente a comprobantes electrónicos.</label>
+		<br />
+		<br />
+<form id="consultaDocumentoForm" name="consultaDocumentoForm" method="post" action="/comprobantes-electronicos-internet/pages/consultas/menu.jsf" class="contenido-left" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="consultaDocumentoForm" value="consultaDocumentoForm" />
+<div id="consultaDocumentoForm:panelPrincipal">
+				<ul class="sri-contenido-left">
+					<li class="sri-listaLinks"><a href="#" onclick="mojarra.jsfcljs(document.getElementById('consultaDocumentoForm'),{'consultaDocumentoForm:j_idt19':'consultaDocumentoForm:j_idt19'},'');return false">Recuperación de oficios de emisión</a>
+					</li>
+					<li class="sri-listaLinks"><a href="#" onclick="mojarra.jsfcljs(document.getElementById('consultaDocumentoForm'),{'consultaDocumentoForm:j_idt22':'consultaDocumentoForm:j_idt22'},'');return false">Comprobantes electrónicos emitidos</a>
+					</li><span id="consultaDocumentoForm:pgNat">
+
+						<li class="sri-listaLinks"><a href="#" onclick="mojarra.jsfcljs(document.getElementById('consultaDocumentoForm'),{'consultaDocumentoForm:j_idt26':'consultaDocumentoForm:j_idt26'},'');return false">Comprobantes electrónicos recibidos</a>
+						</li></span>
+					<li class="sri-listaLinks"><a href="#" onclick="mojarra.jsfcljs(document.getElementById('consultaDocumentoForm'),{'consultaDocumentoForm:j_idt30':'consultaDocumentoForm:j_idt30'},'');return false">Validación de emisor</a>
+					</li>			
+				
+				</ul>
+
+				<div aria-labelledby="Información" class="sri-flex-unico sri-template-descargar sri-flex-left-descarga" role="region"><a id="consultaDocumentoForm:lnkTxtlistado" href="#" onclick="mojarra.jsfcljs(document.getElementById('consultaDocumentoForm'),{'consultaDocumentoForm:lnkTxtlistado':'consultaDocumentoForm:lnkTxtlistado'},'');return false" class="sri-flex-unico sri-flex-centrado sri-template-link sri-flex-left-descarga">
+						<a href="https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/6162dad8-05c9-46e0-8a94-dabf556aceb5/Gu%c3%ada%20comprobantes%20electr%c3%b3nicos%20%20-%20Internet.pdf" download="guia_contribuyente.pdf">						
+						   <div class="sri-flex-unico sri-flex-left-descarga"><img src="/comprobantes-electronicos-internet/javax.faces.resource/icono-descargar-guia.svg.jsf?ln=imagenes/recursos-sri-en-linea/imagenes/descargar-guia" alt="Guía para contribuyentes" class="sri-flex-unico sri-flex-centrado sri-template-link sri-descargar-solicitud-imagen" />
+									<p class="sri-flex-unico sri-flex-centrado sri-template-descargar-link-texto">Guía para contribuyentes</p>
+							</div>
+						</a></a>
+				</div></div><input type="hidden" name="javax.faces.ViewState" id="javax.faces.ViewState" value="-9008930302825453345:536664832152179299" autocomplete="off" />
+</form></div>
+			<!-- FIN contenido -->
+
+			<!-- FIN contenedor Centro --></div>
+		<!-- Fin contenedorPrincipal --><span style="clear:both;display:block;"> </span></div><div id="ajaxScriptPanelGroup">
+		<script type="text/javascript">
+			requestAjax(
+					'https://srienlinea.sri.gob.ec/tuportal-internet/pages/menuGeneralMyPortal/comun.jsp',
+					[ 'menuMPT' ], {});
+		</script></div><div id="estadoTributarioModalPanel" style="visibility: hidden;"><div class="rf-pp-shade" id="estadoTributarioModalPanel_shade" style="z-index:100;"><button class="rf-pp-btn" id="estadoTributarioModalPanelFirstHref" name="estadoTributarioModalPanelfirstHref"></button></div><div class="rf-pp-cntr " id="estadoTributarioModalPanel_container" style="position: fixed; z-index:100; "><div class="rf-pp-shdw" id="estadoTributarioModalPanel_shadow"></div><div class="rf-pp-hdr " id="estadoTributarioModalPanel_header"><div class="rf-pp-hdr-cnt" id="estadoTributarioModalPanel_header_content">Obligaciones Pendientes</div></div><div class="rf-pp-hdr-cntrls " id="estadoTributarioModalPanel_header_controls"><a href="#" onclick="RichFaces.$('estadoTributarioModalPanel').hide();                                         return false;">X</a></div><div class="rf-pp-cnt-scrlr" id="estadoTributarioModalPanel_content_scroller"><div class="rf-pp-cnt" id="estadoTributarioModalPanel_content">El contribuyente tiene obligaciones pendientes con el SRI. Son las siguientes: 
+		<br /><table id="obligaciones-table" class="rf-dt reporte"><colgroup span="3"></colgroup><thead id="obligaciones-table:th" class="rf-dt-thd"><tr id="obligaciones-table:ch" class="rf-dt-shdr"><th class="rf-dt-shdr-c" scope="col" id="obligaciones-table:j_idt46"><span style="text-align:center;">No.</span></th><th class="rf-dt-shdr-c" scope="col" id="obligaciones-table:j_idt49"><span style="text-align:center;">Obligación Pendiente</span></th><th class="rf-dt-shdr-c" scope="col" id="obligaciones-table:j_idt52"><span style="text-align:center;">Período</span></th></tr></thead><tbody id="obligaciones-table:tb" class="rf-dt-b"><tr class="rf-dt-nd"><td colspan="3" class="rf-dt-nd-c" style="display: none;"></td></tr></tbody><tbody id="obligaciones-table:sc"><tr><td style="display: none"><script type="text/javascript">new RichFaces.ui.DataTable("obligaciones\u002Dtable",{"ajaxEventOptions":{} } )</script></td></tr></tbody></table> 
+		<br /><a href="" onclick="RichFaces.$('estadoTributarioModalPanel').hide(); return false;">Volver</a></div></div></div><script type="text/javascript">new RichFaces.ui.PopupPanel("estadoTributarioModalPanel",{"height":420,"width":650} );</script></div><script type="text/javascript">$(document).ready(function() {
+new RichFaces.ui.Message("messagesText_",{"isMessages":true} )
+});
+</script></body>
+</html>

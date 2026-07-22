@@ -272,8 +272,23 @@ async function pollStatus() {
     try {
         const response = await fetch(route("tenant.sri-scrape.status"));
         const data = await response.json();
-        // Update only visible jobs by ID to preserve pagination
-        (data.jobs as ScrapeJob[]).forEach((freshJob) => {
+        const fresh = data.jobs as ScrapeJob[];
+
+        // En la primera página, insertar jobs nuevos (p.ej. recién despachados
+        // por el agente) al tope — si no, no aparecen hasta recargar.
+        const onFirstPage = (jobsMeta.value.current_page ?? 1) === 1;
+        if (onFirstPage) {
+            const known = new Set(jobsList.value.map((j) => j.id));
+            const additions = fresh
+                .filter((j) => !known.has(j.id))
+                .sort((a, b) => b.id - a.id);
+            if (additions.length) {
+                jobsList.value.unshift(...additions);
+            }
+        }
+
+        // Actualizar en sitio los jobs ya visibles (estado/progreso)
+        fresh.forEach((freshJob) => {
             const idx = jobsList.value.findIndex((j) => j.id === freshJob.id);
             if (idx !== -1) {
                 jobsList.value[idx] = freshJob;
@@ -408,7 +423,19 @@ async function submitAgent(): Promise<void> {
             return;
         }
 
-        // Agent accepted the job (async with callbackUrl) — start polling for updates
+        // Agente aceptó el job. Marcarlo "running" — el agente solo hace callback
+        // al final, así que sin esto quedaría en "pending" todo el proceso.
+        if (dispatchData.jobId) {
+            fetch(route("tenant.sri-scrape.mark-running", { job: dispatchData.jobId }), {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "X-XSRF-TOKEN": readXsrfToken(),
+                },
+            }).catch(() => {});
+        }
+
+        // Job async con callbackUrl — empezar polling para reflejar el avance
         pollStatus();
         startPolling();
     } catch {
