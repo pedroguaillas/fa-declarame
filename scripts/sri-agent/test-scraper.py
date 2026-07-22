@@ -1319,9 +1319,21 @@ def scrape_modals_from_table(
             )
 
             if result is None:
+                # Un reintento: el modal a veces no abre al primer click. Cerrar
+                # cualquier diálogo colgado (que bloquearía la siguiente fila) y
+                # reintentar antes de darse por vencido.
+                progress("modal-scrape", f"Reintentando modal ...{clave[-10:]}...")
+                _close_modal(page)
+                random_delay(0.4, 0.8)
+                result = _click_and_scrape_modal(
+                    page, table_id, row_info["rowIndex"], voucher_label
+                )
+
+            if result is None:
                 progress(
                     "modal-scrape", f"No se pudo abrir modal para ...{clave[-10:]}"
                 )
+                _close_modal(page)
                 remaining.discard(clave)
                 continue
 
