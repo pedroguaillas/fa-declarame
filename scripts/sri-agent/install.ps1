@@ -6,16 +6,20 @@
 #
 # Uso (abrir PowerShell y ejecutar):
 #   Set-ExecutionPolicy Bypass -Scope Process -Force
-#   iwr https://declarame.facec.ec/agent/install.ps1 | iex
+#   iwr https://declarame.facec.ec/agent/install.ps1 -UseBasicParsing | iex
 #
 # Con dominio personalizado:
 #   $env:AGENT_URL = "https://mi-dominio.com/agent"
-#   iwr https://declarame.facec.ec/agent/install.ps1 | iex
+#   iwr https://declarame.facec.ec/agent/install.ps1 -UseBasicParsing | iex
 #
 # Para actualizar: mismos comandos de arriba.
 # =============================================================================
 
 $ErrorActionPreference = "Stop"
+
+# UTF-8 en consola para mostrar caracteres especiales correctamente
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 # ─── Configuracion ────────────────────────────────────────────────────────────
 
@@ -100,10 +104,11 @@ $VenvPip        = "$InstallDir\venv\Scripts\pip.exe"
 $VenvPlaywright = "$InstallDir\venv\Scripts\playwright.exe"
 
 Step "Actualizando pip..."
-& $VenvPip install --quiet --upgrade pip 2>&1 | Out-Null
+# pip escribe a stderr incluso en exito; try-catch evita que StopOnError lo trate como fallo
+try { & $VenvPip install --quiet --upgrade pip 2>&1 | Out-Null } catch { }
 
 Step "Instalando dependencias Python (playwright, playwright-stealth)..."
-& $VenvPip install --quiet --upgrade playwright playwright-stealth
+& $VenvPip install --upgrade playwright playwright-stealth
 
 Step "Instalando Chromium para Playwright (puede tardar unos minutos)..."
 & $VenvPlaywright install chromium
@@ -227,5 +232,5 @@ if ($Started) {
 Write-Host ""
 Write-Host "  Para actualizar en el futuro:" -ForegroundColor Cyan
 Write-Host "    Set-ExecutionPolicy Bypass -Scope Process -Force"
-Write-Host "    iwr $AgentUrl/install.ps1 | iex"
+Write-Host "    iwr $AgentUrl/install.ps1 -UseBasicParsing | iex"
 Write-Host ""

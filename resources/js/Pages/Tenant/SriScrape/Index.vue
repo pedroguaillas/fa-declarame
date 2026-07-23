@@ -31,6 +31,10 @@ import {
     Sheet,
     ArrowRight,
     Bot,
+    Copy,
+    Check,
+    RefreshCw,
+    Terminal,
 } from "lucide-vue-next";
 import { Paginator } from "@/types";
 
@@ -62,6 +66,7 @@ const props = defineProps<{
     hasCaptchaKey: boolean;
     isRetentionAgent: boolean;
     typeDeclaration: string | null;
+    agentInstallUrl: string;
 }>();
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -367,6 +372,7 @@ function compareVersion(a: string | null, b: string): number {
 }
 
 async function checkAgent(): Promise<void> {
+    agentStatus.value = "checking";
     try {
         const resp = await fetch("http://localhost:8765/health", {
             signal: AbortSignal.timeout(3000),
@@ -382,6 +388,42 @@ async function checkAgent(): Promise<void> {
         agentStatus.value = "unavailable";
     }
 }
+
+// ─── Install Panel ────────────────────────────────────────────────────────────
+
+type OS = "mac" | "windows" | "linux";
+
+const detectedOS = computed<OS>(() => {
+    if (typeof navigator === "undefined") return "windows";
+    const ua = navigator.userAgent;
+    if (/Mac/i.test(ua)) return "mac";
+    if (/Linux/i.test(ua) && !/Win/i.test(ua)) return "linux";
+    return "windows";
+});
+
+const selectedOS = ref<OS | null>(null);
+const activeOS = computed<OS>(() => selectedOS.value ?? detectedOS.value);
+
+const showInstallPanel = computed(
+    () => agentStatus.value === "unavailable" || agentStatus.value === "outdated"
+);
+
+const copiedKey = ref<string | null>(null);
+
+async function copyCommand(text: string, key: string): Promise<void> {
+    await navigator.clipboard.writeText(text);
+    copiedKey.value = key;
+    setTimeout(() => { copiedKey.value = null; }, 2000);
+}
+
+const installCommands = computed(() => {
+    const base = props.agentInstallUrl;
+    return {
+        mac: `curl -sSL ${base}/install.sh | bash`,
+        linux: `curl -sSL ${base}/install.sh | bash`,
+        windows: `Set-ExecutionPolicy Bypass -Scope Process -Force\niwr ${base}/install.ps1 -UseBasicParsing | iex`,
+    };
+});
 
 async function submitAgent(): Promise<void> {
     agentDispatching.value = true;
@@ -464,7 +506,13 @@ defineOptions({ layout: TenantLayout });
 <template>
     <HeaderList title="Comprobantes SRI" description="Descarga masiva" />
 
-    <div class="mt-6 space-y-6 px-1">
+    <div
+        class="mt-6 px-1"
+        :class="showInstallPanel ? 'grid grid-cols-1 gap-6 lg:grid-cols-3' : 'space-y-6'"
+    >
+        <!-- Main column -->
+        <div class="space-y-6" :class="{ 'lg:col-span-2': showInstallPanel }">
+
         <!-- Alerts -->
         <Alert v-if="!hasPassword" variant="destructive">
             <AlertTriangle class="size-4" />
@@ -776,5 +824,116 @@ defineOptions({ layout: TenantLayout });
                 />
             </CardContent>
         </Card>
+
+        </div><!-- /main column -->
+
+        <!-- Install Panel (right column) -->
+        <div v-if="showInstallPanel" class="lg:col-span-1">
+            <Card class="sticky top-4">
+                <CardHeader>
+                    <CardTitle class="flex items-center gap-2 text-base">
+                        <HardDriveDownload class="size-4" />
+                        Instalar Agente Local
+                    </CardTitle>
+                    <p class="text-muted-foreground text-sm">
+                        El agente corre en tu computadora y descarga los comprobantes
+                        directamente desde el portal del SRI.
+                    </p>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <!-- OS selector -->
+                    <div class="flex gap-1 rounded-lg border p-1">
+                        <button
+                            v-for="os in (['windows', 'mac', 'linux'] as OS[])"
+                            :key="os"
+                            type="button"
+                            class="flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors"
+                            :class="activeOS === os
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground hover:bg-muted'"
+                            @click="selectedOS = os"
+                        >
+                            {{ os === 'mac' ? 'macOS' : os === 'linux' ? 'Linux' : 'Windows' }}
+                            <span
+                                v-if="os === detectedOS && selectedOS === null"
+                                class="ml-1 opacity-60"
+                            >✓</span>
+                        </button>
+                    </div>
+
+                    <!-- Commands -->
+                    <div class="space-y-2">
+                        <template v-if="activeOS === 'windows'">
+                            <!-- Windows: two commands -->
+                            <div
+                                v-for="(line, i) in installCommands.windows.split('\n')"
+                                :key="i"
+                                class="group relative"
+                            >
+                                <div class="flex items-center gap-1.5 rounded-md bg-muted px-3 py-2 pr-10 font-mono text-xs break-all">
+                                    <Terminal class="size-3 shrink-0 text-muted-foreground" />
+                                    {{ line }}
+                                </div>
+                                <button
+                                    type="button"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
+                                    @click="copyCommand(line, `win-${i}`)"
+                                >
+                                    <Check v-if="copiedKey === `win-${i}`" class="size-3 text-green-500" />
+                                    <Copy v-else class="size-3" />
+                                </button>
+                            </div>
+                        </template>
+                        <template v-else>
+                            <!-- macOS / Linux: one command -->
+                            <div class="group relative">
+                                <div class="flex items-center gap-1.5 rounded-md bg-muted px-3 py-2 pr-10 font-mono text-xs break-all">
+                                    <Terminal class="size-3 shrink-0 text-muted-foreground" />
+                                    {{ installCommands[activeOS] }}
+                                </div>
+                                <button
+                                    type="button"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
+                                    @click="copyCommand(installCommands[activeOS], 'cmd')"
+                                >
+                                    <Check v-if="copiedKey === 'cmd'" class="size-3 text-green-500" />
+                                    <Copy v-else class="size-3" />
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+
+                    <p class="text-muted-foreground text-xs">
+                        <template v-if="activeOS === 'windows'">
+                            Abre PowerShell como usuario normal (no administrador) y ejecuta los comandos en orden.
+                        </template>
+                        <template v-else-if="activeOS === 'mac'">
+                            Abre Terminal y pega el comando. Instala automáticamente Python, Playwright y Chrome.
+                        </template>
+                        <template v-else>
+                            Ejecuta en la terminal. Requiere Python 3.9+ y conexión a internet.
+                        </template>
+                    </p>
+
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        class="w-full"
+                        :disabled="agentStatus === 'checking'"
+                        @click="checkAgent"
+                    >
+                        <Loader2 v-if="agentStatus === 'checking'" class="size-3.5 animate-spin" />
+                        <RefreshCw v-else class="size-3.5" />
+                        {{ agentStatus === 'outdated' ? 'Verificar actualización' : 'Ya instalé el agente' }}
+                    </Button>
+
+                    <p v-if="agentStatus === 'outdated'" class="text-xs text-amber-600 dark:text-amber-400">
+                        Versión desactualizada (v{{ agentVersion }}). Ejecuta el mismo comando de instalación para actualizar.
+                    </p>
+                </CardContent>
+            </Card>
+        </div><!-- /install panel -->
+
     </div>
 </template>

@@ -45,6 +45,7 @@ class SriScrapeController extends Controller
             'hasCaptchaKey' => true,
             'isRetentionAgent' => (bool) $company->retention_agent,
             'typeDeclaration' => $company->type_declaration,
+            'agentInstallUrl' => url('/agent'),
         ]);
     }
 
