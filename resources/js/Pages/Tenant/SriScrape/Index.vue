@@ -416,6 +416,7 @@ async function copyCommand(text: string, key: string): Promise<void> {
     setTimeout(() => { copiedKey.value = null; }, 2000);
 }
 
+
 const installCommands = computed(() => {
     const base = props.agentInstallUrl;
     return {
@@ -862,9 +863,9 @@ defineOptions({ layout: TenantLayout });
                     </div>
 
                     <!-- Commands -->
-                    <div class="space-y-2">
+                    <div class="space-y-3">
+                        <!-- Windows: two commands -->
                         <template v-if="activeOS === 'windows'">
-                            <!-- Windows: two commands -->
                             <div
                                 v-for="(line, i) in installCommands.windows.split('\n')"
                                 :key="i"
@@ -883,9 +884,14 @@ defineOptions({ layout: TenantLayout });
                                     <Copy v-else class="size-3" />
                                 </button>
                             </div>
+                            <p class="text-muted-foreground text-xs">
+                                Abre PowerShell como usuario normal y ejecuta los comandos en orden.
+                                Si la descarga de Chromium falla, verifica que la fecha y hora del equipo sean correctas.
+                            </p>
                         </template>
+
+                        <!-- macOS / Linux: one command -->
                         <template v-else>
-                            <!-- macOS / Linux: one command -->
                             <div class="group relative">
                                 <div class="flex items-center gap-1.5 rounded-md bg-muted px-3 py-2 pr-10 font-mono text-xs break-all">
                                     <Terminal class="size-3 shrink-0 text-muted-foreground" />
@@ -900,20 +906,16 @@ defineOptions({ layout: TenantLayout });
                                     <Copy v-else class="size-3" />
                                 </button>
                             </div>
+                            <p class="text-muted-foreground text-xs">
+                                <template v-if="activeOS === 'mac'">
+                                    Abre Terminal y pega el comando. Instala automáticamente Python, Playwright y Chrome.
+                                </template>
+                                <template v-else>
+                                    Ejecuta en la terminal. Requiere Python 3.9+ y conexión a internet.
+                                </template>
+                            </p>
                         </template>
                     </div>
-
-                    <p class="text-muted-foreground text-xs">
-                        <template v-if="activeOS === 'windows'">
-                            Abre PowerShell como usuario normal (no administrador) y ejecuta los comandos en orden.
-                        </template>
-                        <template v-else-if="activeOS === 'mac'">
-                            Abre Terminal y pega el comando. Instala automáticamente Python, Playwright y Chrome.
-                        </template>
-                        <template v-else>
-                            Ejecuta en la terminal. Requiere Python 3.9+ y conexión a internet.
-                        </template>
-                    </p>
 
                     <Button
                         type="button"

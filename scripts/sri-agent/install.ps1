@@ -35,7 +35,7 @@ function Warn($msg)    { Write-Host "[sri-agent] AVISO: $msg" -ForegroundColor Y
 function Fail($msg)    { Write-Host "`n[sri-agent] ERROR: $msg`n" -ForegroundColor Red; exit 1 }
 
 Write-Host ""
-Write-Host " SRI Agent — Instalador para Windows " -ForegroundColor White -BackgroundColor DarkBlue
+Write-Host " SRI Agent - Instalador para Windows " -ForegroundColor White -BackgroundColor DarkBlue
 Write-Host ""
 Step "URL del agente : $AgentUrl"
 Step "Directorio     : $InstallDir"
@@ -112,6 +112,17 @@ Step "Instalando dependencias Python (playwright, playwright-stealth)..."
 
 Step "Instalando Chromium para Playwright (puede tardar unos minutos)..."
 & $VenvPlaywright install chromium
+if ($LASTEXITCODE -ne 0) {
+    Warn "Descarga fallida (posible problema de certificado TLS o reloj del sistema). Reintentando..."
+    $env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
+    & $VenvPlaywright install chromium
+    Remove-Item env:NODE_TLS_REJECT_UNAUTHORIZED -ErrorAction SilentlyContinue
+    if ($LASTEXITCODE -ne 0) {
+        Fail ("No se pudo instalar Chromium.`n" +
+              "Verifica: 1) conexion a internet  2) fecha y hora del sistema sean correctas`n" +
+              "Luego vuelve a ejecutar este instalador.")
+    }
+}
 
 # ─── Script lanzador (para Task Scheduler) ────────────────────────────────────
 # Task Scheduler no redirige stdout/stderr; usamos un wrapper .ps1 que
