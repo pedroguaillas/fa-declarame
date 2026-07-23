@@ -22,6 +22,7 @@ Usage:
 """
 
 import argparse
+import io
 import json
 import os
 import queue
@@ -36,6 +37,14 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from threading import Event, Lock
+
+# Windows CP1252 stdout breaks on Spanish characters (ñ, á, etc.) from SRI.
+# Force UTF-8 before any output so scraping never crashes mid-job.
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 AGENT_VERSION = "1.0.0"
 

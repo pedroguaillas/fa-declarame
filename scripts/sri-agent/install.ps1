@@ -111,17 +111,16 @@ Step "Instalando dependencias Python (playwright, playwright-stealth)..."
 & $VenvPip install --upgrade playwright playwright-stealth
 
 Step "Instalando Chromium para Playwright (puede tardar unos minutos)..."
-& $VenvPlaywright install chromium
-if ($LASTEXITCODE -ne 0) {
-    Warn "Descarga fallida (posible problema de certificado TLS o reloj del sistema). Reintentando..."
-    $env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
-    & $VenvPlaywright install chromium
-    Remove-Item env:NODE_TLS_REJECT_UNAUTHORIZED -ErrorAction SilentlyContinue
-    if ($LASTEXITCODE -ne 0) {
-        Fail ("No se pudo instalar Chromium.`n" +
-              "Verifica: 1) conexion a internet  2) fecha y hora del sistema sean correctas`n" +
-              "Luego vuelve a ejecutar este instalador.")
-    }
+# NODE_TLS_REJECT_UNAUTHORIZED=0 evita errores de certificado en equipos con
+# reloj desincronizado o proxies corporativos. Solo aplica a esta descarga.
+$env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
+& $VenvPlaywright install --force chromium
+$playwrightExit = $LASTEXITCODE
+Remove-Item env:NODE_TLS_REJECT_UNAUTHORIZED -ErrorAction SilentlyContinue
+if ($playwrightExit -ne 0) {
+    Fail ("No se pudo instalar Chromium.`n" +
+          "Verifica: 1) conexion a internet  2) fecha y hora del sistema sean correctas`n" +
+          "Luego vuelve a ejecutar este instalador.")
 }
 
 # ─── Script lanzador (para Task Scheduler) ────────────────────────────────────
@@ -132,40 +131,8 @@ $LauncherPath = "$InstallDir\start-agent.ps1"
 
 @"
 # Auto-generado por install.ps1 — no editar manualmente
-`$LogFile = "$InstallDir\agent.log"
-`$PythonExe = "$VenvPy"
-`$ScriptPath = "$InstallDir\server.py"
-
-# Limpiar Singleton locks de Chromium de sesiones anteriores
 Remove-Item "$InstallDir\browser-session\Singleton*" -ErrorAction SilentlyContinue
-
-# Iniciar el agente redirigiendo stdout/stderr al log
-`$psi = New-Object System.Diagnostics.ProcessStartInfo
-`$psi.FileName = `$PythonExe
-`$psi.Arguments = "`"`$ScriptPath`" --host=127.0.0.1 --port=$Port --update-url=$AgentUrl --user-data-dir=`"$InstallDir\browser-session`""
-`$psi.UseShellExecute = `$false
-`$psi.RedirectStandardOutput = `$true
-`$psi.RedirectStandardError = `$true
-`$psi.CreateNoWindow = `$true
-`$psi.WorkingDirectory = "$InstallDir"
-
-`$proc = [System.Diagnostics.Process]::Start(`$psi)
-
-# Escribir salida al log de forma continua
-`$writer = [System.IO.StreamWriter]::new(`$LogFile, `$true, [System.Text.Encoding]::UTF8)
-`$writer.AutoFlush = `$true
-
-Register-ObjectEvent -InputObject `$proc -EventName "OutputDataReceived" -Action {
-    if (`$Event.SourceEventArgs.Data) { `$writer.WriteLine("[OUT] " + `$Event.SourceEventArgs.Data) }
-} | Out-Null
-Register-ObjectEvent -InputObject `$proc -EventName "ErrorDataReceived" -Action {
-    if (`$Event.SourceEventArgs.Data) { `$writer.WriteLine("[ERR] " + `$Event.SourceEventArgs.Data) }
-} | Out-Null
-
-`$proc.BeginOutputReadLine()
-`$proc.BeginErrorReadLine()
-`$proc.WaitForExit()
-`$writer.Close()
+& "$VenvPy" "$InstallDir\server.py" --host=127.0.0.1 --port=$Port --update-url=$AgentUrl --user-data-dir="$InstallDir\browser-session" *>> "$InstallDir\agent.log"
 "@ | Set-Content -Path $LauncherPath -Encoding UTF8
 
 Step "Script lanzador creado: $LauncherPath"
@@ -176,7 +143,7 @@ Step "Registrando tarea en Task Scheduler ($TaskName)..."
 
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-WindowStyle Hidden -NonInteractive -ExecutionPolicy Bypass -File `"$LauncherPath`"" `
+    -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`"" `
     -WorkingDirectory $InstallDir
 
 $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
@@ -211,7 +178,9 @@ Step "Tarea registrada. Arranca automaticamente al iniciar sesion en Windows."
 Step "Iniciando agente..."
 Remove-Item "$InstallDir\browser-session\Singleton*" -ErrorAction SilentlyContinue
 
-Start-ScheduledTask -TaskName $TaskName
+# Start-ScheduledTask no dispara de inmediato en todos los entornos Windows;
+# lanzamos el proceso directamente y dejamos la tarea para el auto-inicio en login.
+Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`"" -WorkingDirectory $InstallDir
 
 # ─── Health check ─────────────────────────────────────────────────────────────
 
