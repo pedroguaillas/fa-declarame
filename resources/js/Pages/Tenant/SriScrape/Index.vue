@@ -618,7 +618,7 @@ defineOptions({ layout: TenantLayout });
                             </Select>
                         </div>
 
-                        <Button
+                        <!-- <Button
                             type="submit"
                             :disabled="form.processing || !hasPassword || !hasSelectedVouchers"
                             class="font-bold"
@@ -626,18 +626,17 @@ defineOptions({ layout: TenantLayout });
                             <Loader2 v-if="form.processing" class="size-4 animate-spin" />
                             <CloudDownload v-else class="size-4" />
                             Descargar del SRI
-                        </Button>
+                        </Button> -->
 
                         <Button
                             type="button"
-                            variant="outline"
                             :disabled="agentDispatching || !hasPassword || !hasSelectedVouchers || agentStatus !== 'available'"
                             class="font-bold"
                             @click="submitAgent"
                         >
                             <Loader2 v-if="agentDispatching" class="size-4 animate-spin" />
-                            <HardDriveDownload v-else class="size-4" />
-                            Agente Local
+                            <CloudDownload v-else class="size-4" />
+                            Descargar del SRI
                         </Button>
                     </div>
 
