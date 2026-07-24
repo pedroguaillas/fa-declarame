@@ -75,18 +75,51 @@ foreach ($candidate in @("python", "py", "python3")) {
 }
 
 if (-not $Python) {
-    Step "Python no encontrado. Intentando instalar via winget..."
-    try {
-        winget install --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements | Out-Null
-        # Recargar PATH de la sesion actual
-        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" +
-                    [System.Environment]::GetEnvironmentVariable("PATH","User")
-        $Python = "python"
-        Step "Python instalado via winget."
-    } catch {
-        Fail ("Python 3.9+ no encontrado y no se pudo instalar automaticamente.`n" +
-              "Descargalo desde: https://www.python.org/downloads/`n" +
-              "Marca la casilla 'Add Python to PATH' durante la instalacion.")
+    # Intento 1: winget
+    $wingetOk = $false
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Step "Python no encontrado. Intentando instalar via winget..."
+        try {
+            winget install --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" +
+                        [System.Environment]::GetEnvironmentVariable("PATH","User")
+            # Verificar que realmente quedo instalado
+            $verLine = & python --version 2>&1
+            if ($verLine -match "Python (\d+)\.(\d+)" -and [int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 9) {
+                $Python = "python"
+                $wingetOk = $true
+                Step "Python instalado via winget: $verLine"
+            }
+        } catch { }
+    }
+
+    # Intento 2: descargar instalador directamente desde python.org
+    if (-not $wingetOk) {
+        Step "Descargando Python 3.12 desde python.org (puede tardar unos minutos)..."
+        $PyVersion  = "3.12.7"
+        $PyUrl      = "https://www.python.org/ftp/python/$PyVersion/python-$PyVersion-amd64.exe"
+        $PyInstaller = "$env:TEMP\python-sri-agent.exe"
+        try {
+            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest $PyUrl -OutFile $PyInstaller -UseBasicParsing
+            Step "Instalando Python $PyVersion (puede requerir permisos de administrador)..."
+            $proc = Start-Process -FilePath $PyInstaller `
+                -ArgumentList "/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 SimpleInstall=1" `
+                -Wait -PassThru
+            Remove-Item $PyInstaller -ErrorAction SilentlyContinue
+            if ($proc.ExitCode -ne 0) { throw "Instalador salio con codigo $($proc.ExitCode)" }
+            # Recargar PATH
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" +
+                        [System.Environment]::GetEnvironmentVariable("PATH","User")
+            $Python = "python"
+            Step "Python $PyVersion instalado correctamente."
+        } catch {
+            Remove-Item $PyInstaller -ErrorAction SilentlyContinue
+            Fail ("No se pudo instalar Python automaticamente.`n" +
+                  "Instala manualmente desde: https://www.python.org/downloads/`n" +
+                  "IMPORTANTE: marca la casilla 'Add Python to PATH' durante la instalacion.`n" +
+                  "Luego vuelve a ejecutar este instalador.")
+        }
     }
 }
 
