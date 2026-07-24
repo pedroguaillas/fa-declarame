@@ -17,6 +17,14 @@
 
 $ErrorActionPreference = "Stop"
 
+# Captura errores no manejados — sin esto la ventana se cierra antes de que el usuario lea el error
+trap {
+    Write-Host "`n[sri-agent] ERROR inesperado: $_`n" -ForegroundColor Red
+    Write-Host "Presiona Enter para cerrar..." -ForegroundColor Yellow
+    $null = Read-Host
+    exit 1
+}
+
 # UTF-8 en consola para mostrar caracteres especiales correctamente
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -32,7 +40,12 @@ $TaskName  = "SRI-Agent-Declarame"
 
 function Step($msg)    { Write-Host "[sri-agent] $msg" -ForegroundColor Green }
 function Warn($msg)    { Write-Host "[sri-agent] AVISO: $msg" -ForegroundColor Yellow }
-function Fail($msg)    { Write-Host "`n[sri-agent] ERROR: $msg`n" -ForegroundColor Red; exit 1 }
+function Fail($msg) {
+    Write-Host "`n[sri-agent] ERROR: $msg`n" -ForegroundColor Red
+    Write-Host "Presiona Enter para cerrar..." -ForegroundColor Yellow
+    $null = Read-Host
+    exit 1
+}
 
 Write-Host ""
 Write-Host " SRI Agent - Instalador para Windows " -ForegroundColor White -BackgroundColor DarkBlue
@@ -214,3 +227,5 @@ Write-Host "  Para actualizar en el futuro:" -ForegroundColor Cyan
 Write-Host "    Set-ExecutionPolicy Bypass -Scope Process -Force"
 Write-Host "    iwr $AgentUrl/install.ps1 -UseBasicParsing | iex"
 Write-Host ""
+Write-Host "Presiona Enter para cerrar..." -ForegroundColor Yellow
+$null = Read-Host
