@@ -165,14 +165,14 @@ for ($attempt = 1; $attempt -le 3; $attempt++) {
         Start-Sleep -Seconds 5
     }
 
-    # PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS evita fallo por version de glibc en entornos raros
-    # HTTPS_PROXY: si el sistema tiene proxy configurado, Playwright lo respeta automaticamente
-    $env:PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "1"
-
-    # Captura salida para mostrar en caso de error
+    # Captura salida para mostrar en caso de error.
+    # ErrorActionPreference temporal a Continue: evita que stderr de Playwright
+    # se convierta en ErrorRecord terminating bajo Stop global.
+    $prevPref = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     $pwOutput = & $VenvPlaywright install chromium 2>&1
     $playwrightExit = $LASTEXITCODE
-    Remove-Item env:PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS -ErrorAction SilentlyContinue
+    $ErrorActionPreference = $prevPref
 
     if ($playwrightExit -eq 0) {
         $chromiumOk = $true
