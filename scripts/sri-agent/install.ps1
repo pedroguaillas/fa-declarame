@@ -129,6 +129,33 @@ Step "Preparando directorio $InstallDir..."
 New-Item -ItemType Directory -Force -Path $InstallDir         | Out-Null
 New-Item -ItemType Directory -Force -Path "$InstallDir\browser-session" | Out-Null
 
+# ─── Exclusión antivirus ──────────────────────────────────────────────────────
+# Playwright controla un navegador real, comportamiento que los AV detectan como
+# sospechoso. Agregar exclusión evita que bloqueen o sandboxeen el agente.
+
+Step "Configurando exclusion antivirus para $InstallDir..."
+
+# Windows Defender: Add-MpPreference no requiere admin para excluir carpetas del perfil
+$defenderOk = $false
+try {
+    Add-MpPreference -ExclusionPath $InstallDir -ErrorAction Stop
+    $defenderOk = $true
+    Step "Windows Defender: exclusion agregada correctamente."
+} catch {
+    Warn "No se pudo agregar exclusion en Windows Defender automaticamente."
+}
+
+# Mostrar instrucciones para AVG / Avast / otros AV
+Write-Host ""
+Write-Host "  IMPORTANTE — Si tienes AVG, Avast, Kaspersky u otro antivirus:" -ForegroundColor Yellow
+Write-Host "  Agrega esta carpeta como EXCEPCION en tu antivirus:" -ForegroundColor Yellow
+Write-Host "    $InstallDir" -ForegroundColor Cyan
+Write-Host "  (El agente controla un navegador para descargar del SRI; los AV lo" -ForegroundColor Yellow
+Write-Host "   detectan como sospechoso y lo bloquean o ralentizan.)" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  Presiona Enter para continuar con la instalacion..." -ForegroundColor Gray
+$null = Read-Host
+
 # ─── Descargar scripts ────────────────────────────────────────────────────────
 
 Step "Descargando scripts desde $AgentUrl..."
@@ -277,8 +304,21 @@ if ($Started) {
     Write-Host "    Puerto  : $Port"
     Write-Host "    Logs    : $InstallDir\agent.log"
 } else {
-    Warn "El agente no respondio en 45 s. Revisa los logs:"
-    Write-Host "    $InstallDir\agent.log"
+    Write-Host ""
+    Write-Host "  ✗ El agente no respondio en 45 s." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  Causas mas comunes:" -ForegroundColor Yellow
+    Write-Host "  1) ANTIVIRUS bloqueando o ralentizando el agente (AVG, Avast, Kaspersky...)" -ForegroundColor Yellow
+    Write-Host "     Solucion: agrega esta carpeta como EXCEPCION en tu antivirus y" -ForegroundColor Yellow
+    Write-Host "     vuelve a ejecutar este instalador:" -ForegroundColor Yellow
+    Write-Host "       $InstallDir" -ForegroundColor Cyan
+    Write-Host "  2) Puerto $Port ocupado por otro proceso." -ForegroundColor Yellow
+    Write-Host "     Verificar: netstat -an | findstr $Port" -ForegroundColor Gray
+    Write-Host "  3) Error en el agente — revisa los logs:" -ForegroundColor Yellow
+    Write-Host "       $InstallDir\agent.log" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  El agente puede seguir iniciando en segundo plano." -ForegroundColor Gray
+    Write-Host "  Verifica en 2 min: Invoke-RestMethod http://127.0.0.1:$Port/health" -ForegroundColor Gray
 }
 
 Write-Host ""
