@@ -156,16 +156,42 @@ try { & $VenvPip install --quiet --upgrade pip 2>&1 | Out-Null } catch { }
 Step "Instalando dependencias Python (playwright, playwright-stealth)..."
 & $VenvPip install --upgrade playwright playwright-stealth
 
-Step "Instalando Chromium para Playwright (puede tardar unos minutos)..."
-# NODE_TLS_REJECT_UNAUTHORIZED=0 evita errores de certificado en equipos con
-# reloj desincronizado o proxies corporativos. Solo aplica a esta descarga.
-$env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
-& $VenvPlaywright install --force chromium
-$playwrightExit = $LASTEXITCODE
-Remove-Item env:NODE_TLS_REJECT_UNAUTHORIZED -ErrorAction SilentlyContinue
-if ($playwrightExit -ne 0) {
-    Fail ("No se pudo instalar Chromium.`n" +
-          "Verifica: 1) conexion a internet  2) fecha y hora del sistema sean correctas`n" +
+Step "Instalando Chromium para Playwright (puede tardar varios minutos)..."
+
+$chromiumOk = $false
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+    if ($attempt -gt 1) {
+        Step "Reintento $attempt de 3..."
+        Start-Sleep -Seconds 5
+    }
+
+    # PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS evita fallo por version de glibc en entornos raros
+    # HTTPS_PROXY: si el sistema tiene proxy configurado, Playwright lo respeta automaticamente
+    $env:PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "1"
+
+    # Captura salida para mostrar en caso de error
+    $pwOutput = & $VenvPlaywright install chromium 2>&1
+    $playwrightExit = $LASTEXITCODE
+    Remove-Item env:PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS -ErrorAction SilentlyContinue
+
+    if ($playwrightExit -eq 0) {
+        $chromiumOk = $true
+        break
+    }
+
+    Write-Host ""
+    Write-Host "  Salida de Playwright (intento $attempt):" -ForegroundColor Yellow
+    $pwOutput | ForEach-Object { Write-Host "    $_" -ForegroundColor Yellow }
+    Write-Host ""
+}
+
+if (-not $chromiumOk) {
+    Fail ("No se pudo instalar Chromium despues de 3 intentos.`n" +
+          "Causas comunes:`n" +
+          "  1) Firewall/antivirus bloqueando playwright.azureedge.net`n" +
+          "  2) Sin espacio en disco (necesita ~300 MB en $env:USERPROFILE)`n" +
+          "  3) Reloj del sistema desincronizado (verificar fecha/hora)`n" +
+          "Revisa los mensajes amarillos arriba para el error exacto.`n" +
           "Luego vuelve a ejecutar este instalador.")
 }
 
