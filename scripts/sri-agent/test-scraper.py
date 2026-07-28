@@ -340,10 +340,7 @@ def human_type(page: Page, selector: str, text: str) -> None:
 
     for char in text:
         el.type(char, delay=0)
-        time.sleep(random.uniform(0.05, 0.18))
-        # Occasional longer pause (thinking)
-        if random.random() < 0.05:
-            time.sleep(random.uniform(0.3, 0.7))
+        time.sleep(random.uniform(0.04, 0.09))
 
 
 def simulate_human_presence(page: Page, duration_s: float = 8.0) -> None:
@@ -368,25 +365,27 @@ def simulate_human_presence(page: Page, duration_s: float = 8.0) -> None:
 def login(page: Page, ruc: str, password: str) -> bool:
     progress("login", "Navegando al portal SRI...")
 
-    for attempt in range(1, 4):
-        try:
-            page.goto(SRI_URLS["portal"], wait_until="networkidle", timeout=60000)
-            break
-        except Exception as e:
-            if attempt == 3:
-                emit(
-                    "error",
-                    {
-                        "code": "NAV_TIMEOUT",
-                        "message": f"No se pudo cargar el portal SRI: {e}",
-                    },
-                )
-                return False
-            progress("login", f"Intento {attempt} falló, reintentando...")
-            random_delay(0.5, 1.0)
-
-    # Brief pause before filling the form
-    simulate_human_presence(page, duration_s=0.5)
+    # If already on the login page (redirected there by ensure_logged_in's session check),
+    # skip the redundant navigation — avoids reloading the same page twice.
+    if "/auth/" in page.url:
+        progress("login", "Ya en página de login, omitiendo navegación redundante.")
+    else:
+        for attempt in range(1, 4):
+            try:
+                page.goto(SRI_URLS["portal"], wait_until="networkidle", timeout=60000)
+                break
+            except Exception as e:
+                if attempt == 3:
+                    emit(
+                        "error",
+                        {
+                            "code": "NAV_TIMEOUT",
+                            "message": f"No se pudo cargar el portal SRI: {e}",
+                        },
+                    )
+                    return False
+                progress("login", f"Intento {attempt} falló, reintentando...")
+                random_delay(0.5, 1.0)
 
     username_el = page.query_selector("#usuario")
     password_el = page.query_selector("#password")
@@ -403,43 +402,16 @@ def login(page: Page, ruc: str, password: str) -> bool:
 
     progress("login", "Ingresando credenciales...")
 
-    # Move mouse to username field naturally
-    box = username_el.bounding_box()
-    if box:
-        human_mouse_move(
-            page,
-            target_x=int(box["x"] + box["width"] / 2),
-            target_y=int(box["y"] + box["height"] / 2),
-        )
-        random_delay(0.3, 0.7)
-
+    # Click username field directly — no human_mouse_move needed for Keycloak login
+    # (no reCAPTCHA on this page; the captcha fires on the SRI comprobantes form).
     human_type(page, "#usuario", ruc)
-    random_delay(0.5, 1.2)
-
-    # Move mouse to password field
-    box = password_el.bounding_box()
-    if box:
-        human_mouse_move(
-            page,
-            target_x=int(box["x"] + box["width"] / 2),
-            target_y=int(box["y"] + box["height"] / 2),
-        )
-        random_delay(0.3, 0.6)
+    random_delay(0.2, 0.4)
 
     human_type(page, "#password", password)
-    random_delay(0.5, 1.0)
+    random_delay(0.2, 0.4)
 
-    # Move to submit button and click
     submit_btn = page.query_selector("#kc-login")
     if submit_btn:
-        box = submit_btn.bounding_box()
-        if box:
-            human_mouse_move(
-                page,
-                target_x=int(box["x"] + box["width"] / 2),
-                target_y=int(box["y"] + box["height"] / 2),
-            )
-            random_delay(0.2, 0.5)
         submit_btn.click()
     else:
         password_el.press("Enter")
@@ -556,24 +528,24 @@ def set_filters(
             input.dispatchEvent(new Event('change', {{ bubbles: true }}));
             input.dispatchEvent(new Event('blur', {{ bubbles: true }}));
         }}""")
-        random_delay(0.8, 1.5)
+        random_delay(0.2, 0.4)
 
         # Seleccionar tipo de comprobante
         page.select_option("#frmPrincipal\\:cmbTipoComprobante", voucher_type["value"])
-        random_delay(0.8, 1.5)
+        random_delay(0.2, 0.4)
     else:
         # Compras usa dropdowns de año/mes/día
         page.select_option("#frmPrincipal\\:ano", str(year))
-        random_delay(0.5, 1.0)
+        random_delay(0.15, 0.3)
 
         page.select_option("#frmPrincipal\\:mes", str(month))
-        random_delay(0.5, 1.0)
+        random_delay(0.15, 0.3)
 
         page.select_option("#frmPrincipal\\:dia", str(day))
-        random_delay(0.5, 1.0)
+        random_delay(0.15, 0.3)
 
         page.select_option("#frmPrincipal\\:cmbTipoComprobante", voucher_type["value"])
-        random_delay(0.5, 1.0)
+        random_delay(0.15, 0.3)
 
 
 # ─── Check Page State ─────────────────────────────────────────────────────────
@@ -820,10 +792,9 @@ def search_with_captcha(
     for attempt in range(1, 4):
         progress(label, f"═══ Intento {attempt}/3 ═══")
 
-        # reCAPTCHA v3 needs enough session history to assign a good score.
-        # Session already carries login + navigation signals, so the first
-        # attempt only needs a short warm-up; retries warm up a bit longer.
-        warmup = random.uniform(6.0, 10.0) if attempt == 1 else random.uniform(4.0, 6.0)
+        # reCAPTCHA v3 score is already built from login + navigation signals.
+        # Short warmup is enough for attempt 1; retries get a slightly longer pause.
+        warmup = random.uniform(3.0, 5.0) if attempt == 1 else random.uniform(4.0, 6.0)
         progress(label, f"Warm-up reCAPTCHA: {warmup:.0f}s...")
         simulate_human_presence(page, duration_s=warmup)
 
@@ -1843,10 +1814,14 @@ def download_xmls_from_table(page: Page, tipo: str, old_claves: set[str]) -> lis
             xml_content = _capture_xml_by_link_id(page, link_id)
 
             if not xml_content:
-                # Un reintento: el postback JSF a veces no dispara la descarga al
-                # primer click. Sin esto la clave se perdería del run.
+                # Un reintento: esperar que la página se estabilice antes de reintentar
+                # — el timeout en el primer intento puede dejar la página en estado AJAX pendiente.
                 progress("xml-tabla", f"Reintentando XML ...{clave[-10:]}...")
-                random_delay(0.4, 0.8)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=10000)
+                except Exception:
+                    pass
+                random_delay(1.0, 2.0)
                 xml_content = _capture_xml_by_link_id(page, link_id)
 
             if xml_content:
@@ -1911,9 +1886,10 @@ def _capture_xml_by_link_id(page: Page, xml_link_id: str) -> str | None:
     try:
         # Attempt 1: real Playwright click + expect_download (JSF sends file as attachment)
         try:
-            with page.expect_download(timeout=15000) as dl_info:
+            with page.expect_download(timeout=30000) as dl_info:
                 # force=True bypasses actionability checks (visibility, overlap, etc.)
-                locator.click(timeout=5000, force=True)
+                # 20s timeout: SRI slows down after many rapid POSTbacks — 5s was too short.
+                locator.click(timeout=20000, force=True)
             dl = dl_info.value
             tmp_path = Path(dl.path()) if dl.path() else None
             if tmp_path and tmp_path.exists():
@@ -1928,12 +1904,17 @@ def _capture_xml_by_link_id(page: Page, xml_link_id: str) -> str | None:
             )
 
         # Attempt 2: response interceptor — JSF may stream XML inline (no download dialog)
+        # Wait for any pending navigation from attempt 1 before clicking again.
         if not captured["content"]:
             try:
-                locator.click(timeout=5000, force=True)
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                pass
+            try:
+                locator.click(timeout=20000, force=True)
             except Exception as e:
                 progress("xml-tabla", f"Click falló: {e}")
-            for _ in range(20):
+            for _ in range(30):
                 time.sleep(0.5)
                 if captured["content"]:
                     break

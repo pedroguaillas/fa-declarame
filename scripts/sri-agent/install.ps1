@@ -133,16 +133,20 @@ New-Item -ItemType Directory -Force -Path "$InstallDir\browser-session" | Out-Nu
 # Playwright controla un navegador real, comportamiento que los AV detectan como
 # sospechoso. Agregar exclusión evita que bloqueen o sandboxeen el agente.
 
-Step "Configurando exclusion antivirus para $InstallDir..."
+Step "Configurando exclusiones antivirus..."
 
-# Windows Defender: Add-MpPreference no requiere admin para excluir carpetas del perfil
+# Windows Defender: excluir el directorio del agente, el venv de Python y el Chromium de Playwright.
+# Add-MpPreference no requiere admin para excluir carpetas del perfil del usuario.
+$PlaywrightDir = "$env:LOCALAPPDATA\ms-playwright"
 $defenderOk = $false
-try {
-    Add-MpPreference -ExclusionPath $InstallDir -ErrorAction Stop
-    $defenderOk = $true
-    Step "Windows Defender: exclusion agregada correctamente."
-} catch {
-    Warn "No se pudo agregar exclusion en Windows Defender automaticamente."
+foreach ($excPath in @($InstallDir, "$InstallDir\venv", $PlaywrightDir)) {
+    try {
+        Add-MpPreference -ExclusionPath $excPath -ErrorAction Stop
+        Step "Windows Defender: exclusion agregada -> $excPath"
+        $defenderOk = $true
+    } catch {
+        Warn "No se pudo agregar exclusion en Windows Defender para: $excPath"
+    }
 }
 
 # Mostrar instrucciones para AVG / Avast / otros AV
@@ -222,6 +226,25 @@ if (-not $chromiumOk) {
           "Luego vuelve a ejecutar este instalador.")
 }
 
+# ─── Detectar Chrome real ─────────────────────────────────────────────────────
+# Chrome real es proceso confiable para todos los AV — preferirlo sobre Playwright
+# Chromium que se instala en carpeta inusual y puede ser bloqueado.
+
+$ChromePaths = @(
+    "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+    "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+)
+$ChromeInstalled = $ChromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+$ChannelArg = if ($ChromeInstalled) { "--channel=chrome" } else { "--channel=chromium" }
+
+if ($ChromeInstalled) {
+    Step "Chrome real detectado: $ChromeInstalled"
+    Step "Usando Chrome real (mejor compatibilidad con antivirus)."
+} else {
+    Warn "Chrome no encontrado — usando Playwright Chromium. Si tienes problemas de antivirus, instala Google Chrome."
+}
+
 # ─── Script lanzador (para Task Scheduler) ────────────────────────────────────
 # Task Scheduler no redirige stdout/stderr; usamos un wrapper .ps1 que
 # captura la salida en agent.log mientras Chromium corre visible.
@@ -231,7 +254,7 @@ $LauncherPath = "$InstallDir\start-agent.ps1"
 @"
 # Auto-generado por install.ps1 — no editar manualmente
 Remove-Item "$InstallDir\browser-session\Singleton*" -ErrorAction SilentlyContinue
-& "$VenvPy" "$InstallDir\server.py" --host=127.0.0.1 --port=$Port --update-url=$AgentUrl --user-data-dir="$InstallDir\browser-session" *>> "$InstallDir\agent.log"
+& "$VenvPy" "$InstallDir\server.py" --host=127.0.0.1 --port=$Port --update-url=$AgentUrl --user-data-dir="$InstallDir\browser-session" $ChannelArg *>> "$InstallDir\agent.log"
 "@ | Set-Content -Path $LauncherPath -Encoding UTF8
 
 Step "Script lanzador creado: $LauncherPath"
@@ -279,7 +302,7 @@ Remove-Item "$InstallDir\browser-session\Singleton*" -ErrorAction SilentlyContin
 
 # Start-ScheduledTask no dispara de inmediato en todos los entornos Windows;
 # lanzamos el proceso directamente y dejamos la tarea para el auto-inicio en login.
-Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`"" -WorkingDirectory $InstallDir
+Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`"" -WorkingDirectory $InstallDir -WindowStyle Hidden
 
 # ─── Health check ─────────────────────────────────────────────────────────────
 

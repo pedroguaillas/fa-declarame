@@ -46,7 +46,7 @@ if sys.platform == "win32":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.0.1"
 
 # ─── Load test-scraper.py as module ──────────────────────────────────────────
 
@@ -361,23 +361,27 @@ def ensure_logged_in(ruc: str, password: str) -> bool:
             scraper.progress("server", f"Advertencia al limpiar cookies: {e}")
         _browser_state["logged_in_ruc"] = None
 
-    # Google warmup: navigate briefly to google.com before SRI so reCAPTCHA sees
-    # prior same-session Google interaction (boosts v3 score). Also tests whether
-    # Google account cookies are accessible to this Playwright-controlled session.
-    try:
-        page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=15000)
-        # Check if Google account is accessible (cookie encryption test)
-        google_logged_in = page.evaluate(
-            "() => !!document.querySelector('a[aria-label*=\"Google Account\"], "
-            "a[aria-label*=\"Cuenta de Google\"], #gb_70, [data-ogsr-up]')"
-        )
-        scraper.progress(
-            "server",
-            f"Google warmup: cuenta={'SI' if google_logged_in else 'NO (sin cuenta o cookies no accesibles)'}",
-        )
-        time.sleep(random.uniform(8, 12))
-    except Exception as e:
-        scraper.progress("server", f"Google warmup: error ({e}), continuando...")
+    # Google warmup: only run when the browser is freshly opened.
+    # Once the browser has navigated (login + SRI pages), reCAPTCHA score is already
+    # accumulated — repeating the warmup every job wastes 8-12s with no captcha benefit.
+    # _clear_sri_session() sets logged_in_ruc=None between jobs, so we check the
+    # browser context directly instead.
+    if not _browser_is_open():
+        try:
+            page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=15000)
+            google_logged_in = page.evaluate(
+                "() => !!document.querySelector('a[aria-label*=\"Google Account\"], "
+                "a[aria-label*=\"Cuenta de Google\"], #gb_70, [data-ogsr-up]')"
+            )
+            scraper.progress(
+                "server",
+                f"Google warmup: cuenta={'SI' if google_logged_in else 'NO (sin cuenta o cookies no accesibles)'}",
+            )
+            time.sleep(random.uniform(4, 7))
+        except Exception as e:
+            scraper.progress("server", f"Google warmup: error ({e}), continuando...")
+    else:
+        scraper.progress("server", "Google warmup omitido (navegador caliente, score reCAPTCHA ya acumulado).")
 
     # Always verify session first — covers both in-memory flag and persistent
     # context cookies saved from a previous run (open-on-demand restores cookies
