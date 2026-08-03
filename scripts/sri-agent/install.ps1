@@ -187,6 +187,15 @@ try { & $VenvPip install --quiet --upgrade pip 2>&1 | Out-Null } catch { }
 Step "Instalando dependencias Python (playwright, playwright-stealth)..."
 & $VenvPip install --upgrade playwright playwright-stealth
 
+# El almacen de raices de Windows se actualiza bajo demanda via CryptoAPI (lo
+# dispara .NET/el navegador); Python sin este paquete solo lee una foto fija
+# del almacen local y puede rechazar cadenas validas con "certificate has
+# expired" en equipos que aun no cachearon una raiz nueva. pip-system-certs
+# delega la validacion en CryptoAPI en vivo, igualando el comportamiento de
+# Windows/.NET.
+Step "Instalando pip-system-certs (evita falsos 'certificado vencido' con raices nuevas de Windows)..."
+& $VenvPip install --upgrade pip-system-certs
+
 Step "Instalando Chromium para Playwright (puede tardar varios minutos)..."
 
 $chromiumOk = $false
