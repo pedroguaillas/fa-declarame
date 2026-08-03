@@ -275,9 +275,14 @@ $Settings = New-ScheduledTaskSettingsSet `
     -RestartCount 3 `
     -RestartInterval (New-TimeSpan -Minutes 2) `
     -MultipleInstances IgnoreNew `
-    -StartWhenAvailable `
-    -DisallowStartIfOnBatteries:$false `
-    -StopIfGoingOnBatteries:$false
+    -StartWhenAvailable
+
+# Portátiles con batería: por defecto Task Scheduler NO arranca la tarea si no hay
+# corriente AC. Se asigna como propiedad (no parámetro del cmdlet) porque en algunos
+# hosts de PowerShell (ej. pwsh vía WinCompat) el proxy del cmdlet no expone estos
+# parámetros aunque la propiedad SIEMPRE existe en el objeto CIM subyacente.
+$Settings.DisallowStartIfOnBatteries = $false
+$Settings.StopIfGoingOnBatteries = $false
 
 $Principal = New-ScheduledTaskPrincipal `
     -UserId $env:USERNAME `
