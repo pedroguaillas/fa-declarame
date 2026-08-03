@@ -38,3 +38,4 @@ scripts/sri-agent/__pycache__/
 scripts/sri-agent/venv/
 scripts/sri-agent/.venv/
 scripts/sri-agent/screenshots/
+scripts/sri-agent/recaptcha_cookies.json

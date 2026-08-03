@@ -1089,9 +1089,22 @@ def download_for_voucher_type_by_day(
     for day in range(1, days_in_month + 1):
         progress(label, f"Día {day}/{days_in_month}...")
 
-        result = download_for_voucher_type(
-            page, voucher_type, year, month, download_dir, tipo, day, skip_claves
-        )
+        # Un día roto (timeout, DOM corrupto tras un fallo anterior, etc.) NO debe
+        # tirar todo el mes — sin este aislamiento, una excepción aquí se propaga
+        # hasta handle_scrape y descarta TODO lo ya acumulado de días anteriores.
+        try:
+            result = download_for_voucher_type(
+                page, voucher_type, year, month, download_dir, tipo, day, skip_claves
+            )
+        except Exception as e:
+            progress(label, f"Día {day}: excepción ({e}), recargando página...")
+            incomplete_days.append(day)
+            try:
+                navigate_to_comprobantes(page, tipo)
+            except Exception as nav_e:
+                progress(label, f"Día {day}: no se pudo recargar la página ({nav_e})")
+            random_delay(0.5, 1.5)
+            continue
 
         if result["status"] == "downloaded":
             if result.get("content"):
@@ -1120,8 +1133,15 @@ def download_for_voucher_type_by_day(
             progress(label, f"Día {day}: captcha falló, continuando...")
             incomplete_days.append(day)
         else:
-            progress(label, f"Día {day}: {result['status']}")
+            # download_failed, download_button_not_found, error, etc. — el estado de
+            # la página puede haber quedado inconsistente (diálogo colgado, descarga
+            # a medias). Recargar antes del próximo día evita que arrastre el problema.
+            progress(label, f"Día {day}: {result['status']}, recargando página...")
             incomplete_days.append(day)
+            try:
+                navigate_to_comprobantes(page, tipo)
+            except Exception as nav_e:
+                progress(label, f"Día {day}: no se pudo recargar la página ({nav_e})")
 
         random_delay(0.5, 1.5)
 

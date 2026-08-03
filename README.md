@@ -122,6 +122,26 @@ rm -f /opt/sri-scraper/browser-session/Singleton*
 supervisorctl start sri-scraper
 ```
 
+### Jobs atascados en "running"
+
+Si el agente/scraper se reinicia a mitad de un job, el `SriScrapeJob` queda en `running` para siempre (nunca llega el callback). Comando de rescate:
+
+```bash
+# Ver qué hay atascado sin tocar nada
+php artisan sri:rescue-stuck-jobs --dry-run --tenant=TENANT_ID
+
+# Re-despachar (resetea a pending y vuelve a lanzar el job)
+php artisan sri:rescue-stuck-jobs --tenant=TENANT_ID
+
+# Jobs puntuales por ID
+php artisan sri:rescue-stuck-jobs --ids=123,124
+
+# Marcar como failed en vez de reintentar (consume cupo de intentos)
+php artisan sri:rescue-stuck-jobs --tenant=TENANT_ID --mark-failed
+```
+
+Detalle completo en `docs/sri-agent.md`.
+
 ---
 
 ## Queue Worker

@@ -165,12 +165,63 @@ El agente corre en `localhost:8765`. Cuando el navegador (HTTPS) hace `fetch` a 
 - La clave SRI viaja en la respuesta de `agent-dispatch` sobre HTTPS (la misma que el usuario ingresó)
 - Los scripts Python son públicos pero no contienen credenciales
 
+## Ver logs del agente
+
+El agente escribe todo su output (progreso + errores) a `agent.log` dentro de su carpeta de instalación (`~/.sri-agent/`).
+
+**Mac / Linux:**
+```bash
+tail -n 150 ~/.sri-agent/agent.log      # últimas líneas
+tail -f ~/.sri-agent/agent.log          # en vivo
+```
+
+**Windows (PowerShell):**
+```powershell
+Get-Content "$env:USERPROFILE\.sri-agent\agent.log" -Tail 150        # últimas líneas
+Get-Content "$env:USERPROFILE\.sri-agent\agent.log" -Wait -Tail 30   # en vivo
+```
+
+Cada línea del progreso del scraper se loguea dos veces: una legible (`[HH:MM:SS] [step] mensaje`) y una en JSON (`{"event": "progress", ...}`) — esta última es la que el frontend recibiría si el agente corriera en modo streaming. Buscar `[callback] Error al enviar callback:` para diagnosticar fallos de entrega del resultado a Laravel (ver tabla de troubleshooting).
+
+## Jobs atascados en `running`
+
+Si el proceso del agente se reinicia (crash, actualización, cierre de sesión) a mitad de un scrape, el `SriScrapeJob` correspondiente queda en `status=running` para siempre — nunca llega el callback que lo marcaría `completed`/`failed`, y el frontend lo sigue mostrando "en proceso" indefinidamente.
+
+Comando de rescate: `php artisan sri:rescue-stuck-jobs`
+
+```bash
+# 1. Ver qué hay atascado sin tocar nada (recomendado primero)
+php artisan sri:rescue-stuck-jobs --dry-run --tenant=TENANT_ID
+
+# 2. Re-despachar (resetea a pending y vuelve a lanzar ScrapeFromSriJob)
+php artisan sri:rescue-stuck-jobs --tenant=TENANT_ID
+
+# Jobs puntuales por ID (ignora el filtro de horas)
+php artisan sri:rescue-stuck-jobs --ids=123,124
+
+# Marcar como failed en vez de reintentar
+php artisan sri:rescue-stuck-jobs --tenant=TENANT_ID --mark-failed
+```
+
+Opciones: `--hours=1` (default; mínimo de horas en `running` para considerarse atascado), `--date=YYYY-MM-DD`, `--ids`, `--tenant`, `--mark-failed`, `--dry-run`.
+
+- **Re-despachar (default, sin `--mark-failed`)**: no consume el cupo de intentos por período (`SriScrapeJob::blockReason()` solo cuenta `completed`/`failed`) — es la opción segura para reintentar.
+- **`--mark-failed`**: consume 1 de los 3 intentos fallidos permitidos por período (`MAX_FAILED_ATTEMPTS=3`). Usar solo si ya no se quiere reintentar ese job.
+- Un job `running`/`pending` para la misma empresa+tipo **bloquea** un nuevo dispatch manual ("Ya existe una descarga en progreso para este tipo") — hay que rescatar el atascado antes de poder lanzar uno nuevo desde la UI.
+- Re-correr un período ya parcialmente importado es seguro: `getExistingClavesForPeriod()` arma `skipClaves` desde los documentos ya guardados en `Order`/`Shop`, así que el re-run solo trae lo que faltó, sin duplicar.
+
 ## Troubleshooting
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
 | Botón "Agente Local" nunca se habilita | Agente no está corriendo | Verificar servicio; revisar `~/.sri-agent/agent.log` |
 | "Agente desactualizado" | `version.json` tiene versión mayor | Reinstalar: `curl ... \| bash` |
-| Job queda en `pending` para siempre | `callbackUrl` no alcanzable desde la PC del cliente | Verificar que el dominio resuelve correctamente desde el cliente |
+| Job queda en `pending`/`running` para siempre | `callbackUrl` no alcanzable desde la PC del cliente, o error SSL en la máquina del agente | Ver `agent.log` → línea `[callback] Error al enviar callback:`. Rescatar el job con `sri:rescue-stuck-jobs` (ver sección arriba) |
+| En dev local, job nunca completa aunque el agente terminó | `APP_URL` en `.env` sin puerto (ej. `http://localhost` en vez de `http://localhost:8000`) — el callback pega a un puerto sin nada escuchando y falla silencioso en el agente | Corregir `APP_URL` con el puerto de `php artisan serve`, `php artisan config:clear`, reiniciar `composer dev` |
+| Callback falla con `CERTIFICATE_VERIFY_FAILED: certificate has expired` en Windows, pero el navegador/.NET sí conecta bien | El almacén de certificados raíz de Windows tiene una raíz nueva (ej. tras rotación de Let's Encrypt) que Python no ve porque no delega en CryptoAPI como sí hace .NET | `.\venv\Scripts\pip.exe install pip-system-certs` dentro de `~/.sri-agent`, reiniciar el agente |
+| Windows: agente arranca bien manual pero no tras reiniciar la PC | Tarea de Task Scheduler con `DisallowStartIfOnBatteries` en `true` (default) — no arranca si la laptop está en batería | Ya corregido en `install.ps1` (se asigna como propiedad post-creación, no parámetro del cmdlet, porque algunos hosts de PowerShell —ej. pwsh vía WinCompat— no exponen esos parámetros) |
+| Windows: `.\start-agent.ps1` da error "la ejecución de scripts está deshabilitada" | Execution policy restringe scripts en sesión interactiva (Task Scheduler sí usa `-ExecutionPolicy Bypass`) | `powershell.exe -ExecutionPolicy Bypass -File "$env:USERPROFILE\.sri-agent\start-agent.ps1"` |
+| Ventas (emitidos) descarga día-por-día: un mes entero sale en cero pese a que sí hay comprobantes | Un día con timeout de descarga deja la página en estado inconsistente; el día siguiente revienta con excepción no atrapada, que se propagaba hasta `handle_scrape` y descartaba TODO lo acumulado de los días anteriores | Corregido: cada día está aislado en su propio try/except en `download_for_voucher_type_by_day` y recarga la página (`navigate_to_comprobantes`) tras cualquier fallo antes de seguir al día siguiente |
+| Comprobante visible en el portal pero no se importó, sin error visible | Modal/XML falló al abrir tras reintentos y se descartaba en silencio | Corregido: el scraper ahora reporta `failed_claves`/`incomplete_days`; `SriScraperService` los suma en `result.missing` y pone `error_message` de advertencia aunque el job quede `completed` |
 | Login SRI falla | Clave SRI incorrecta o cambió | Actualizar clave en configuración de empresa |
 | reCAPTCHA rechazado | Chrome fingerprint desactualizado | `scripts/sri-agent/server.py` actualiza fingerprint en cada arranque — reiniciar agente |
