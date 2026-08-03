@@ -6,6 +6,8 @@ defineProps<{
     //canRegister?: boolean;
 }>();
 
+const canonicalUrl = typeof window !== "undefined" ? window.location.origin + window.location.pathname : "";
+
 const features = [
     {
         icon: "upload",
@@ -76,7 +78,7 @@ const steps = [
     <Head title="Declárame — La forma inteligente de preparar tus declaraciones">
         <meta
             name="description"
-            content="Compras, ventas y retenciones organizadas automáticamente en un solo lugar. Sin descargas, sin importaciones manuales y sin horas perdidas preparando información tributaria. Hecho para contadores ecuatorianos."
+            content="Compras, ventas y retenciones organizadas automáticamente en un solo lugar. Sin descargas ni importaciones manuales."
         />
         <meta
             name="keywords"
@@ -84,14 +86,17 @@ const steps = [
         />
         <meta name="robots" content="index, follow" />
         <meta name="author" content="Declárame" />
+        <link rel="canonical" :href="canonicalUrl" />
 
         <!-- Open Graph -->
         <meta property="og:title" content="Declárame — La forma inteligente de preparar tus declaraciones" />
         <meta
             property="og:description"
-            content="Compras, ventas y retenciones organizadas automáticamente en un solo lugar. Sin descargas, sin importaciones manuales y sin horas perdidas preparando información tributaria."
+            content="Compras, ventas y retenciones organizadas automáticamente en un solo lugar. Sin descargas ni importaciones manuales."
         />
         <meta property="og:type" content="website" />
+        <meta property="og:url" :content="canonicalUrl" />
+        <meta property="og:image" content="/og-image.jpg" />
         <meta property="og:locale" content="es_EC" />
         <meta property="og:site_name" content="Declárame" />
 
@@ -100,8 +105,9 @@ const steps = [
         <meta name="twitter:title" content="Declárame — La forma inteligente de preparar tus declaraciones" />
         <meta
             name="twitter:description"
-            content="Compras, ventas y retenciones organizadas automáticamente en un solo lugar. Sin descargas, sin importaciones manuales y sin horas perdidas preparando información tributaria."
+            content="Compras, ventas y retenciones organizadas automáticamente en un solo lugar. Sin descargas ni importaciones manuales."
         />
+        <meta name="twitter:image" content="/og-image.jpg" />
     </Head>
 
     <div class="min-h-screen bg-white text-gray-900 transition-colors duration-300 dark:bg-gray-950 dark:text-gray-100">
