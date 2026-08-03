@@ -1007,6 +1007,7 @@ def download_for_voucher_type(
     xmls: list[dict] = []
     modal_entries: list[dict] = []
     retention_modal_entries: list[dict] = []
+    failed_claves: list[str] = []
 
     if old_claves:
         if tipo == "compras":
@@ -1015,14 +1016,14 @@ def download_for_voucher_type(
                 label,
                 f"{len(old_claves)} claves >30d: descargando XMLs de tabla (col 10)...",
             )
-            xmls = download_xmls_from_table(page, tipo, set(old_claves))
+            xmls, failed_claves = download_xmls_from_table(page, tipo, set(old_claves))
         else:
             # Ventas (emitidos): no XML button — click clave in col 3 to open modal
             progress(
                 label,
                 f"{len(old_claves)} claves >30d: extrayendo datos de modal (col 3)...",
             )
-            xmls_modal, modal_scraped = scrape_modals_from_table(
+            xmls_modal, modal_scraped, failed_claves = scrape_modals_from_table(
                 page, tipo, set(old_claves), clave_to_line, label
             )
             xmls.extend(xmls_modal)
@@ -1034,6 +1035,13 @@ def download_for_voucher_type(
     if recent_claves:
         progress(label, f"{len(recent_claves)} claves ≤30d: se procesarán via SOAP")
 
+    if failed_claves:
+        progress(
+            label,
+            f"ADVERTENCIA: {len(failed_claves)} comprobantes visibles en el portal "
+            f"no se pudieron descargar: {failed_claves}",
+        )
+
     filtered_content = filter_txt_by_claves(final_content, set(recent_claves))
 
     return {
@@ -1044,6 +1052,7 @@ def download_for_voucher_type(
         "modal_entries": modal_entries,
         "retention_modal_entries": retention_modal_entries,
         "rows": table_info["rows"],
+        "failed_claves": failed_claves,
     }
 
 
@@ -1070,6 +1079,8 @@ def download_for_voucher_type_by_day(
     all_xmls: list[dict] = []
     all_modal_entries: list[dict] = []
     all_retention_modal_entries: list[dict] = []
+    all_failed_claves: list[str] = []
+    incomplete_days: list[int] = []
     total_rows = 0
     header_saved = False
 
@@ -1100,16 +1111,32 @@ def download_for_voucher_type_by_day(
             all_retention_modal_entries.extend(
                 result.get("retention_modal_entries") or []
             )
+            all_failed_claves.extend(result.get("failed_claves") or [])
             total_rows += result.get("rows", 0)
             progress(label, f"Día {day}: {result.get('rows', 0)} registros")
         elif result["status"] == "no_records":
             progress(label, f"Día {day}: sin registros")
         elif result["status"] == "captcha_failed":
             progress(label, f"Día {day}: captcha falló, continuando...")
+            incomplete_days.append(day)
         else:
             progress(label, f"Día {day}: {result['status']}")
+            incomplete_days.append(day)
 
         random_delay(0.5, 1.5)
+
+    if incomplete_days:
+        progress(
+            label,
+            f"ADVERTENCIA: {len(incomplete_days)} día(s) no se pudieron consultar "
+            f"(captcha u otro error): {incomplete_days}. Puede haber comprobantes sin descargar.",
+        )
+    if all_failed_claves:
+        progress(
+            label,
+            f"ADVERTENCIA: {len(all_failed_claves)} comprobantes visibles en el portal "
+            f"no se pudieron descargar en total.",
+        )
 
     if (
         not all_content
@@ -1124,6 +1151,8 @@ def download_for_voucher_type_by_day(
             "xmls": [],
             "modal_entries": [],
             "retention_modal_entries": [],
+            "failed_claves": all_failed_claves,
+            "incomplete_days": incomplete_days,
         }
 
     progress(
@@ -1137,6 +1166,8 @@ def download_for_voucher_type_by_day(
         "modal_entries": all_modal_entries,
         "retention_modal_entries": all_retention_modal_entries,
         "rows": total_rows,
+        "failed_claves": all_failed_claves,
+        "incomplete_days": incomplete_days,
     }
 
 
@@ -1225,22 +1256,25 @@ def scrape_modals_from_table(
     old_claves: set[str],
     clave_to_line: dict[str, str],
     voucher_label: str = "",
-) -> tuple[list[dict], list[dict]]:
+) -> tuple[list[dict], list[dict], list[str]]:
     """
     For ventas (emitidos): iterate the results table and for each old clave,
     click the clave de acceso link (column 3) to open the detail modal,
     extract the data, and close it.
 
-    Returns (xmls, modal_entries):
+    Returns (xmls, modal_entries, failed_claves):
       - xmls: entries where the modal contained downloadable XML
       - modal_entries: entries where data was scraped from the modal HTML
+      - failed_claves: claves visible in the portal table that could not be
+        scraped after retries — the caller must surface these, not just log them.
     """
     if not old_claves:
-        return [], []
+        return [], [], []
 
     table_id = get_table_id(tipo)
     xmls: list[dict] = []
     modal_entries: list[dict] = []
+    failed_claves: list[str] = []
     remaining = set(old_claves)
     page_num = 1
 
@@ -1293,18 +1327,26 @@ def scrape_modals_from_table(
                 # Un reintento: el modal a veces no abre al primer click. Cerrar
                 # cualquier diálogo colgado (que bloquearía la siguiente fila) y
                 # reintentar antes de darse por vencido.
-                progress("modal-scrape", f"Reintentando modal ...{clave[-10:]}...")
-                _close_modal(page)
-                random_delay(0.4, 0.8)
-                result = _click_and_scrape_modal(
-                    page, table_id, row_info["rowIndex"], voucher_label
-                )
+                for retry_num in range(2):
+                    progress(
+                        "modal-scrape",
+                        f"Reintentando modal ...{clave[-10:]} ({retry_num + 1}/2)...",
+                    )
+                    _close_modal(page)
+                    random_delay(0.4, 0.8)
+                    result = _click_and_scrape_modal(
+                        page, table_id, row_info["rowIndex"], voucher_label
+                    )
+                    if result is not None:
+                        break
 
             if result is None:
                 progress(
-                    "modal-scrape", f"No se pudo abrir modal para ...{clave[-10:]}"
+                    "modal-scrape",
+                    f"No se pudo abrir modal para ...{clave[-10:]} tras 3 intentos",
                 )
                 _close_modal(page)
+                failed_claves.append(clave)
                 remaining.discard(clave)
                 continue
 
@@ -1339,9 +1381,10 @@ def scrape_modals_from_table(
 
     progress(
         "modal-scrape",
-        f"Procesados: {len(xmls)} XMLs + {len(modal_entries)} scrapeados de {len(old_claves)} solicitados",
+        f"Procesados: {len(xmls)} XMLs + {len(modal_entries)} scrapeados "
+        f"({len(failed_claves)} fallidos) de {len(old_claves)} solicitados",
     )
-    return xmls, modal_entries
+    return xmls, modal_entries, failed_claves
 
 
 def _click_and_scrape_modal(
@@ -1741,7 +1784,9 @@ def _close_modal(page: Page) -> None:
 # ─── XML Download from Table ──────────────────────────────────────────────────
 
 
-def download_xmls_from_table(page: Page, tipo: str, old_claves: set[str]) -> list[dict]:
+def download_xmls_from_table(
+    page: Page, tipo: str, old_claves: set[str]
+) -> tuple[list[dict], list[str]]:
     """
     Iterate the results table and for each row that has an XML download button,
     click it with a real Playwright click and capture the XML response.
@@ -1749,9 +1794,13 @@ def download_xmls_from_table(page: Page, tipo: str, old_claves: set[str]) -> lis
     Detection strategy: querySelectorAll('a[id$=":lnkXml"]') finds all XML buttons
     directly — no column-index guessing, no data-ri construction, no getElementById.
     Clave is extracted from the closest <tr> by scanning <a> text for 49 digits.
+
+    Returns (results, failed_claves) — claves present in old_claves whose button
+    was never found on any page, or whose XML capture failed after retry, so the
+    caller can surface the undercount instead of silently importing fewer documents.
     """
     if not old_claves:
-        return []
+        return [], []
 
     results = []
     page_num = 1
@@ -1814,21 +1863,28 @@ def download_xmls_from_table(page: Page, tipo: str, old_claves: set[str]) -> lis
             xml_content = _capture_xml_by_link_id(page, link_id)
 
             if not xml_content:
-                # Un reintento: esperar que la página se estabilice antes de reintentar
+                # Reintentos: esperar que la página se estabilice antes de reintentar
                 # — el timeout en el primer intento puede dejar la página en estado AJAX pendiente.
-                progress("xml-tabla", f"Reintentando XML ...{clave[-10:]}...")
-                try:
-                    page.wait_for_load_state("networkidle", timeout=10000)
-                except Exception:
-                    pass
-                random_delay(1.0, 2.0)
-                xml_content = _capture_xml_by_link_id(page, link_id)
+                for retry_num in range(2):
+                    progress(
+                        "xml-tabla", f"Reintentando XML ...{clave[-10:]} ({retry_num + 1}/2)..."
+                    )
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=10000)
+                    except Exception:
+                        pass
+                    random_delay(1.0, 2.0)
+                    xml_content = _capture_xml_by_link_id(page, link_id)
+                    if xml_content:
+                        break
 
             if xml_content:
                 results.append({"clave": clave, "xml": xml_content})
                 progress("xml-tabla", f"XML capturado ({len(xml_content)} bytes)")
             else:
-                progress("xml-tabla", f"No se pudo capturar XML para ...{clave[-10:]}")
+                progress(
+                    "xml-tabla", f"No se pudo capturar XML para ...{clave[-10:]} tras 3 intentos"
+                )
 
             # Post-consulta la descarga NO pasa captcha → no se necesita pacing
             # anti-bot. Pausa mínima solo para no saturar el postback JSF.
@@ -1844,11 +1900,14 @@ def download_xmls_from_table(page: Page, tipo: str, old_claves: set[str]) -> lis
         random_delay(0.5, 1.0)
         page_num += 1
 
+    captured_claves = {r["clave"] for r in results}
+    failed_claves = sorted(old_claves - captured_claves)
     progress(
         "xml-tabla",
-        f"XMLs descargados: {len(results)} de {len(old_claves)} solicitados",
+        f"XMLs descargados: {len(results)} de {len(old_claves)} solicitados "
+        f"({len(failed_claves)} fallidos)",
     )
-    return results
+    return results, failed_claves
 
 
 def _capture_xml_by_link_id(page: Page, xml_link_id: str) -> str | None:

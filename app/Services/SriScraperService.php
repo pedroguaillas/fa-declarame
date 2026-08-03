@@ -290,6 +290,9 @@ class SriScraperService
         $totalImported = 0;
         $totalSkipped = 0;
         $totalErrors = 0;
+        $totalMissing = 0;
+        $totalIncompleteDays = 0;
+        $missingClaves = [];
         $fileResults = [];
 
         foreach ($files as $file) {
@@ -298,6 +301,21 @@ class SriScraperService
             $xmls = $file['xmls'] ?? [];
             $modalEntries = $file['modal_entries'] ?? [];
             $retentionModalEntries = $file['retention_modal_entries'] ?? [];
+
+            // Comprobantes visibles en el portal SRI que el scraper no pudo descargar
+            // (modal o XML falló tras reintentos) — deben contarse, no perderse en silencio.
+            $failedClaves = $file['failed_claves'] ?? [];
+            if (! empty($failedClaves)) {
+                $totalMissing += count($failedClaves);
+                $missingClaves = array_merge($missingClaves, $failedClaves);
+            }
+
+            // Días (ventas día-por-día) donde ni siquiera se pudo consultar el portal
+            // (captcha u otro error) — pueden contener comprobantes nunca vistos.
+            $incompleteDays = $file['incomplete_days'] ?? [];
+            if (! empty($incompleteDays)) {
+                $totalIncompleteDays += count($incompleteDays);
+            }
 
             // In 'ambos' mode the scraper tags each file with its section; otherwise use job type
             $effectiveSection = $scrapeJob->type === 'ambos'
@@ -378,6 +396,9 @@ class SriScraperService
             'imported' => $totalImported + ($freshResult['imported'] ?? 0),
             'skipped' => $totalSkipped + ($freshResult['skipped'] ?? 0),
             'errors' => $totalErrors + ($freshResult['errors'] ?? 0),
+            'missing' => $totalMissing,
+            'missing_claves' => $missingClaves,
+            'incomplete_days' => $totalIncompleteDays,
             'details' => $fileResults,
         ];
 
@@ -398,11 +419,23 @@ class SriScraperService
             return $stats;
         }
 
-        $scrapeJob->update([
+        $updates = [
             'status' => 'completed',
             'result' => $stats,
             'completed_at' => now(),
-        ]);
+        ];
+
+        // Job "completed" pero quedaron comprobantes visibles en el portal sin descargar —
+        // no marcar como failed (hubo importaciones parciales válidas) pero avisar al usuario.
+        if ($totalMissing > 0 || $totalIncompleteDays > 0) {
+            $updates['error_message'] = sprintf(
+                'Descarga incompleta: %d comprobante(s) del portal SRI no se pudieron descargar%s. Vuelva a ejecutar la descarga para completarlos.',
+                $totalMissing,
+                $totalIncompleteDays > 0 ? " y {$totalIncompleteDays} día(s) no se pudieron consultar" : ''
+            );
+        }
+
+        $scrapeJob->update($updates);
 
         return $stats;
     }

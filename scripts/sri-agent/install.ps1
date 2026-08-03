@@ -275,7 +275,9 @@ $Settings = New-ScheduledTaskSettingsSet `
     -RestartCount 3 `
     -RestartInterval (New-TimeSpan -Minutes 2) `
     -MultipleInstances IgnoreNew `
-    -StartWhenAvailable
+    -StartWhenAvailable `
+    -DisallowStartIfOnBatteries:$false `
+    -StopIfGoingOnBatteries:$false
 
 $Principal = New-ScheduledTaskPrincipal `
     -UserId $env:USERNAME `

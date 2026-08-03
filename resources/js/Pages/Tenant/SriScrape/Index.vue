@@ -52,7 +52,7 @@ interface ScrapeJob {
     voucher_types: string[] | null;
     status: string;
     progress: { step: string; message: string } | null;
-    result: { imported: number; skipped: number; errors: number } | null;
+    result: { imported: number; skipped: number; errors: number; missing?: number } | null;
     error_message: string | null;
     created_at: string;
     completed_at: string | null;
@@ -755,11 +755,14 @@ defineOptions({ layout: TenantLayout });
                                 {{ job.result.imported }} importados,
                                 {{ job.result.skipped }} omitidos,
                                 {{ job.result.errors }} errores
+                                <template v-if="job.result.missing">
+                                    , {{ job.result.missing }} no descargados
+                                </template>
                             </p>
 
-                            <!-- Error -->
+                            <!-- Error / warning -->
                             <p
-                                v-if="job.status === 'failed' && job.error_message"
+                                v-if="job.error_message"
                                 class="text-xs text-red-600 dark:text-red-400"
                             >
                                 {{ job.error_message }}
