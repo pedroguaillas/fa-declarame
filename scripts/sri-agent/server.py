@@ -46,7 +46,7 @@ if sys.platform == "win32":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-AGENT_VERSION = "1.0.2"
+AGENT_VERSION = "1.0.3"
 
 # ─── Load test-scraper.py as module ──────────────────────────────────────────
 

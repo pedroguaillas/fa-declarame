@@ -483,12 +483,24 @@ def _navigate_ventas(page: Page) -> None:
 
     simulate_human_presence(page, duration_s=0.3)
 
-    # Click en "Comprobantes electrónicos emitidos" via mojarra JSF
+    # Click en "Comprobantes electrónicos emitidos" via mojarra JSF.
+    # Real Playwright click (not page.evaluate) — same fix as _capture_xml_by_link_id:
+    # page.evaluate races the page's own mojarra.js load and can throw
+    # "ReferenceError: mojarra is not defined"; a real click auto-waits for the
+    # element (and its onclick handler) to be ready before firing.
     progress("navigate", "Ejecutando click en 'Comprobantes electrónicos emitidos'...")
-    page.evaluate("""() => {
-        mojarra.jsfcljs(document.getElementById('consultaDocumentoForm'),
-            {'consultaDocumentoForm:j_idt22':'consultaDocumentoForm:j_idt22'},'');
-    }""")
+    link_selector = "[id='consultaDocumentoForm:j_idt22']"
+    for attempt in range(1, 3):
+        try:
+            page.wait_for_selector(link_selector, timeout=15000)
+            page.locator(link_selector).click(timeout=15000, force=True)
+            break
+        except Exception as e:
+            if attempt == 2:
+                raise
+            progress("navigate", f"Click en 'Comprobantes emitidos' falló ({e}), reintentando...")
+            page.goto(url, wait_until="networkidle", timeout=60000)
+            simulate_human_presence(page, duration_s=0.3)
 
     # Esperar que cargue el formulario
     time.sleep(0.8)

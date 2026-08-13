@@ -210,6 +210,39 @@ Opciones: `--hours=1` (default; mínimo de horas en `running` para considerarse 
 - Un job `running`/`pending` para la misma empresa+tipo **bloquea** un nuevo dispatch manual ("Ya existe una descarga en progreso para este tipo") — hay que rescatar el atascado antes de poder lanzar uno nuevo desde la UI.
 - Re-correr un período ya parcialmente importado es seguro: `getExistingClavesForPeriod()` arma `skipClaves` desde los documentos ya guardados en `Order`/`Shop`, así que el re-run solo trae lo que faltó, sin duplicar.
 
+## Eliminar jobs failed/running-atascados
+
+Con el tiempo se acumulan `SriScrapeJob` en `failed` (reintentos fallidos) o `running` atascados (ver sección arriba) para períodos ya usados. Como `SriScrapeJob::blockReason()` cuenta esos intentos (`MAX_FAILED_ATTEMPTS=3`, `MAX_TOTAL_ATTEMPTS=5` por período), acumular jobs viejos termina bloqueando reintentos legítimos del cliente. `sri:prune-jobs` los borra.
+
+Comando: `php artisan sri:prune-jobs`
+
+```bash
+# 1. Ver qué se borraría sin tocar nada (recomendado primero)
+php artisan sri:prune-jobs --dry-run --tenant=TENANT_ID
+
+# 2. Borrar failed (default) de un tenant, con confirmación por tenant
+php artisan sri:prune-jobs --tenant=TENANT_ID
+
+# Incluir también running atascados (>N horas, mismo criterio que rescue-stuck-jobs)
+php artisan sri:prune-jobs --status=failed,running --hours=2 --tenant=TENANT_ID
+
+# Solo jobs con más de 30 días de antigüedad
+php artisan sri:prune-jobs --days=30
+
+# Jobs puntuales por ID (ignora status/days, borra sin importar estado)
+php artisan sri:prune-jobs --ids=123,124 --force
+
+# Sin confirmación interactiva (cron / script)
+php artisan sri:prune-jobs --status=failed,running --force
+```
+
+Opciones: `--status=failed` (default; acepta `failed`, `running` o ambos separados por coma), `--hours=1` (mínimo en `running` para considerarse atascado, solo aplica si `status` incluye `running`), `--days` (antigüedad mínima por `created_at`, sin filtro por default), `--tenant`, `--ids` (bypassa status/hours/days), `--dry-run`, `--force` (omite el `confirm()` interactivo por tenant).
+
+- `running` **nunca** se borra "en caliente": solo entran los que llevan más de `--hours` sin `completed_at`, igual que `sri:rescue-stuck-jobs`, para no tocar un scrape realmente en curso.
+- Sin `--force`, pide confirmación por tenant antes de borrar (no aplica en `--dry-run`).
+- Borrar libera cupo en `SriScrapeJob::blockReason()` — útil cuando un cliente reporta "no me deja reintentar" y tiene varios `failed` viejos acumulados.
+- Si un `running` sigue realmente activo pero fuera del corte de horas (scrape legítimamente largo), usar `sri:rescue-stuck-jobs` en vez de este comando — ese re-despacha o marca failed sin perder el registro.
+
 ## Troubleshooting
 
 | Síntoma | Causa probable | Solución |

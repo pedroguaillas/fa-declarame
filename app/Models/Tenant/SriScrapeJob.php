@@ -9,9 +9,9 @@ use Illuminate\Support\Collection;
 
 class SriScrapeJob extends Model
 {
-    public const MAX_FAILED_ATTEMPTS = 3;
+    public const MAX_FAILED_ATTEMPTS = 5;
 
-    public const MAX_TOTAL_ATTEMPTS = 5;
+    public const MAX_TOTAL_ATTEMPTS = 8;
 
     protected $fillable = [
         'company_id',

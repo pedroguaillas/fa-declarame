@@ -139,11 +139,15 @@ class SalesXlsxImportService
     {
         $date = trim((string) $value);
 
-        if (! preg_match('/^\d{2}-\d{2}-\d{4}$/', $date)) {
-            throw new \InvalidArgumentException("Fecha inválida '{$date}'. Formato esperado: DD-MM-YYYY.");
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return Carbon::createFromFormat('Y-m-d', $date)->format('Y-m-d');
         }
 
-        return Carbon::createFromFormat('d-m-Y', $date)->format('Y-m-d');
+        if (preg_match('/^\d{2}-\d{2}-\d{4}$/', $date)) {
+            return Carbon::createFromFormat('d-m-Y', $date)->format('Y-m-d');
+        }
+
+        throw new \InvalidArgumentException("Fecha inválida '{$date}'. Formato esperado: DD-MM-YYYY o YYYY-MM-DD.");
     }
 
     private function parseVoucherType(mixed $value): string
