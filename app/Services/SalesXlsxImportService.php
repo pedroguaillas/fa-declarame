@@ -9,6 +9,7 @@ use App\Models\Tenant\Scopes\CompanyScope;
 use App\Models\Tenant\VoucherType;
 use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 class SalesXlsxImportService
 {
@@ -137,6 +138,10 @@ class SalesXlsxImportService
 
     private function parseDate(mixed $value): string
     {
+        if (is_numeric($value)) {
+            return Date::excelToDateTimeObject((float) $value)->format('Y-m-d');
+        }
+
         $date = trim((string) $value);
 
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
