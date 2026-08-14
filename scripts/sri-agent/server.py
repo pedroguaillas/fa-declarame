@@ -46,7 +46,7 @@ if sys.platform == "win32":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-AGENT_VERSION = "1.0.3"
+AGENT_VERSION = "1.0.4"
 
 # ─── Load test-scraper.py as module ──────────────────────────────────────────
 
@@ -200,6 +200,13 @@ def _clear_sri_session() -> None:
 # ─── Auto-Update ─────────────────────────────────────────────────────────────
 
 
+def _version_tuple(v: str) -> tuple[int, ...]:
+    try:
+        return tuple(int(p) for p in v.split("."))
+    except ValueError:
+        return (0,)
+
+
 def _check_for_updates(update_url: str) -> None:
     """Check remote version.json; if newer, download updated .py files and restart."""
     try:
@@ -211,7 +218,10 @@ def _check_for_updates(update_url: str) -> None:
         resp = urllib.request.urlopen(req, timeout=10)
         data = json.loads(resp.read())
         remote_version = data.get("version", "")
-        if not remote_version or remote_version == AGENT_VERSION:
+        # Comparar numéricamente, no solo desigualdad: si el remoto (p.ej. prod
+        # sin deployar aún) queda desactualizado respecto al agente local, no
+        # hay que hacer downgrade — eso pisaba fixes recién copiados a mano.
+        if not remote_version or _version_tuple(remote_version) <= _version_tuple(AGENT_VERSION):
             scraper.progress("update", f"Versión {AGENT_VERSION} al día.")
             return
         scraper.progress("update", f"Nueva versión {remote_version} disponible. Actualizando...")
@@ -747,6 +757,13 @@ class ScrapeRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # Chrome Private Network Access: sitios públicos HTTPS (producción) que
+        # llaman a loopback disparan un preflight con
+        # "Access-Control-Request-Private-Network: true". Sin este header en la
+        # respuesta, Chrome bloquea la petición real aunque el CORS normal esté
+        # bien — el fetch falla silenciosamente y el agente aparece como no
+        # detectado. Dev en localhost no lo dispara (loopback→loopback).
+        self.send_header("Access-Control-Allow-Private-Network", "true")
 
     def _json_response(self, status: int, data: dict):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")

@@ -488,12 +488,24 @@ def _navigate_ventas(page: Page) -> None:
     # page.evaluate races the page's own mojarra.js load and can throw
     # "ReferenceError: mojarra is not defined"; a real click auto-waits for the
     # element (and its onclick handler) to be ready before firing.
+    #
+    # El id "consultaDocumentoForm:j_idt22" lo autogenera JSF según el árbol de
+    # componentes de esa página — varía entre cuentas SRI con menús distintos
+    # (permisos, tipo de contribuyente), por eso el mismo agente funciona con
+    # una cuenta y falla con otra. Se localiza por texto del enlace, que es
+    # estable, y el id viejo queda como fallback.
     progress("navigate", "Ejecutando click en 'Comprobantes electrónicos emitidos'...")
-    link_selector = "[id='consultaDocumentoForm:j_idt22']"
+    link_text_re = re.compile("comprobantes.*electr.nicos.*emitidos", re.IGNORECASE)
+    id_selector = "[id='consultaDocumentoForm:j_idt22']"
     for attempt in range(1, 3):
         try:
-            page.wait_for_selector(link_selector, timeout=15000)
-            page.locator(link_selector).click(timeout=15000, force=True)
+            text_locator = page.get_by_text(link_text_re).first
+            try:
+                text_locator.wait_for(state="visible", timeout=15000)
+                text_locator.click(timeout=15000, force=True)
+            except Exception:
+                page.wait_for_selector(id_selector, timeout=15000)
+                page.locator(id_selector).click(timeout=15000, force=True)
             break
         except Exception as e:
             if attempt == 2:
