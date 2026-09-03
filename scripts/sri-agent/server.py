@@ -46,7 +46,7 @@ if sys.platform == "win32":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-AGENT_VERSION = "1.0.4"
+AGENT_VERSION = "1.0.5"
 
 # ─── Load test-scraper.py as module ──────────────────────────────────────────
 
@@ -119,6 +119,20 @@ def _browser_is_open() -> bool:
     return _browser_state["context"] is not None
 
 
+def _browser_is_alive() -> bool:
+    """Ping the actual browser process — the Python object can outlive a crashed
+    or manually-closed Chrome, and every subsequent call then fails with
+    'Target page, context or browser has been closed' forever until restart."""
+    page = _browser_state["page"]
+    if not page:
+        return False
+    try:
+        page.evaluate("1")
+        return True
+    except Exception:
+        return False
+
+
 # ─── Cookie Persistence (reCAPTCHA warmth) ────────────────────────────────────
 
 
@@ -183,10 +197,14 @@ def _clear_sri_session() -> None:
             ctx.add_cookies(google)
         if page:
             try:
-                page.goto("about:blank", wait_until="commit", timeout=10000)
+                # Clear storage while still on the SRI/Keycloak origin — doing it
+                # after navigating to about:blank clears the wrong origin's storage
+                # (about:blank is opaque) and leaves stale Keycloak state (login_hint,
+                # session/nonce) behind, breaking the next login on RUC switch.
                 page.evaluate(
                     "() => { try { localStorage.clear(); sessionStorage.clear(); } catch(e){} }"
                 )
+                page.goto("about:blank", wait_until="commit", timeout=10000)
             except Exception:
                 pass
         _browser_state["logged_in_ruc"] = None
@@ -461,6 +479,13 @@ def _scraper_thread_main(
 
         job_ok = False
         try:
+            if _browser_is_open() and not _browser_is_alive():
+                scraper.progress(
+                    "server",
+                    "Navegador caliente pero el proceso ya no responde (crash o cierre manual) — reabriendo...",
+                )
+                _close_browser()
+
             if not _browser_is_open():
                 browser_label = "Chrome real" if channel != "chromium" else "Chromium"
                 scraper.progress("server", f"Abriendo {browser_label} para este job...")
