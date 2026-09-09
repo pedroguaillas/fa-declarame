@@ -273,4 +273,62 @@ class SriScrapeController extends Controller
 
         return response()->json(['ok' => true]);
     }
+
+    /**
+     * Reintenta un job fallido: reutiliza el mismo registro (mismo período/tipo/comprobantes)
+     * y lo vuelve a despachar. Respeta los mismos límites de reintentos que una descarga nueva.
+     */
+    public function retry(SriScrapeJob $job): RedirectResponse
+    {
+        $company = company();
+
+        if ($job->company_id !== $company->id) {
+            abort(403);
+        }
+
+        if ($job->status !== 'failed') {
+            return back()->with('error', 'Solo se pueden reintentar descargas con error.');
+        }
+
+        $existing = SriScrapeJob::where('company_id', $company->id)
+            ->where('type', $job->type)
+            ->whereIn('status', ['pending', 'running'])
+            ->exists();
+
+        if ($existing) {
+            return back()->with('error', 'Ya existe una descarga en progreso para este tipo.');
+        }
+
+        $previousJobs = SriScrapeJob::forPeriod(
+            $company->id,
+            $job->type,
+            $job->year,
+            $job->month,
+            $job->day,
+            $job->end_month,
+        )->whereIn('status', ['completed', 'failed'])
+            ->where('id', '!=', $job->id)
+            ->get(['status', 'result', 'voucher_types']);
+
+        if ($blockReason = SriScrapeJob::blockReason($previousJobs, $job->voucher_types ?? [])) {
+            return back()->with('error', $blockReason);
+        }
+
+        $job->update([
+            'status' => 'pending',
+            'started_at' => null,
+            'completed_at' => null,
+            'progress' => null,
+            'error_message' => null,
+        ]);
+
+        ScrapeFromSriJob::dispatch(
+            $job->id,
+            $company->id,
+            tenancy()->tenant->getTenantKey(),
+            $job->end_month !== null ? self::SEMESTER_JOB_TIMEOUT : ScrapeFromSriJob::DEFAULT_TIMEOUT,
+        );
+
+        return back()->with('success', 'Reintentando descarga...');
+    }
 }

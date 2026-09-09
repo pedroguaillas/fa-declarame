@@ -13,6 +13,8 @@ class SriXmlParserService
     /** @var array<string, int> */
     private array $contributorTypeCache = [];
 
+    private ?int $rucIdentificationTypeId = null;
+
     /** @var array<string, string> */
     private array $infoNodeMap = [
         '01' => 'infoFactura',
@@ -87,19 +89,43 @@ class SriXmlParserService
             (string) $infoTributaria->secuencial,
         );
 
+        // La Liquidación de Compra la emite el propio comprador (la empresa): infoTributaria
+        // describe a la empresa (no al proveedor), y el proveedor viene en infoLiquidacionCompra
+        // como "proveedor" en vez de "comprador". Se invierten los roles para encajar en el
+        // pipeline genérico (emisor = proveedor/contraparte, comprador = empresa).
+        $isLiquidacionCompra = $codDoc === Constants::LIQUIDACION_COMPRA;
+
+        if ($isLiquidacionCompra) {
+            $rucEmisor = trim((string) $info->identificacionProveedor);
+            $razonSocialEmisor = trim((string) $info->razonSocialProveedor);
+            $nombreComercialEmisor = $razonSocialEmisor;
+            $identificacionComprador = trim((string) $infoTributaria->ruc);
+            $razonSocialComprador = trim((string) $infoTributaria->razonSocial);
+            $tipoIdentificacionComprador = $this->resolveRucIdentificationTypeId();
+            $contributorTypeId = $this->getGeneralContributorTypeId();
+        } else {
+            $rucEmisor = (string) $infoTributaria->ruc;
+            $razonSocialEmisor = (string) $infoTributaria->razonSocial;
+            $nombreComercialEmisor = (string) ($infoTributaria->nombreComercial ?? $infoTributaria->razonSocial);
+            $identificacionComprador = trim((string) ($info->identificacionComprador ?? ''));
+            $razonSocialComprador = trim((string) ($info->razonSocialComprador ?? ''));
+            $tipoIdentificacionComprador = $this->resolveTipoIdentificacionComprador($info);
+            $contributorTypeId = $this->resolveContributorTypeId($infoTributaria);
+        }
+
         return [
             'estado' => (string) ($autorizacion->estado ?? 'AUTORIZADO'),
             'fecha_autorizacion' => Carbon::parse((string) $autorizacion->fechaAutorizacion)->format('Y-m-d H:i:s'),
-            'contributor_type_id' => $this->resolveContributorTypeId($infoTributaria),
-            'ruc_emisor' => (string) $infoTributaria->ruc,
-            'razon_social_emisor' => (string) $infoTributaria->razonSocial,
-            'nombre_comercial_emisor' => (string) ($infoTributaria->nombreComercial ?? $infoTributaria->razonSocial),
+            'contributor_type_id' => $contributorTypeId,
+            'ruc_emisor' => $rucEmisor,
+            'razon_social_emisor' => $razonSocialEmisor,
+            'nombre_comercial_emisor' => $nombreComercialEmisor,
             'cod_doc' => $codDoc,
             'fecha_emision' => Carbon::createFromFormat('d/m/Y', trim((string) $info->fechaEmision))->format('Y-m-d'),
             'serie' => $serie,
-            'tipoIdentificacionComprador' => $this->resolveTipoIdentificacionComprador($info),
-            'identificacion_comprador' => trim((string) ($info->identificacionComprador ?? '')),
-            'razon_social_comprador' => trim((string) ($info->razonSocialComprador ?? '')),
+            'tipoIdentificacionComprador' => $tipoIdentificacionComprador,
+            'identificacion_comprador' => $identificacionComprador,
+            'razon_social_comprador' => $razonSocialComprador,
             'sub_total' => (float) ($info->totalSinImpuestos ?? 0),
             'discount' => (float) ($info->totalDescuento ?? 0),
             'total' => (float) ($info->importeTotal ?? $info->valorModificacion ?? $info->valorTotal ?? 0),
@@ -114,6 +140,24 @@ class SriXmlParserService
         $tipoIdentificacionComprador = trim((string) $infoFactura->tipoIdentificacionComprador);
 
         return IdentificationType::where('code_order', $tipoIdentificacionComprador)->value('id');
+    }
+
+    /**
+     * En Liquidación de Compra el comprador siempre es la empresa (identificada con RUC).
+     */
+    private function resolveRucIdentificationTypeId(): int
+    {
+        return $this->rucIdentificationTypeId ??= IdentificationType::where('code_order', '04')->value('id');
+    }
+
+    /**
+     * En Liquidación de Compra el nodo del proveedor no trae régimen RIMPE, por lo que
+     * la contraparte se clasifica siempre como régimen general.
+     */
+    private function getGeneralContributorTypeId(): int
+    {
+        return $this->contributorTypeCache['GENERAL']
+            ??= ContributorType::where('description', 'GENERAL')->value('id');
     }
 
     private function resolveContributorTypeId(SimpleXMLElement $infoTributaria): int

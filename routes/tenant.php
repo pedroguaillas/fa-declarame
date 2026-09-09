@@ -135,6 +135,7 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
         Route::post('sri-scrape', [SriScrapeController::class, 'store'])->name('tenant.sri-scrape.store');
         Route::post('sri-scrape/agent-dispatch', [SriScrapeController::class, 'agentDispatch'])->name('tenant.sri-scrape.agent-dispatch');
         Route::post('sri-scrape/{job}/mark-running', [SriScrapeController::class, 'markRunning'])->name('tenant.sri-scrape.mark-running');
+        Route::post('sri-scrape/{job}/retry', [SriScrapeController::class, 'retry'])->name('tenant.sri-scrape.retry');
         Route::get('sri-scrape/status', [SriScrapeController::class, 'status'])->name('tenant.sri-scrape.status');
 
         Route::get('sri', [AtsController::class, 'index'])->name('tenant.sri.index');

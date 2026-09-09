@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?><liquidacionCompra id="comprobante" version="1.1.0">
+    <infoTributaria>
+        <ambiente>2</ambiente>
+        <tipoEmision>1</tipoEmision>
+        <razonSocial>RODRIGUEZ ARANA ANA MARIA</razonSocial>
+        <ruc>1307305043001</ruc>
+        <claveAcceso>0909202603130730504300120011000000000173728836510</claveAcceso>
+        <codDoc>03</codDoc>
+        <estab>001</estab>
+        <ptoEmi>100</ptoEmi>
+        <secuencial>000000017</secuencial>
+        <dirMatriz>Barrio: SITIO LA BRAMADORA Numero: S/N </dirMatriz>
+    </infoTributaria>
+    <infoLiquidacionCompra>
+        <fechaEmision>09/09/2026</fechaEmision>
+        <dirEstablecimiento>Barrio: SITIO LA BRAMADORA Numero: S/N </dirEstablecimiento>
+        <obligadoContabilidad>SI</obligadoContabilidad>
+        <tipoIdentificacionProveedor>05</tipoIdentificacionProveedor>
+        <razonSocialProveedor>MENDOZA CEDEÑO JHONY REINALDO</razonSocialProveedor>
+        <identificacionProveedor>1306514736</identificacionProveedor>
+        <totalSinImpuestos>392.70</totalSinImpuestos>
+        <totalDescuento>0.00</totalDescuento>
+        <totalConImpuestos>
+            <totalImpuesto>
+                <codigo>2</codigo>
+                <codigoPorcentaje>0</codigoPorcentaje>
+                <baseImponible>392.70</baseImponible>
+                <valor>0.00</valor>
+            </totalImpuesto>
+        </totalConImpuestos>
+        <importeTotal>392.70</importeTotal>
+        <moneda>DOLAR</moneda>
+        <pagos>
+            <pago>
+                <formaPago>01</formaPago>
+                <total>392.70</total>
+            </pago>
+        </pagos>
+    </infoLiquidacionCompra>
+    <detalles>
+        <detalle>
+            <codigoPrincipal>1</codigoPrincipal>
+            <descripcion>QQ DE CACAO</descripcion>
+            <cantidad>2.38</cantidad>
+            <precioUnitario>165.00</precioUnitario>
+            <descuento>0</descuento>
+            <precioTotalSinImpuesto>392.70</precioTotalSinImpuesto>
+            <impuestos>
+                <impuesto>
+                    <codigo>2</codigo>
+                    <codigoPorcentaje>0</codigoPorcentaje>
+                    <tarifa>0.0</tarifa>
+                    <baseImponible>392.70</baseImponible>
+                    <valor>0.00</valor>
+                </impuesto>
+            </impuestos>
+        </detalle>
+    </detalles>
+    <infoAdicional>
+        <campoAdicional nombre="Telefono">090515326</campoAdicional>
+        <campoAdicional nombre="Email">sincorreo@gmail.com</campoAdicional>
+    </infoAdicional>
+<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Id="xmldsig-bc9e5602-b7fd-4d12-b111-aa767a10cf3e"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference Id="xmldsig-bc9e5602-b7fd-4d12-b111-aa767a10cf3e-ref0" URI="#comprobante"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>daC7Rh0pkPAlV8c9V9y3AxQi0DHMNojni6spP/TuSsA=</ds:DigestValue></ds:Reference><ds:Reference Type="http://uri.etsi.org/01903#SignedProperties" URI="#xmldsig-bc9e5602-b7fd-4d12-b111-aa767a10cf3e-signedprops"><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>h5xeZsyauxJHivnkigpvYInegO7dRHbm7iVJRmKWHHM=</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue Id="xmldsig-bc9e5602-b7fd-4d12-b111-aa767a10cf3e-sigvalue">JfelWJ/8YqGIaRuJEng5y7C1SjgzgNR226AaKknrVZ7LSAo7aRVnsPig7rLKhsHBj9kC0AZApehIYb7S60HSxJk05n+sEf4AiritoGHTbTdNbTVn9Vh0lIj+L/Gr3BPtwXOOmTw/vQ46+/8c732OfFsmLkF9m9TcV8SMwOqiM4zqu7IExu+VgUm8FoocEADzXdk+YEH5EysUVGv6uhjdadLusHf1ce1OGm3djvb+OVK//mHQ+nTm3W7RrLeEOVx4KDHjjwrQxuZC4GkIqHG8I1zHAklZ7aoRP0FNCFhjqrZv31wcSVERFLPAqwSknb0BFef1bIWNlemfpYfA42mmkg==</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>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</ds:X509Certificate></ds:X509Data></ds:KeyInfo><ds:Object><xades:QualifyingProperties xmlns:xades="http://uri.etsi.org/01903/v1.3.2#" xmlns:xades141="http://uri.etsi.org/01903/v1.4.1#" Target="#xmldsig-bc9e5602-b7fd-4d12-b111-aa767a10cf3e"><xades:SignedProperties Id="xmldsig-bc9e5602-b7fd-4d12-b111-aa767a10cf3e-signedprops"><xades:SignedSignatureProperties><xades:SigningTime>2026-09-09T11:11:12.783-05:00</xades:SigningTime><xades:SigningCertificate><xades:Cert><xades:CertDigest><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>ceD6kAJjIwiF9CxMMcTs09bCdmeQ5LtYmaKoIiZ8HzU=</ds:DigestValue></xades:CertDigest><xades:IssuerSerial><ds:X509IssuerName>L=AMBATO,CN=AUTORIDAD DE CERTIFICACION SUBCA-1 FIRMASEGURA S.A.S.,ST=TUNGURAHUA,OU=ENTIDAD DE CERTIFICACION DE INFORMACION,O=FIRMASEGURA S.A.S.,C=EC</ds:X509IssuerName><ds:X509SerialNumber>158420661718038814550955713200050757046</ds:X509SerialNumber></xades:IssuerSerial></xades:Cert></xades:SigningCertificate></xades:SignedSignatureProperties><xades:SignedDataObjectProperties><xades:DataObjectFormat ObjectReference="#xmldsig-bc9e5602-b7fd-4d12-b111-aa767a10cf3e-ref0"><xades:Description>FIRMA DIGITAL SRI</xades:Description><xades:MimeType>text/xml</xades:MimeType><xades:Encoding>UTF-8</xades:Encoding></xades:DataObjectFormat></xades:SignedDataObjectProperties></xades:SignedProperties></xades:QualifyingProperties></ds:Object></ds:Signature></liquidacionCompra>

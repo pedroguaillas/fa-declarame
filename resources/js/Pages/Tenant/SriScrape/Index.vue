@@ -488,6 +488,28 @@ async function submitAgent(): Promise<void> {
     }
 }
 
+// ─── Retry ──────────────────────────────────────────────────────────────────
+
+const retryingJobId = ref<number | null>(null);
+
+function retryJob(job: ScrapeJob) {
+    retryingJobId.value = job.id;
+    router.post(
+        route("tenant.sri-scrape.retry", job.id),
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                pollStatus();
+                startPolling();
+            },
+            onFinish: () => {
+                retryingJobId.value = null;
+            },
+        }
+    );
+}
+
 // ─── Submit ─────────────────────────────────────────────────────────────────
 
 function submit() {
@@ -815,6 +837,20 @@ defineOptions({ layout: TenantLayout });
                                     Reportes
                                     <ArrowRight class="size-3 opacity-60" />
                                 </Link>
+                            </div>
+
+                            <!-- Retry button for failed jobs -->
+                            <div v-else-if="job.status === 'failed'">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    class="h-auto gap-1.5 px-2.5 py-1 text-xs"
+                                    :disabled="retryingJobId === job.id"
+                                    @click="retryJob(job)"
+                                >
+                                    <RefreshCw class="size-3" :class="{ 'animate-spin': retryingJobId === job.id }" />
+                                    Reintentar
+                                </Button>
                             </div>
                         </div>
                     </div>

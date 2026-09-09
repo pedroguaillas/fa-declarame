@@ -12,3 +12,8 @@ Artisan::command('inspire', function () {
 //     ->dailyAt('00:03')
 //     ->timezone('America/Guayaquil')
 //     ->withoutOverlapping();
+
+Schedule::command('sri:rescue-stuck-jobs --hours=1 --mark-failed')
+    ->everyFifteenMinutes()
+    ->timezone('America/Guayaquil')
+    ->withoutOverlapping();

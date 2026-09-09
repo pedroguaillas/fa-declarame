@@ -9,7 +9,9 @@ use App\Models\Tenant\Scopes\CompanyScope;
 use App\Models\Tenant\Shop;
 use App\Models\Tenant\TaxSupport;
 use App\Models\Tenant\VoucherType;
+use Carbon\Carbon;
 use Constants;
+use SimpleXMLElement;
 
 class ShopImportService
 {
@@ -21,21 +23,32 @@ class ShopImportService
         'nota de débito' => '05',
     ];
 
-    private ?int $identificationTypeId = null;
-
     private ?int $taxSupportId = null;
 
     /** @var array<string, int> */
     private array $voucherTypeIdCache = [];
+
+    /** @var array<string, int> */
+    private array $identificationTypeIdCache = [];
 
     public function __construct(
         private readonly SriSoapService $sriSoapService,
         private readonly SriXmlParserService $xmlParser,
     ) {}
 
-    private function getIdentificationTypeId(): int
+    /**
+     * RUC (13 dígitos) o Cédula (10 dígitos); cualquier otra longitud se considera Pasaporte.
+     */
+    private function getIdentificationTypeId(string $identification): int
     {
-        return $this->identificationTypeId ??= IdentificationType::where('code_shop', Constants::RUC_COMPRA)->value('id');
+        $code = match (strlen($identification)) {
+            13 => Constants::RUC_COMPRA,
+            10 => Constants::CEDULA_COMPRA,
+            default => Constants::PASAPORTE_COMPRA,
+        };
+
+        return $this->identificationTypeIdCache[$code]
+            ??= IdentificationType::where('code_shop', $code)->value('id');
     }
 
     private function getTaxSupportId(): int
@@ -195,6 +208,9 @@ class ShopImportService
         return ['imported' => $imported, 'skipped' => $skipped];
     }
 
+    /** Raíces válidas de comprobante SRI que puede llegar "pelado" (sin el wrapper &lt;autorizacion&gt;). */
+    private const COMPROBANTE_ROOTS = ['factura', 'liquidacionCompra', 'notaCredito', 'notaDebito'];
+
     /**
      * Parse an SRI authorization XML string into a stdClass matching the SOAP response structure.
      */
@@ -208,19 +224,67 @@ class ShopImportService
             return null;
         }
 
-        // Handle both <autorizacion> root and wrapped structures
-        $autorizacion = $xml->getName() === 'autorizacion' ? $xml : ($xml->autorizacion ?? null);
+        $rootName = $xml->getName();
 
-        if ($autorizacion === null || ! isset($autorizacion->comprobante)) {
+        // Handle both <autorizacion> root and wrapped structures
+        $autorizacion = $rootName === 'autorizacion' ? $xml : ($xml->autorizacion ?? null);
+
+        if ($autorizacion !== null && isset($autorizacion->comprobante)) {
+            return (object) [
+                'estado' => (string) ($autorizacion->estado ?? 'AUTORIZADO'),
+                'numeroAutorizacion' => (string) ($autorizacion->numeroAutorizacion ?? ''),
+                'fechaAutorizacion' => (string) ($autorizacion->fechaAutorizacion ?? ''),
+                'comprobante' => (string) $autorizacion->comprobante,
+            ];
+        }
+
+        // Comprobante autorizado firmado directamente (sin wrapper <autorizacion>), como el que
+        // genera el propio contribuyente en Liquidación de Compra: la clave de acceso hace de
+        // número de autorización y la fecha de firma XAdES sirve de fecha de autorización.
+        if (! in_array($rootName, self::COMPROBANTE_ROOTS, true)) {
+            return null;
+        }
+
+        $claveAcceso = trim((string) ($xml->infoTributaria->claveAcceso ?? ''));
+
+        if ($claveAcceso === '') {
             return null;
         }
 
         return (object) [
-            'estado' => (string) ($autorizacion->estado ?? 'AUTORIZADO'),
-            'numeroAutorizacion' => (string) ($autorizacion->numeroAutorizacion ?? ''),
-            'fechaAutorizacion' => (string) ($autorizacion->fechaAutorizacion ?? ''),
-            'comprobante' => (string) $autorizacion->comprobante,
+            'estado' => 'AUTORIZADO',
+            'numeroAutorizacion' => $claveAcceso,
+            'fechaAutorizacion' => $this->extractSigningTime($xml) ?? $this->extractDateFromClaveAcceso($claveAcceso),
+            'comprobante' => $xmlContent,
         ];
+    }
+
+    private function extractSigningTime(SimpleXMLElement $xml): ?string
+    {
+        $xml->registerXPathNamespace('xades', 'http://uri.etsi.org/01903/v1.3.2#');
+        $nodes = $xml->xpath('//xades:SigningTime');
+
+        if (empty($nodes)) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse((string) $nodes[0])->format('Y-m-d H:i:s');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Clave de acceso: los primeros 8 dígitos son la fecha de emisión (ddMMyyyy).
+     */
+    private function extractDateFromClaveAcceso(string $claveAcceso): string
+    {
+        try {
+            return Carbon::createFromFormat('dmY', substr($claveAcceso, 0, 8))->format('Y-m-d H:i:s');
+        } catch (\Throwable) {
+            return now()->format('Y-m-d H:i:s');
+        }
     }
 
     /**
@@ -251,7 +315,7 @@ class ShopImportService
         $contact = Contact::firstOrCreate(
             ['identification' => trim($rucEmisor)],
             [
-                'identification_type_id' => $this->getIdentificationTypeId(),
+                'identification_type_id' => $this->getIdentificationTypeId(trim($rucEmisor)),
                 'name' => $sriData['razon_social_emisor'],
                 'provider_type' => strlen($rucEmisor) === 13 && in_array($rucEmisor[2], ['6', '9']) ? '02' : '01',
                 'contributor_type_id' => $sriData['contributor_type_id'],
