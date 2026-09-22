@@ -54,6 +54,24 @@ except ImportError:
         STEALTH_VERSION = 0
 
 
+# ─── Pagination ────────────────────────────────────────────────────────────────
+
+# Techo TOTAL por página en los loops de paginación (tabla/modal/XML). Medido en
+# producción: una página lenta de SRI puede tardar ~65s en cargar SIN estar
+# colgada — 2 min da margen para que esas terminen bien. Solo se corta esa
+# página si de verdad nunca responde; nunca cuelga el hilo del scraper.
+PAGINATION_PAGE_TIMEOUT_MS = 120000
+
+# La espera se trocea en bloques de este tamaño (ver _wait_for_page_settle) para
+# emitir progress() en cada uno — una página lenta pero viva se ve "esperando
+# SRI..." en la consola del agente en vez de quedar en silencio.
+PAGINATION_CHUNK_MS = 15000
+
+# Tope duro de páginas por consulta — red de seguridad si el paginador de SRI
+# nunca reporta "sin siguiente" (DOM inconsistente, bug del portal, etc.).
+PAGINATION_MAX_PAGES = 200
+
+
 # ─── URLs ─────────────────────────────────────────────────────────────────────
 
 SRI_URLS = {
@@ -261,6 +279,34 @@ def emit(event: str, data: dict) -> None:
 def progress(step: str, message: str) -> None:
     log(step, message)
     emit("progress", {"step": step, "message": message})
+
+
+def _wait_for_page_settle(
+    page: Page,
+    label: str,
+    page_num: int,
+    total_timeout_ms: int = PAGINATION_PAGE_TIMEOUT_MS,
+    chunk_ms: int = PAGINATION_CHUNK_MS,
+) -> None:
+    """Wait for the page to go network-idle after a paginator click, polling in
+    chunks so a legitimately slow SRI response (not a hang) reports progress
+    instead of looking frozen. Raises only if it never settles within
+    total_timeout_ms — the caller treats that as "this page never responded"."""
+    elapsed_ms = 0
+    while elapsed_ms < total_timeout_ms:
+        this_chunk = min(chunk_ms, total_timeout_ms - elapsed_ms)
+        try:
+            page.wait_for_load_state("networkidle", timeout=this_chunk)
+            return
+        except Exception:
+            elapsed_ms += this_chunk
+            if elapsed_ms < total_timeout_ms:
+                progress(
+                    label,
+                    f"Página {page_num}: SRI lento, esperando... "
+                    f"({elapsed_ms // 1000}s/{total_timeout_ms // 1000}s)",
+                )
+    raise TimeoutError(f"Página {page_num}: sin respuesta tras {total_timeout_ms // 1000}s")
 
 
 # ─── Layer 2: Human Behavior Simulation ──────────────────────────────────────
@@ -1419,8 +1465,31 @@ def scrape_modals_from_table(
         if not has_next:
             break
 
-        page.click(".ui-paginator-next:not(.ui-state-disabled)")
-        random_delay(0.5, 1.0)
+        if page_num >= PAGINATION_MAX_PAGES:
+            progress(
+                "modal-scrape",
+                f"Límite de {PAGINATION_MAX_PAGES} páginas alcanzado, cortando "
+                f"({len(remaining)} pendientes quedan como fallidos).",
+            )
+            failed_claves.extend(remaining)
+            break
+
+        try:
+            page.click(".ui-paginator-next:not(.ui-state-disabled)")
+            # SRI lento en el postback AJAX de la tabla: esperar hasta que la red
+            # se estabilice (o el techo) antes de leer la página siguiente — sin
+            # esto se podía leer el DOM aún no actualizado, o colgar el hilo si
+            # el postback nunca respondía.
+            _wait_for_page_settle(page, "modal-scrape", page_num)
+        except Exception as e:
+            progress(
+                "modal-scrape",
+                f"Página {page_num}: no se pudo avanzar de página ({e}), cortando "
+                f"({len(remaining)} pendientes quedan como fallidos).",
+            )
+            failed_claves.extend(remaining)
+            break
+
         page_num += 1
 
     progress(
@@ -1903,6 +1972,18 @@ def download_xmls_from_table(
                 progress("xml-tabla", f"Clave ≤30d, saltando XML ...{clave[-10:]}")
                 continue
 
+            # Verificación rápida (ms, no espera) antes de gastar los timeouts largos
+            # del click: si el id capturado al inicio de la página ya no está en el
+            # DOM (re-render JSF disparado por una fila anterior), re-resolverlo por
+            # clave en vez de esperar 20-40s contra un elemento que nunca va a aparecer.
+            if page.locator(f"[id='{link_id}']").count() == 0:
+                fresh_id = _find_xml_link_id(page, clave)
+                if not fresh_id:
+                    progress("xml-tabla", f"Botón XML ya no existe para ...{clave[-10:]}, omitiendo")
+                    continue
+                progress("xml-tabla", f"Id stale para ...{clave[-10:]}, re-resuelto: {fresh_id}")
+                link_id = fresh_id
+
             progress("xml-tabla", f"Click en {link_id} (clave ...{clave[-10:]})...")
             xml_content = _capture_xml_by_link_id(page, link_id)
 
@@ -1918,6 +1999,15 @@ def download_xmls_from_table(
                     except Exception:
                         pass
                     random_delay(1.0, 2.0)
+                    if page.locator(f"[id='{link_id}']").count() == 0:
+                        fresh_id = _find_xml_link_id(page, clave)
+                        if not fresh_id:
+                            progress(
+                                "xml-tabla",
+                                f"Botón XML sigue sin existir para ...{clave[-10:]}, abortando reintentos",
+                            )
+                            break
+                        link_id = fresh_id
                     xml_content = _capture_xml_by_link_id(page, link_id)
                     if xml_content:
                         break
@@ -1940,8 +2030,17 @@ def download_xmls_from_table(
         if not has_next:
             break
 
-        page.click(".ui-paginator-next:not(.ui-state-disabled)")
-        random_delay(0.5, 1.0)
+        if page_num >= PAGINATION_MAX_PAGES:
+            progress("xml-tabla", f"Límite de {PAGINATION_MAX_PAGES} páginas alcanzado, cortando.")
+            break
+
+        try:
+            page.click(".ui-paginator-next:not(.ui-state-disabled)")
+            _wait_for_page_settle(page, "xml-tabla", page_num)
+        except Exception as e:
+            progress("xml-tabla", f"Página {page_num}: no se pudo avanzar de página ({e}), cortando.")
+            break
+
         page_num += 1
 
     captured_claves = {r["clave"] for r in results}
@@ -2027,6 +2126,33 @@ def _capture_xml_by_link_id(page: Page, xml_link_id: str) -> str | None:
         page.remove_listener("response", on_xml_response)
 
 
+def _find_xml_link_id(page: Page, clave: str) -> str | None:
+    """Re-locate the XML download button for a clave by scanning the CURRENT DOM.
+
+    Un click previo (o su fallback de interceptor) puede disparar un re-render
+    parcial JSF que cambia los ids de botón de las filas restantes de la misma
+    página — reusar el id capturado al inicio de la página entonces espera contra
+    un elemento que ya no existe. Se llama solo cuando el id capturado ya no está
+    en el DOM, para resolverlo de nuevo por clave (estable) en vez de por id."""
+    return page.evaluate(
+        """(clave) => {
+        const xmlLinks = document.querySelectorAll('a[id$=":lnkXml"]');
+        for (const link of xmlLinks) {
+            const row = link.closest('tr');
+            if (!row) continue;
+            for (const a of row.querySelectorAll('a')) {
+                if ((a.textContent ?? '').trim() === clave) return link.id;
+            }
+            for (const inp of row.querySelectorAll('input[type="hidden"]')) {
+                if ((inp.value ?? '').trim() === clave) return link.id;
+            }
+        }
+        return null;
+    }""",
+        clave,
+    )
+
+
 # ─── Scrape Table ─────────────────────────────────────────────────────────────
 
 
@@ -2071,8 +2197,17 @@ def scrape_table_data(page: Page, tipo: str) -> list[str]:
         if not page_data["hasNext"]:
             break
 
-        page.click(".ui-paginator-next:not(.ui-state-disabled)")
-        random_delay(0.5, 1.0)
+        if page_num >= PAGINATION_MAX_PAGES:
+            progress("scrape", f"Límite de {PAGINATION_MAX_PAGES} páginas alcanzado, cortando.")
+            break
+
+        try:
+            page.click(".ui-paginator-next:not(.ui-state-disabled)")
+            _wait_for_page_settle(page, "scrape", page_num)
+        except Exception as e:
+            progress("scrape", f"Página {page_num}: no se pudo avanzar de página ({e}), cortando.")
+            break
+
         page_num += 1
 
     unique_claves = list(dict.fromkeys(all_claves))

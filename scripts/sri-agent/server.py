@@ -46,7 +46,7 @@ if sys.platform == "win32":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-AGENT_VERSION = "1.0.5"
+AGENT_VERSION = "1.0.6"
 
 # ─── Load test-scraper.py as module ──────────────────────────────────────────
 
@@ -493,6 +493,16 @@ def _scraper_thread_main(
                 _restore_recaptcha_cookies(user_data_dir)
             else:
                 scraper.progress("server", "Reusando navegador caliente (sesión viva).")
+
+            # handle_scrape corre en ESTE MISMO hilo — Playwright sync usa greenlets
+            # atados al hilo que abrió el navegador (start_browser, arriba); llamarlo
+            # desde otro hilo revienta con "Cannot switch to a different thread" en
+            # CUALQUIER acción, no solo al colgarse. Un watchdog de timeout duro para
+            # Playwright sync requeriría correr el job en un subproceso aparte (para
+            # poder matarlo desde afuera sin tocar sus objetos) — fuera de alcance
+            # por ahora. La protección real contra colgados vive en los timeouts por
+            # página (_wait_for_page_settle) y el resto de timeouts explícitos ya
+            # presentes en cada llamada a Playwright.
             result = handle_scrape(config)
             future.set_result(result)
             job_ok = True

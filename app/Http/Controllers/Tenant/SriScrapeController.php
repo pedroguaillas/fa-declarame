@@ -268,7 +268,7 @@ class SriScrapeController extends Controller
         }
 
         if ($job->status === 'pending') {
-            $job->update(['status' => 'running']);
+            $job->update(['status' => 'running', 'started_at' => now()]);
         }
 
         return response()->json(['ok' => true]);
