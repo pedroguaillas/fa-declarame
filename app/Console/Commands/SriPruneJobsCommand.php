@@ -10,7 +10,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 #[Signature('sri:prune-jobs
-    {--status=failed : Estados a eliminar, separados por coma (failed,running)}
+    {--status=failed : Estados a eliminar, separados por coma (failed,running,pending)}
     {--hours=1 : Horas mínimas en "running" para considerarse atascado (solo aplica a status=running)}
     {--days= : Eliminar solo jobs con más de N días de antigüedad (created_at)}
     {--tenant= : Limitar a un tenant específico por su ID}
@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
 #[Description('Elimina SriScrapeJobs en estado failed y/o running-atascado para desbloquear reintentos de clientes.')]
 class SriPruneJobsCommand extends Command
 {
-    private const ALLOWED_STATUSES = ['failed', 'running'];
+    private const ALLOWED_STATUSES = ['failed', 'running', 'pending'];
 
     public function handle(): int
     {
@@ -84,6 +84,10 @@ class SriPruneJobsCommand extends Command
                                     ->whereNull('completed_at')
                                     ->where('started_at', '<', $cutoff);
                             });
+                        }
+
+                        if (in_array('pending', $statuses, true)) {
+                            $q->orWhere('status', 'pending');
                         }
                     });
 

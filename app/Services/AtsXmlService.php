@@ -6,10 +6,11 @@ use App\Models\Tenant\Company;
 use App\Models\Tenant\Order;
 use App\Models\Tenant\Shop;
 use Carbon\Carbon;
+use Constants;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Normalizer;
 use SimpleXMLElement;
-use Constants;
 
 class AtsXmlService
 {
@@ -39,11 +40,19 @@ class AtsXmlService
             ->orderBy('emision')
             ->get();
 
+        $retentionTotals = DB::table('order_retention_items')
+            ->join('retentions', 'retentions.id', '=', 'order_retention_items.retention_id')
+            ->selectRaw("
+                order_retention_items.order_id,
+                SUM(CASE WHEN retentions.type = 'IVA' THEN order_retention_items.value ELSE 0 END) AS retention_iva,
+                SUM(CASE WHEN retentions.type = 'RENTA' THEN order_retention_items.value ELSE 0 END) AS retention_renta
+            ")
+            ->groupBy('order_retention_items.order_id');
+
         $orders = Order::query()
             ->join('contacts', 'contacts.id', '=', 'orders.contact_id')
             ->join('identification_types', 'identification_types.id', '=', 'contacts.identification_type_id')
-            ->leftJoin('order_retention_items', 'order_retention_items.order_id', '=', 'orders.id')
-            ->leftJoin('retentions', 'retentions.id', '=', 'order_retention_items.retention_id')
+            ->leftJoinSub($retentionTotals, 'order_retentions', 'order_retentions.order_id', '=', 'orders.id')
             ->join('voucher_types', 'voucher_types.id', '=', 'orders.voucher_type_id')
             ->where('orders.state', 'AUTORIZADO')
             ->when(
@@ -51,7 +60,7 @@ class AtsXmlService
                 fn ($q) => $q->whereBetween('orders.emision', [$startDate, $endDate]),
                 fn ($q) => $q->whereYear('orders.emision', $year)->whereMonth('orders.emision', $period),
             )
-            ->selectRaw("
+            ->selectRaw('
                 SUM(orders.no_iva) AS no_iva,
                 SUM(orders.exempt) AS exempt,
                 SUM(orders.base0) AS base0,
@@ -70,27 +79,14 @@ class AtsXmlService
                     orders.iva15
                 ) AS iva,
 
-                SUM(
-                    CASE
-                        WHEN retentions.type = 'IVA'
-                        THEN order_retention_items.value
-                        ELSE 0
-                    END
-                ) AS retention_iva,
-
-                SUM(
-                    CASE
-                        WHEN retentions.type = 'RENTA'
-                        THEN order_retention_items.value
-                        ELSE 0
-                    END
-                ) AS retention_renta,
+                SUM(COALESCE(order_retentions.retention_iva, 0)) AS retention_iva,
+                SUM(COALESCE(order_retentions.retention_renta, 0)) AS retention_renta,
 
                 COUNT(*) as num_compr,
                 contacts.identification,
                 identification_types.code_order AS identification_code,
                 voucher_types.code AS voucher_code
-            ")
+            ')
             ->groupBy(
                 'contacts.identification',
                 'identification_types.code_order',
