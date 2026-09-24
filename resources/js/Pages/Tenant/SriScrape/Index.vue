@@ -48,7 +48,7 @@ interface ScrapeJob {
     end_month: number | null;
     day: number | null;
     mode: string;
-    source: string;
+    source: "manual" | "agent" | "automatic";
     voucher_types: string[] | null;
     status: string;
     progress: { step: string; message: string } | null;
@@ -493,6 +493,11 @@ async function submitAgent(): Promise<void> {
 const retryingJobId = ref<number | null>(null);
 
 function retryJob(job: ScrapeJob) {
+    if (job.source === "agent") {
+        retryAgentJob(job);
+        return;
+    }
+
     retryingJobId.value = job.id;
     router.post(
         route("tenant.sri-scrape.retry", job.id),
@@ -508,6 +513,60 @@ function retryJob(job: ScrapeJob) {
             },
         }
     );
+}
+
+// Jobs de agente local corrieron en el navegador del usuario, no en el servidor —
+// reintentarlos significa volver a llamar al agente local directamente, igual que
+// al crear una descarga nueva (submitAgent), en vez de despachar un job en cola.
+async function retryAgentJob(job: ScrapeJob): Promise<void> {
+    retryingJobId.value = job.id;
+    agentError.value = null;
+    try {
+        const dispatchResp = await fetch(route("tenant.sri-scrape.retry", job.id), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                "X-XSRF-TOKEN": readXsrfToken(),
+            },
+        });
+
+        const dispatchData = await dispatchResp.json();
+
+        if (!dispatchResp.ok) {
+            agentError.value = dispatchData.error ?? "Error al preparar el reintento.";
+            return;
+        }
+
+        const agentResp = await fetch("http://localhost:8765/scrape", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(dispatchData.config),
+        });
+
+        if (!agentResp.ok) {
+            const agentData = await agentResp.json();
+            agentError.value = agentData.error ?? "Error al comunicar con el agente local.";
+            return;
+        }
+
+        if (dispatchData.jobId) {
+            fetch(route("tenant.sri-scrape.mark-running", { job: dispatchData.jobId }), {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "X-XSRF-TOKEN": readXsrfToken(),
+                },
+            }).catch(() => {});
+        }
+
+        pollStatus();
+        startPolling();
+    } catch {
+        agentError.value = "No se pudo conectar con el agente local. ¿Está corriendo?";
+    } finally {
+        retryingJobId.value = null;
+    }
 }
 
 // ─── Submit ─────────────────────────────────────────────────────────────────

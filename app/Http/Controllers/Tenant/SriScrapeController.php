@@ -277,17 +277,28 @@ class SriScrapeController extends Controller
     /**
      * Reintenta un job fallido: reutiliza el mismo registro (mismo período/tipo/comprobantes)
      * y lo vuelve a despachar. Respeta los mismos límites de reintentos que una descarga nueva.
+     *
+     * Los jobs con source "agent" corrieron originalmente en el navegador del usuario (agente
+     * local); no se pueden reintentar despachando un job en cola server-side, porque este
+     * servidor no tiene el navegador/Playwright para hacer el scraping. En ese caso devolvemos
+     * el config firmado (JSON) para que el frontend vuelva a llamar directamente al agente
+     * local, igual que en el flujo de creación (agentDispatch).
      */
-    public function retry(SriScrapeJob $job): RedirectResponse
+    public function retry(SriScrapeJob $job, SriScraperService $scraperService): RedirectResponse|JsonResponse
     {
         $company = company();
+        $isAgent = $job->source === 'agent';
+
+        $fail = fn (string $message) => $isAgent
+            ? response()->json(['error' => $message], 422)
+            : back()->with('error', $message);
 
         if ($job->company_id !== $company->id) {
             abort(403);
         }
 
         if ($job->status !== 'failed') {
-            return back()->with('error', 'Solo se pueden reintentar descargas con error.');
+            return $fail('Solo se pueden reintentar descargas con error.');
         }
 
         $existing = SriScrapeJob::where('company_id', $company->id)
@@ -296,7 +307,7 @@ class SriScrapeController extends Controller
             ->exists();
 
         if ($existing) {
-            return back()->with('error', 'Ya existe una descarga en progreso para este tipo.');
+            return $fail('Ya existe una descarga en progreso para este tipo.');
         }
 
         $previousJobs = SriScrapeJob::forPeriod(
@@ -311,7 +322,7 @@ class SriScrapeController extends Controller
             ->get(['status', 'result', 'voucher_types']);
 
         if ($blockReason = SriScrapeJob::blockReason($previousJobs, $job->voucher_types ?? [])) {
-            return back()->with('error', $blockReason);
+            return $fail($blockReason);
         }
 
         $job->update([
@@ -321,6 +332,15 @@ class SriScrapeController extends Controller
             'progress' => null,
             'error_message' => null,
         ]);
+
+        if ($isAgent) {
+            $tenantId = tenancy()->tenant->getTenantKey();
+
+            return response()->json([
+                'jobId' => $job->id,
+                'config' => $scraperService->buildAgentConfig($job, $company, $tenantId),
+            ]);
+        }
 
         ScrapeFromSriJob::dispatch(
             $job->id,
