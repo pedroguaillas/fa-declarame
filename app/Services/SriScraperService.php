@@ -294,9 +294,11 @@ class SriScraperService
         $totalIncompleteDays = 0;
         $missingClaves = [];
         $fileResults = [];
+        $failedFileMessages = [];
 
         foreach ($files as $file) {
             $type = $file['type'] ?? 'unknown';
+            $status = $file['status'] ?? 'no_content';
             $content = $file['content'] ?? '';
             $xmls = $file['xmls'] ?? [];
             $modalEntries = $file['modal_entries'] ?? [];
@@ -322,8 +324,24 @@ class SriScraperService
                 ? ($file['section'] ?? 'compras')
                 : $scrapeJob->type;
 
-            if ($file['status'] !== 'downloaded' || (empty($content) && empty($xmls) && empty($modalEntries) && empty($retentionModalEntries))) {
-                $fileResults[$type] = $file['status'] ?? 'no_content';
+            // 'no_records' es un resultado legítimo (el SRI no tenía nada para esa consulta).
+            // Cualquier otro status distinto de 'downloaded' (download_failed,
+            // download_button_not_found, error, captcha_failed) es un fallo real del scraper
+            // que puede dejar comprobantes visibles en el portal sin descargar — antes se
+            // perdía en silencio como si no hubiera nada, mostrando 0/0/0 sin avisar.
+            if ($status !== 'downloaded' && $status !== 'no_records') {
+                $rows = (int) ($file['rows'] ?? 0);
+                $totalErrors++;
+                $failedFileMessages[] = $rows > 0
+                    ? "{$type} ({$effectiveSection}): {$rows} comprobante(s) visibles en el SRI que no se pudieron descargar."
+                    : "{$type} ({$effectiveSection}): la consulta al SRI falló ({$status}).";
+                $fileResults[$type] = $status;
+
+                continue;
+            }
+
+            if ($status !== 'downloaded' || (empty($content) && empty($xmls) && empty($modalEntries) && empty($retentionModalEntries))) {
+                $fileResults[$type] = $status;
 
                 continue;
             }
@@ -432,6 +450,12 @@ class SriScraperService
                 'Descarga incompleta: %d comprobante(s) del portal SRI no se pudieron descargar%s. Vuelva a ejecutar la descarga para completarlos.',
                 $totalMissing,
                 $totalIncompleteDays > 0 ? " y {$totalIncompleteDays} día(s) no se pudieron consultar" : ''
+            );
+        }
+
+        if (! empty($failedFileMessages)) {
+            $updates['error_message'] = trim(
+                ($updates['error_message'] ?? '').' '.implode(' ', $failedFileMessages)
             );
         }
 

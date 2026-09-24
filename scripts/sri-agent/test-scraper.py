@@ -942,104 +942,77 @@ def download_for_voucher_type(
 
     progress(label, f"{table_info['rows']} registros, descargando reporte...")
 
-    # Find the PrimeFaces download link (has onclick + text "descargar")
-    target_id = page.evaluate("""() => {
+    # NOTA: antes esto hacía click en el link y capturaba la descarga por
+    # expect_download / CDP / interceptor de response. Los tres mecanismos
+    # crashean Chrome de forma reproducible (EXC_BAD_ACCESS/SIGSEGV, confirmado
+    # con crash reports del sistema) al completar la descarga — con Chrome real
+    # y con Chromium. El link solo dispara mojarra.jsfcljs(form, {...}), un
+    # submit NORMAL de formulario JSF (no AJAX) — se replica con un fetch()
+    # ejecutado DENTRO de la página (credentials same-origin usa la sesión ya
+    # autenticada). El navegador nunca ve esto como una descarga, así que no
+    # activa ningún download manager y no hay nada que pueda crashear.
+    result = page.evaluate("""async () => {
         const links = document.querySelectorAll('a');
+        let target = null;
         for (const link of links) {
             const text = (link.textContent || '').trim().toLowerCase();
             const hasOnclick = !!link.onclick || !!link.getAttribute('onclick');
-            if (hasOnclick && text.includes('descargar')) {
-                return link.id || null;
-            }
+            if (hasOnclick && text.includes('descargar')) { target = link; break; }
         }
-        return null;
+        if (!target) return { ok: false, reason: 'not_found' };
+
+        const form = target.closest('form');
+        if (!form) return { ok: false, reason: 'no_form', linkId: target.id };
+
+        const params = new URLSearchParams(new FormData(form));
+        params.set(target.id, target.id);
+
+        try {
+            const resp = await fetch(form.action, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString(),
+                credentials: 'same-origin',
+            });
+            const text = await resp.text();
+            return { ok: true, linkId: target.id, status: resp.status, content: text };
+        } catch (e) {
+            return { ok: false, reason: String(e), linkId: target.id };
+        }
     }""")
 
-    progress(label, f"Link de descarga: id={target_id}")
-
-    # Set up response interceptor to capture file content (PrimeFaces fallback)
-    captured = {"content": None, "filename": None}
-
-    def on_response(response):
-        content_type = response.headers.get("content-type", "")
-        content_disp = response.headers.get("content-disposition", "")
-        if (
-            "attachment" in content_disp
-            or "text/plain" in content_type
-            or "octet-stream" in content_type
-        ):
-            if "attachment" in content_disp or response.url != page.url:
-                try:
-                    raw = response.body()
-                    try:
-                        captured["content"] = raw.decode("utf-8")
-                    except UnicodeDecodeError:
-                        captured["content"] = raw.decode("latin-1")
-                    match = re.search(r'filename[*]?=["\']?([^"\';\n]+)', content_disp)
-                    if match:
-                        captured["filename"] = match.group(1).strip()
-                    progress(
-                        label,
-                        f"Respuesta interceptada: {len(captured['content'])} bytes, filename={captured['filename']}",
-                    )
-                except Exception:
-                    pass
-
-    if not target_id:
-        progress(label, "No se encontró link de descarga con onclick")
+    if not result.get("ok"):
+        if result.get("reason") == "not_found":
+            progress(label, "No se encontró link de descarga con onclick")
+            return {
+                "type": label,
+                "status": "download_button_not_found",
+                "content": None,
+                "xmls": [],
+                "rows": table_info["rows"],
+            }
+        progress(label, f"Fetch de descarga falló: {result.get('reason')}")
         return {
             "type": label,
-            "status": "download_button_not_found",
+            "status": "download_failed",
             "content": None,
             "xmls": [],
+            "rows": table_info["rows"],
         }
 
-    page.on("response", on_response)
-    final_content = None
-
-    try:
-        # Try Playwright download event first (click via JavaScript for PrimeFaces)
-        try:
-            with page.expect_download(timeout=30000) as download_info:
-                page.evaluate("(id) => document.getElementById(id).click()", target_id)
-
-            download = download_info.value
-            filename = download.suggested_filename or f"{label}.txt"
-            file_path = download_dir / filename
-            download.save_as(file_path)
-            raw = file_path.read_bytes()
-            try:
-                final_content = raw.decode("utf-8")
-            except UnicodeDecodeError:
-                final_content = raw.decode("latin-1")
-            file_path.unlink(missing_ok=True)
-            progress(label, f"Descargado via Playwright: {filename}")
-
-        except Exception as e:
-            progress(label, f"expect_download falló ({e}), verificando interceptor...")
-
-        if final_content is None and captured["content"]:
-            filename = captured["filename"] or f"{label}.txt"
-            progress(label, f"Descargado via interceptor: {filename}")
-            final_content = captured["content"]
-
-        if final_content is None:
-            # Fallback 2: wait a bit more for interceptor (PrimeFaces may be slow)
-            progress(label, "Esperando respuesta del servidor...")
-            for _ in range(20):
-                time.sleep(0.5)
-                if captured["content"]:
-                    final_content = captured["content"]
-                    filename = captured["filename"] or f"{label}.txt"
-                    progress(label, f"Descargado via interceptor (delayed): {filename}")
-                    break
-
-    finally:
-        page.remove_listener("response", on_response)
+    progress(label, f"Link de descarga: id={result['linkId']}")
+    final_content = result.get("content") or None
+    progress(label, f"Descargado via fetch: {len(final_content or '')} bytes (HTTP {result.get('status')})")
 
     if final_content is None:
         progress(label, "No se pudo capturar la descarga")
-        return {"type": label, "status": "download_failed", "content": None, "xmls": []}
+        return {
+            "type": label,
+            "status": "download_failed",
+            "content": None,
+            "xmls": [],
+            "rows": table_info["rows"],
+        }
 
     # ── Classify claves: recent (≤30d → SOAP) vs old (>30d → direct extract) ──
     claves = extract_claves_from_txt(final_content)
@@ -2054,76 +2027,49 @@ def download_xmls_from_table(
 
 
 def _capture_xml_by_link_id(page: Page, xml_link_id: str) -> str | None:
-    """Click an XML download link using a real Playwright click and capture the response.
+    """Descarga el XML de una fila vía fetch() directo, replicando el submit
+    JSF (mojarra.jsfcljs) que dispara el onclick del link.
 
-    The onclick calls mojarra.jsfcljs (JSF form POST). A JS .click() via page.evaluate
-    does NOT reliably trigger JSF form submissions in Playwright — a real browser-level
-    click via page.locator().click() is required to fire the onclick handler properly.
-
-    Selector uses [id='...'] attribute form to avoid CSS colon-escaping issues.
+    NOTA: antes esto hacía page.locator().click() + expect_download()/CDP para
+    capturar la respuesta. Ese mecanismo crashea Chrome de forma reproducible
+    (EXC_BAD_ACCESS/SIGSEGV, confirmado con crash reports del sistema) al
+    completar la descarga — con Chrome real y con Chromium. El fetch() corre
+    DENTRO de la página (credentials same-origin usa la sesión ya autenticada)
+    y el navegador nunca lo trata como una descarga, así que no hay download
+    manager que pueda crashear.
     """
-    captured = {"content": None}
+    result = page.evaluate(
+        """async (linkId) => {
+        const target = document.getElementById(linkId);
+        if (!target) return { ok: false, reason: 'not_found' };
 
-    def on_xml_response(response):
-        content_type = response.headers.get("content-type", "").lower()
-        content_disp = response.headers.get("content-disposition", "").lower()
-        if "xml" in content_type or (
-            "attachment" in content_disp and ".xml" in content_disp
-        ):
-            try:
-                raw = response.body()
-                try:
-                    captured["content"] = raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    captured["content"] = raw.decode("latin-1")
-            except Exception:
-                pass
+        const form = target.closest('form');
+        if (!form) return { ok: false, reason: 'no_form' };
 
-    # [id='...'] attribute selector avoids CSS colon-escaping for IDs like
-    # "frmPrincipal:tablaCompRecibidos:250:lnkXml"
-    selector = f"[id='{xml_link_id}']"
-    locator = page.locator(selector).first
+        const params = new URLSearchParams(new FormData(form));
+        params.set(linkId, linkId);
 
-    page.on("response", on_xml_response)
-    try:
-        # Attempt 1: real Playwright click + expect_download (JSF sends file as attachment)
-        try:
-            with page.expect_download(timeout=30000) as dl_info:
-                # force=True bypasses actionability checks (visibility, overlap, etc.)
-                # 20s timeout: SRI slows down after many rapid POSTbacks — 5s was too short.
-                locator.click(timeout=20000, force=True)
-            dl = dl_info.value
-            tmp_path = Path(dl.path()) if dl.path() else None
-            if tmp_path and tmp_path.exists():
-                raw = tmp_path.read_bytes()
-                try:
-                    return raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    return raw.decode("latin-1")
-        except Exception as e:
-            progress(
-                "xml-tabla", f"expect_download falló ({e}), intentando interceptor..."
-            )
+        try {
+            const resp = await fetch(form.action, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString(),
+                credentials: 'same-origin',
+            });
+            const text = await resp.text();
+            return { ok: true, status: resp.status, content: text };
+        } catch (e) {
+            return { ok: false, reason: String(e) };
+        }
+    }""",
+        xml_link_id,
+    )
 
-        # Attempt 2: response interceptor — JSF may stream XML inline (no download dialog)
-        # Wait for any pending navigation from attempt 1 before clicking again.
-        if not captured["content"]:
-            try:
-                page.wait_for_load_state("networkidle", timeout=10000)
-            except Exception:
-                pass
-            try:
-                locator.click(timeout=20000, force=True)
-            except Exception as e:
-                progress("xml-tabla", f"Click falló: {e}")
-            for _ in range(30):
-                time.sleep(0.5)
-                if captured["content"]:
-                    break
+    if not result.get("ok"):
+        progress("xml-tabla", f"Fetch de XML falló ({result.get('reason')})")
+        return None
 
-        return captured.get("content")
-    finally:
-        page.remove_listener("response", on_xml_response)
+    return result.get("content") or None
 
 
 def _find_xml_link_id(page: Page, clave: str) -> str | None:

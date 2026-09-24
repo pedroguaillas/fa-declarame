@@ -46,7 +46,7 @@ if sys.platform == "win32":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-AGENT_VERSION = "1.0.6"
+AGENT_VERSION = "1.0.7"
 
 # ─── Load test-scraper.py as module ──────────────────────────────────────────
 
@@ -275,6 +275,12 @@ def start_browser(user_data_dir: str | None = None, headless: bool = False, chan
         "--lang=es-EC,es",
         "--window-size=1366,768",
         "--window-position=0,0",
+        # Crash reproducible (EXC_BAD_ACCESS/SIGSEGV) al descargar un archivo: el
+        # thread principal muere dentro del RunLoop de AppKit/HIToolbox. Sospecha:
+        # la UI nativa de descarga (burbuja/badge del Dock) no tiene un contexto de
+        # app completo al correr como proceso de fondo (LaunchAgent) y crashea al
+        # intentar dibujarse. Se desactiva esa integración por completo.
+        "--disable-features=DownloadBubble,DownloadBubbleV2,DownloadShelf",
     ]
 
     # Disable GPU on Linux headless servers — no real GPU, Chrome crashes without this.
@@ -504,6 +510,24 @@ def _scraper_thread_main(
             # página (_wait_for_page_settle) y el resto de timeouts explícitos ya
             # presentes en cada llamada a Playwright.
             result = handle_scrape(config)
+
+            # Chrome real puede crashear a mitad de un job (visto en Mac y Windows:
+            # el proceso muere durante la descarga del reporte o la extracción de
+            # XMLs de tabla, dejando archivos en status "error"/"download_failed"
+            # aunque el SRI sí tenía datos — antes esto se perdía silenciosamente
+            # y salía 0/0/0). Si el navegador ya no responde tras el intento,
+            # reabrir con sesión limpia y reintentar el job completo una sola vez
+            # antes de rendirse.
+            if not _browser_is_alive():
+                scraper.progress(
+                    "server",
+                    "El navegador dejó de responder durante el job (crash) — reabriendo y reintentando...",
+                )
+                _close_browser()
+                start_browser(user_data_dir, headless=headless, channel=channel)
+                _restore_recaptcha_cookies(user_data_dir)
+                result = handle_scrape(config)
+
             future.set_result(result)
             job_ok = True
         except Exception as e:
@@ -848,7 +872,11 @@ def main():
         help="Saltar verificación de actualizaciones al arrancar",
     )
     import sys as _sys
-    _default_channel = "chrome" if _sys.platform == "darwin" else "chromium"
+    # Chrome real ("chrome") en macOS crashea de forma reproducible (EXC_BAD_ACCESS/
+    # SIGSEGV, confirmado con crash reports del sistema) al completar cualquier
+    # descarga de archivo, dejando el navegador muerto para el resto del job.
+    # Playwright Chromium no presenta este problema — se usa como default en macOS.
+    _default_channel = "chromium"
     parser.add_argument(
         "--channel",
         default=_default_channel,
