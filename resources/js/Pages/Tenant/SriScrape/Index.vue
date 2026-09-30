@@ -55,6 +55,7 @@ interface ScrapeJob {
     result: { imported: number; skipped: number; errors: number; missing?: number } | null;
     error_message: string | null;
     created_at: string;
+    started_at: string | null;
     completed_at: string | null;
 }
 
@@ -492,6 +493,22 @@ async function submitAgent(): Promise<void> {
 
 const retryingJobId = ref<number | null>(null);
 
+// Un job "running" sin avance durante más de 30 min se considera atascado
+// (agente local cerrado, worker muerto) y se habilita su reintento.
+const STUCK_AFTER_MINUTES = 30;
+
+function isStuckJob(job: ScrapeJob): boolean {
+    if (job.status !== "running" || job.completed_at) {
+        return false;
+    }
+    const since = new Date(job.started_at ?? job.created_at).getTime();
+    return Date.now() - since > STUCK_AFTER_MINUTES * 60 * 1000;
+}
+
+function canRetryJob(job: ScrapeJob): boolean {
+    return job.status === "failed" || isStuckJob(job);
+}
+
 function retryJob(job: ScrapeJob) {
     if (job.source === "agent") {
         retryAgentJob(job);
@@ -898,8 +915,11 @@ defineOptions({ layout: TenantLayout });
                                 </Link>
                             </div>
 
-                            <!-- Retry button for failed jobs -->
-                            <div v-else-if="job.status === 'failed'">
+                            <!-- Retry button: jobs con error o atascados en progreso más de 30 min -->
+                            <div v-else-if="canRetryJob(job)" class="flex flex-col items-end gap-1">
+                                <span v-if="isStuckJob(job)" class="text-xs text-amber-600 dark:text-amber-400">
+                                    Sin avance hace más de {{ STUCK_AFTER_MINUTES }} min
+                                </span>
                                 <Button
                                     variant="outline"
                                     size="sm"

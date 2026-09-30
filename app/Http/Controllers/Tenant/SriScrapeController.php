@@ -18,10 +18,13 @@ class SriScrapeController extends Controller
     /** Timeout del job semestral: 6 meses en una sola sesión puede tardar hasta ~30 min. */
     private const SEMESTER_JOB_TIMEOUT = 3600;
 
+    /** Minutos en "running" tras los cuales un job se considera atascado y se puede reintentar. */
+    public const STUCK_AFTER_MINUTES = 30;
+
     private const SELECT_COLUMNS = [
         'id', 'type', 'year', 'month', 'end_month', 'day', 'mode', 'source',
         'voucher_types', 'status', 'progress', 'result', 'error_message',
-        'created_at', 'completed_at',
+        'created_at', 'started_at', 'completed_at',
     ];
 
     public function index(): Response
@@ -275,6 +278,21 @@ class SriScrapeController extends Controller
     }
 
     /**
+     * Un job "running" sin callback durante más de STUCK_AFTER_MINUTES se considera
+     * atascado (agente local cerrado, servidor Python reiniciado, worker muerto) y
+     * se habilita su reintento. Si no tiene started_at se usa created_at.
+     */
+    public static function isStuck(SriScrapeJob $job): bool
+    {
+        if ($job->status !== 'running' || $job->completed_at !== null) {
+            return false;
+        }
+
+        return ($job->started_at ?? $job->created_at)
+            ->lt(now()->subMinutes(self::STUCK_AFTER_MINUTES));
+    }
+
+    /**
      * Reintenta un job fallido: reutiliza el mismo registro (mismo período/tipo/comprobantes)
      * y lo vuelve a despachar. Respeta los mismos límites de reintentos que una descarga nueva.
      *
@@ -297,12 +315,13 @@ class SriScrapeController extends Controller
             abort(403);
         }
 
-        if ($job->status !== 'failed') {
-            return $fail('Solo se pueden reintentar descargas con error.');
+        if ($job->status !== 'failed' && ! self::isStuck($job)) {
+            return $fail('Solo se pueden reintentar descargas con error o atascadas más de '.self::STUCK_AFTER_MINUTES.' minutos.');
         }
 
         $existing = SriScrapeJob::where('company_id', $company->id)
             ->where('type', $job->type)
+            ->where('id', '!=', $job->id)
             ->whereIn('status', ['pending', 'running'])
             ->exists();
 

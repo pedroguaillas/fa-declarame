@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLayout from "@/layouts/AppLayout.vue";
 import { Head, router } from "@inertiajs/vue3";
+import { computed, ref, watch } from "vue";
 import { Pencil } from "lucide-vue-next";
 import type { Paginator } from "@/types";
 import type { ActionPayload, ColumnDef } from "@/types/shared";
@@ -14,7 +15,29 @@ import TenantLayout from "@/layouts/TenantLayout.vue";
 
 const props = defineProps<{
     companies: Paginator<Company>;
+    filters: { search: string };
 }>();
+
+// ── Search ────────────────────────────────────────────
+const search = ref(props.filters.search);
+let debounceTimer: ReturnType<typeof setTimeout>;
+
+watch(search, (value) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        router.get(
+            route("tenant.companies.index"),
+            { search: value || undefined },
+            { preserveState: true, replace: true, only: ["companies", "filters"] },
+        );
+    }, 300);
+});
+
+const emptyText = computed(() =>
+    search.value
+        ? "Ningún contribuyente coincide con la búsqueda."
+        : "No hay contribuyentes registrados.",
+);
 
 const columns: ColumnDef<Company>[] = [
     { key: "ruc", label: "RUC" },
@@ -70,8 +93,11 @@ function handlePageChange(page: number) {
             class="flex flex-col gap-4 w-full"
         >
             <HeaderList
+                v-model="search"
                 title="Contribuyentes"
                 :description="`${companies.total} contribuyente${companies.total !== 1 ? 's' : ''} registrado${companies.total !== 1 ? 's' : ''}`"
+                :show-search="true"
+                search-placeholder="Buscar por RUC o nombre..."
                 link-label="Nuevo contribuyente"
                 :link-href="route('tenant.companies.create')"
             />
@@ -86,7 +112,7 @@ function handlePageChange(page: number) {
                         :items="companies.data"
                         :actions="actions"
                         actions-mode="icons"
-                        empty-text="No hay contribuyentes registrados."
+                        :empty-text="emptyText"
                         @select="handleSelect"
                         @action="handleAction"
                     />
@@ -99,7 +125,7 @@ function handlePageChange(page: number) {
                         :items="companies.data"
                         :actions="actions"
                         actions-mode="icons"
-                        empty-text="No hay contribuyentes registrados."
+                        :empty-text="emptyText"
                         @select="handleSelect"
                         @action="handleAction"
                     />

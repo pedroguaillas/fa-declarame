@@ -9,17 +9,31 @@ use App\Models\Tenant\Company;
 use App\Models\Tenant\ContributorType;
 use App\Services\SriResolveNameService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CompanyController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $companies = Company::orderBy('name')->paginate(20);
+        $search = (string) $request->input('search', '');
+
+        $companies = Company::when($search !== '', function ($query) use ($search): void {
+            $term = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $search).'%';
+
+            $query->where(function ($q) use ($term): void {
+                $q->where('name', 'ilike', $term)
+                    ->orWhere('ruc', 'ilike', $term);
+            });
+        })
+            ->orderBy('name')
+            ->paginate(20)
+            ->withQueryString();
 
         return Inertia::render('Tenant/Companies/Index', [
             'companies' => $companies,
+            'filters' => ['search' => $search],
         ]);
     }
 

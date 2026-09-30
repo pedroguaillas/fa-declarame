@@ -13,6 +13,7 @@ import {
     Contact,
     CloudDownload,
     ClipboardList,
+    Package,
 } from "lucide-vue-next";
 import type { User } from "@/types";
 import type { LucideIcon } from "lucide-vue-next";
@@ -110,6 +111,11 @@ export function useNavigation(user: User) {
             title: "Plan de cuentas",
             url: route("tenant.accounts.index"),
             icon: Book,
+        },
+        {
+            title: "Inventario de productos",
+            url: route("tenant.product-inventory.index"),
+            icon: Package,
         },
         {
             title: "Vinculación",

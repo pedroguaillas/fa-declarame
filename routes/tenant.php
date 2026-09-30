@@ -13,6 +13,7 @@ use App\Http\Controllers\Tenant\DashboardController as TenantDashboardController
 use App\Http\Controllers\Tenant\DeclarationController;
 use App\Http\Controllers\Tenant\EmployeeController;
 use App\Http\Controllers\Tenant\OrderController;
+use App\Http\Controllers\Tenant\ProductInventoryController;
 use App\Http\Controllers\Tenant\ProfileController as TenantProfileController;
 use App\Http\Controllers\Tenant\ReportController;
 use App\Http\Controllers\Tenant\RetentionController;
@@ -101,6 +102,9 @@ Route::middleware(['auth.tenant', 'check.tenant.subscription'])->group(function 
         Route::get('ajustes', [TenantSettingsController::class, 'edit'])->name('tenant.settings.edit');
         Route::post('ajustes', [TenantSettingsController::class, 'update'])->name('tenant.settings.update');
         Route::get('ajustes/logo', [TenantSettingsController::class, 'logo'])->name('tenant.settings.logo');
+
+        Route::get('inventario', [ProductInventoryController::class, 'index'])->name('tenant.product-inventory.index');
+        Route::get('inventario/export', [ProductInventoryController::class, 'export'])->name('tenant.product-inventory.export');
 
         Route::get('vinculacion', [ShopItemController::class, 'link'])->name('tenant.shop-items.link');
         Route::patch('vinculacion/assign', [ShopItemController::class, 'assignAccount'])->name('tenant.shop-items.assign-account');
