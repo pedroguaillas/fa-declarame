@@ -11,6 +11,7 @@ use App\Http\Controllers\SriScrapeCallbackController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\UserController;
+use App\Services\SriAgentManifestService;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -19,7 +20,8 @@ Route::post('/scrape-callback', [SriScrapeCallbackController::class, 'handle'])
     ->name('scrape.callback');
 
 // Desktop agent distribution — serves scripts and version manifest
-Route::get('/agent/version.json', fn () => response()->file(public_path('agent/version.json'), ['Content-Type' => 'application/json']));
+Route::get('/agent/version.json', fn (SriAgentManifestService $manifest) => response()->json($manifest->manifest())
+    ->header('Cache-Control', 'no-store'));
 Route::get('/agent/install.sh', fn () => response()->file(base_path('scripts/sri-agent/install.sh'), ['Content-Type' => 'text/plain']));
 Route::get('/agent/install.ps1', fn () => response()->file(base_path('scripts/sri-agent/install.ps1'), ['Content-Type' => 'text/plain']));
 Route::get('/agent/server.py', fn () => response()->file(base_path('scripts/sri-agent/server.py'), ['Content-Type' => 'text/plain']));

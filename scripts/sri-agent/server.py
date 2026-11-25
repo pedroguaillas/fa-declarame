@@ -22,6 +22,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -46,7 +47,14 @@ if sys.platform == "win32":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-AGENT_VERSION = "1.0.7"
+AGENT_VERSION = "1.0.8"
+
+# Archivos que se descargan al actualizar, en el orden en que se hashean.
+# Debe coincidir con SriAgentManifestService::AGENT_FILES en Laravel.
+AGENT_FILES = ("server.py", "test-scraper.py")
+
+# Cada cuánto, como mínimo, el agente en reposo vuelve a consultar version.json.
+UPDATE_CHECK_INTERVAL_S = 3600  # 1 h
 
 # ─── Load test-scraper.py as module ──────────────────────────────────────────
 
@@ -216,6 +224,32 @@ def _clear_sri_session() -> None:
 
 
 # ─── Auto-Update ─────────────────────────────────────────────────────────────
+#
+# version.json (generado por Laravel desde estos mismos archivos) trae:
+#   { "version": "1.0.8", "sha256": "<hash de server.py + test-scraper.py>" }
+#
+# Se actualiza cuando el remoto tiene versión MAYOR, o la MISMA versión pero
+# distinto contenido (cambio desplegado sin subir AGENT_VERSION). Nunca se hace
+# downgrade: si el remoto quedó atrás (prod sin deployar), se respeta lo local.
+#
+# Se verifica al arrancar y, mientras el agente corre, cada
+# UPDATE_CHECK_INTERVAL_S cuando está en reposo (sin jobs en cola).
+
+# URL base de actualización (None = auto-update desactivado).
+_update_url: str | None = None
+
+# Servidor HTTP activo, para poder detenerlo y reiniciar tras actualizar.
+_http_server: HTTPServer | None = None
+
+# Señal del hilo scraper al hilo principal: reiniciar con la versión nueva.
+_restart_for_update = Event()
+
+_update_state = {
+    "last_check": 0.0,
+    # Archivos ya reemplazados en disco pero el reinicio quedó pendiente
+    # porque llegó un job justo antes de reiniciar.
+    "pending_restart": False,
+}
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:
@@ -225,34 +259,134 @@ def _version_tuple(v: str) -> tuple[int, ...]:
         return (0,)
 
 
-def _check_for_updates(update_url: str) -> None:
-    """Check remote version.json; if newer, download updated .py files and restart."""
+def _content_hash(contents: list[bytes]) -> str:
+    digest = hashlib.sha256()
+    for chunk in contents:
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _local_content_hash() -> str:
+    agent_dir = Path(__file__).parent
+    return _content_hash([(agent_dir / name).read_bytes() for name in AGENT_FILES])
+
+
+def _fetch_manifest(update_url: str) -> dict:
+    req = urllib.request.Request(
+        update_url.rstrip("/") + "/version.json",
+        headers={"User-Agent": f"SRI-Agent/{AGENT_VERSION}", "Cache-Control": "no-cache"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read())
+
+
+def _needs_update(manifest: dict) -> bool:
+    remote_version = manifest.get("version", "")
+    if not remote_version:
+        return False
+
+    remote, local = _version_tuple(remote_version), _version_tuple(AGENT_VERSION)
+    if remote > local:
+        return True
+    if remote < local:
+        return False
+
+    remote_hash = manifest.get("sha256")
+    return bool(remote_hash) and remote_hash != _local_content_hash()
+
+
+def _download_update(update_url: str, manifest: dict) -> None:
+    """Descarga todos los archivos, verifica el hash y recién entonces los reemplaza.
+
+    Si el hash no coincide (p.ej. deploy a medio camino), no se toca nada en disco.
+    """
+    base_url = update_url.rstrip("/")
+    downloaded: list[bytes] = []
+    for filename in AGENT_FILES:
+        req = urllib.request.Request(
+            f"{base_url}/{filename}",
+            headers={"User-Agent": f"SRI-Agent/{AGENT_VERSION}", "Cache-Control": "no-cache"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            downloaded.append(resp.read())
+
+    expected_hash = manifest.get("sha256")
+    if expected_hash and _content_hash(downloaded) != expected_hash:
+        raise RuntimeError("los archivos descargados no coinciden con el hash publicado (¿deploy en curso?)")
+
+    agent_dir = Path(__file__).parent
+    for filename, contents in zip(AGENT_FILES, downloaded):
+        tmp_path = agent_dir / f".{filename}.tmp"
+        tmp_path.write_bytes(contents)
+        os.replace(tmp_path, agent_dir / filename)
+        scraper.progress("update", f"  {filename} actualizado.")
+
+
+def _apply_available_update(update_url: str) -> bool:
+    """Consulta el manifiesto y, si hay versión nueva, la descarga. True si actualizó."""
+    _update_state["last_check"] = time.monotonic()
     try:
         scraper.progress("update", f"Verificando actualizaciones en {update_url} ...")
-        req = urllib.request.Request(
-            update_url.rstrip("/") + "/version.json",
-            headers={"User-Agent": f"SRI-Agent/{AGENT_VERSION}"},
-        )
-        resp = urllib.request.urlopen(req, timeout=10)
-        data = json.loads(resp.read())
-        remote_version = data.get("version", "")
-        # Comparar numéricamente, no solo desigualdad: si el remoto (p.ej. prod
-        # sin deployar aún) queda desactualizado respecto al agente local, no
-        # hay que hacer downgrade — eso pisaba fixes recién copiados a mano.
-        if not remote_version or _version_tuple(remote_version) <= _version_tuple(AGENT_VERSION):
+        manifest = _fetch_manifest(update_url)
+        if not _needs_update(manifest):
             scraper.progress("update", f"Versión {AGENT_VERSION} al día.")
-            return
-        scraper.progress("update", f"Nueva versión {remote_version} disponible. Actualizando...")
-        agent_dir = Path(__file__).parent
-        base_url = update_url.rstrip("/")
-        for filename in ("server.py", "test-scraper.py"):
-            dest = agent_dir / filename
-            urllib.request.urlretrieve(f"{base_url}/{filename}", dest)
-            scraper.progress("update", f"  {filename} actualizado.")
-        scraper.progress("update", "Reiniciando agente con nueva versión...")
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+            return False
+        remote_version = manifest.get("version")
+        if remote_version == AGENT_VERSION:
+            scraper.progress("update", f"Hay cambios publicados para v{AGENT_VERSION}. Actualizando...")
+        else:
+            scraper.progress(
+                "update",
+                f"Nueva versión {remote_version} disponible (local {AGENT_VERSION}). Actualizando...",
+            )
+        _download_update(update_url, manifest)
+        return True
     except Exception as e:
         scraper.progress("update", f"Advertencia: no se pudo verificar actualización: {e}")
+        return False
+
+
+def _restart_process() -> None:
+    scraper.progress("update", "Reiniciando agente con nueva versión...")
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+
+def _check_for_updates(update_url: str) -> None:
+    """Verificación al arrancar: si hay versión nueva, actualiza y reinicia de inmediato."""
+    if _apply_available_update(update_url):
+        _restart_process()
+
+
+def _maybe_update_while_idle(user_data_dir: str | None) -> bool:
+    """Llamado desde el hilo scraper en reposo. True si se pidió reinicio.
+
+    Corre en el hilo scraper porque es el dueño del navegador (Playwright no es
+    thread-safe): cierra el navegador aquí y luego detiene el servidor HTTP para
+    que el hilo principal reinicie el proceso.
+    """
+    if not _update_url or _http_server is None:
+        return False
+
+    if not _update_state["pending_restart"]:
+        if time.monotonic() - _update_state["last_check"] < UPDATE_CHECK_INTERVAL_S:
+            return False
+        if not _apply_available_update(_update_url):
+            return False
+
+    if not _work_queue.empty():
+        # Llegó un job: atenderlo primero y reiniciar en el próximo reposo.
+        _update_state["pending_restart"] = True
+        scraper.progress("update", "Actualización descargada; se aplicará al terminar los jobs en cola.")
+        return False
+
+    if _browser_is_open():
+        _save_recaptcha_cookies(user_data_dir)
+        _close_browser()
+
+    _restart_for_update.set()
+    # shutdown() bloquea hasta que serve_forever() termine en el hilo principal.
+    _http_server.shutdown()
+    return True
 
 
 # ─── Browser Lifecycle ──────────────────────────────────────────────────────
@@ -477,6 +611,8 @@ def _scraper_thread_main(
                 )
                 _save_recaptcha_cookies(user_data_dir)
                 _close_browser()
+            if _maybe_update_while_idle(user_data_dir):
+                break  # El hilo principal reinicia el proceso con la versión nueva.
             continue
 
         if work is None:
@@ -745,6 +881,7 @@ class ScrapeRequestHandler(BaseHTTPRequestHandler):
                 {
                     "status": "ok",
                     "version": AGENT_VERSION,
+                    "sha256": _local_content_hash(),
                     "logged_in_ruc": _browser_state["logged_in_ruc"],
                 },
             )
@@ -898,7 +1035,10 @@ def main():
         f"Stealth: {'v' + str(scraper.STEALTH_VERSION) if scraper.STEALTH_VERSION else 'NO'}",
     )
 
+    global _update_url, _http_server
+
     if args.update_url and not args.no_update:
+        _update_url = args.update_url
         _check_for_updates(args.update_url)
 
     channel_label = f"Chrome real ({args.channel})" if args.channel != "chromium" else "Playwright Chromium"
@@ -920,6 +1060,7 @@ def main():
     _browser_ready.wait()
 
     server = HTTPServer((args.host, args.port), ScrapeRequestHandler)
+    _http_server = server
     scraper.progress("server", f"Servidor escuchando en http://{args.host}:{args.port}")
     scraper.progress(
         "server", "POST /scrape  — enviar { ruc, password, type, year, month, mode }"
@@ -933,6 +1074,11 @@ def main():
         server.shutdown()
         _work_queue.put(None)  # Signal scraper thread to stop
         _close_browser()
+        return
+
+    if _restart_for_update.is_set():
+        server.server_close()
+        _restart_process()
 
 
 if __name__ == "__main__":

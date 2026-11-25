@@ -309,6 +309,69 @@ def _wait_for_page_settle(
     raise TimeoutError(f"Página {page_num}: sin respuesta tras {total_timeout_ms // 1000}s")
 
 
+def _first_row_marker(page: Page) -> str | None:
+    """Marca de la primera fila visible de la tabla paginada (data-ri de PrimeFaces,
+    que es el índice absoluto de fila: 0, 50, 100...). Cambia SOLO cuando el DOM
+    de la página siguiente ya se renderizó."""
+    return page.evaluate(
+        """() => {
+        const row = document.querySelector('tbody tr[data-ri]');
+        if (row) return row.getAttribute('data-ri');
+        const link = document.querySelector('a[id$=":lnkXml"]');
+        return link ? link.id : null;
+    }"""
+    )
+
+
+def _click_next_page(page: Page, label: str, page_num: int) -> None:
+    """Click en "siguiente" y esperar a que la tabla REALMENTE cambie.
+
+    wait_for_load_state("networkidle") no sirve para el postback AJAX del
+    paginador: el load state del documento ya se alcanzó y retorna al instante,
+    así que se leía el DOM de la página anterior (ids stale → "Botón XML ya no
+    existe" para todas las filas de las páginas 3+)."""
+    previous = _first_row_marker(page)
+    page.click(".ui-paginator-next:not(.ui-state-disabled)")
+
+    if previous is None:
+        _wait_for_page_settle(page, label, page_num)
+        return
+
+    elapsed_ms = 0
+    while elapsed_ms < PAGINATION_PAGE_TIMEOUT_MS:
+        this_chunk = min(PAGINATION_CHUNK_MS, PAGINATION_PAGE_TIMEOUT_MS - elapsed_ms)
+        try:
+            page.wait_for_function(
+                """(prev) => {
+                const row = document.querySelector('tbody tr[data-ri]');
+                const cur = row ? row.getAttribute('data-ri')
+                    : (document.querySelector('a[id$=":lnkXml"]') || {}).id;
+                return cur != null && cur !== prev;
+            }""",
+                arg=previous,
+                timeout=this_chunk,
+            )
+            break
+        except Exception:
+            elapsed_ms += this_chunk
+            if elapsed_ms < PAGINATION_PAGE_TIMEOUT_MS:
+                progress(
+                    label,
+                    f"Página {page_num}: SRI lento, esperando... "
+                    f"({elapsed_ms // 1000}s/{PAGINATION_PAGE_TIMEOUT_MS // 1000}s)",
+                )
+    else:
+        raise TimeoutError(
+            f"Página {page_num}: la tabla no cambió tras {PAGINATION_PAGE_TIMEOUT_MS // 1000}s"
+        )
+
+    # Tabla nueva ya en el DOM; dejar terminar requests colgantes (no bloqueante).
+    try:
+        page.wait_for_load_state("networkidle", timeout=5000)
+    except Exception:
+        pass
+
+
 # ─── Layer 2: Human Behavior Simulation ──────────────────────────────────────
 
 
@@ -1448,12 +1511,9 @@ def scrape_modals_from_table(
             break
 
         try:
-            page.click(".ui-paginator-next:not(.ui-state-disabled)")
-            # SRI lento en el postback AJAX de la tabla: esperar hasta que la red
-            # se estabilice (o el techo) antes de leer la página siguiente — sin
-            # esto se podía leer el DOM aún no actualizado, o colgar el hilo si
-            # el postback nunca respondía.
-            _wait_for_page_settle(page, "modal-scrape", page_num)
+            # Espera a que la tabla cambie de verdad (data-ri de la 1ª fila) — ver
+            # _click_next_page; networkidle solo no detecta el postback AJAX.
+            _click_next_page(page, "modal-scrape", page_num)
         except Exception as e:
             progress(
                 "modal-scrape",
@@ -1929,6 +1989,7 @@ def download_xmls_from_table(
         progress(
             "xml-tabla", f"Página {page_num}: {len(items)} botones XML encontrados"
         )
+        progress("xml-tabla", f"Página {page_num} estado: {_table_state(page)}")
 
         for item in items:
             link_id = item.get("linkId", "")
@@ -1952,7 +2013,11 @@ def download_xmls_from_table(
             if page.locator(f"[id='{link_id}']").count() == 0:
                 fresh_id = _find_xml_link_id(page, clave)
                 if not fresh_id:
-                    progress("xml-tabla", f"Botón XML ya no existe para ...{clave[-10:]}, omitiendo")
+                    progress(
+                        "xml-tabla",
+                        f"Botón XML ya no existe para ...{clave[-10:]} ({link_id}), omitiendo. "
+                        f"Estado: {_table_state(page)}",
+                    )
                     continue
                 progress("xml-tabla", f"Id stale para ...{clave[-10:]}, re-resuelto: {fresh_id}")
                 link_id = fresh_id
@@ -2008,8 +2073,7 @@ def download_xmls_from_table(
             break
 
         try:
-            page.click(".ui-paginator-next:not(.ui-state-disabled)")
-            _wait_for_page_settle(page, "xml-tabla", page_num)
+            _click_next_page(page, "xml-tabla", page_num)
         except Exception as e:
             progress("xml-tabla", f"Página {page_num}: no se pudo avanzar de página ({e}), cortando.")
             break
@@ -2069,7 +2133,51 @@ def _capture_xml_by_link_id(page: Page, xml_link_id: str) -> str | None:
         progress("xml-tabla", f"Fetch de XML falló ({result.get('reason')})")
         return None
 
-    return result.get("content") or None
+    content = result.get("content") or ""
+    head = content[:4000].lower()
+    is_html = "<html" in head or "<!doctype html" in head or "<partial-response" in head
+    if not content or is_html:
+        dump = _dump_debug("xml-no-valido", content)
+        progress(
+            "xml-tabla",
+            f"Respuesta no es XML (HTTP {result.get('status')}, {len(content)} bytes) "
+            f"para {xml_link_id} — guardada en {dump}",
+        )
+        return None
+
+    return content
+
+
+def _dump_debug(prefix: str, content: str) -> str:
+    """Guarda una respuesta inesperada en ~/.sri-agent/debug/ para inspección."""
+    try:
+        debug_dir = Path.home() / ".sri-agent" / "debug"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        path = debug_dir / f"{prefix}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.html"
+        path.write_text(content or "", encoding="utf-8")
+        return str(path)
+    except Exception as e:
+        return f"(no se pudo guardar: {e})"
+
+
+def _table_state(page: Page) -> str:
+    """Resumen del estado visible de la tabla paginada para diagnóstico."""
+    try:
+        return page.evaluate(
+            """() => {
+            const ris = [...document.querySelectorAll('tbody tr[data-ri]')]
+                .map(r => r.getAttribute('data-ri'));
+            const links = document.querySelectorAll('a[id$=":lnkXml"]');
+            const active = document.querySelector('.ui-paginator-page.ui-state-active');
+            const current = document.querySelector('.ui-paginator-current');
+            return `filas=${ris.length} data-ri=${ris[0] ?? '-'}..${ris[ris.length - 1] ?? '-'}`
+                + ` lnkXml=${links.length} primerId=${links[0]?.id ?? '-'}`
+                + ` pagActiva=${active?.textContent?.trim() ?? '-'}`
+                + ` paginador=${current?.textContent?.trim() ?? '-'}`;
+        }"""
+        )
+    except Exception as e:
+        return f"(estado no disponible: {e})"
 
 
 def _find_xml_link_id(page: Page, clave: str) -> str | None:
@@ -2148,8 +2256,7 @@ def scrape_table_data(page: Page, tipo: str) -> list[str]:
             break
 
         try:
-            page.click(".ui-paginator-next:not(.ui-state-disabled)")
-            _wait_for_page_settle(page, "scrape", page_num)
+            _click_next_page(page, "scrape", page_num)
         except Exception as e:
             progress("scrape", f"Página {page_num}: no se pudo avanzar de página ({e}), cortando.")
             break
