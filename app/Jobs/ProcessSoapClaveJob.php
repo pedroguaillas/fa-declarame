@@ -14,9 +14,11 @@ use App\Services\ShopRetentionImportService;
 use App\Services\SriSoapService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Jobs\SyncJob;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Sleep;
 
 class ProcessSoapClaveJob implements ShouldQueue
 {
@@ -59,14 +61,77 @@ class ProcessSoapClaveJob implements ShouldQueue
             );
         };
 
+        $processStarted = false;
+
         try {
+            // block() espera turno en vez de fallar al instante: con la cola `sync`
+            // release() no reencola nada y el comprobante se perdía en silencio.
             Redis::throttle('sri-soap')
                 ->allow(2)->every(1)
-                ->then($process, fn () => $this->release(5));
-        } catch (\Throwable) {
+                ->block(30)
+                ->then(function () use ($process, &$processStarted) {
+                    $processStarted = true;
+                    $process();
+                }, fn () => $this->retryLaterOrFail('throttle'));
+        } catch (\Throwable $exception) {
+            if ($processStarted) {
+                throw $exception;
+            }
+
             // Redis not available — process without throttling
             $process();
         }
+    }
+
+    /**
+     * Whether this job runs on a real queue where release() re-queues it.
+     */
+    private function canBeReleased(): bool
+    {
+        return $this->job !== null && ! $this->job instanceof SyncJob;
+    }
+
+    /**
+     * Re-queue the job, or count it as an error when it cannot be retried.
+     */
+    private function retryLaterOrFail(string $reason, int $delay = 5): void
+    {
+        if ($this->canBeReleased() && $this->attempts() < $this->tries) {
+            $this->release($delay);
+
+            return;
+        }
+
+        Log::warning('ProcessSoapClaveJob: no se pudo procesar la clave', [
+            'clave' => $this->claveAcceso,
+            'company_id' => $this->companyId,
+            'scrape_type' => $this->scrapeType,
+            'reason' => $reason,
+        ]);
+
+        $this->incrementScrapeJobResult('errors');
+    }
+
+    /**
+     * Ask SRI for the authorization. On the sync queue release() is a no-op,
+     * so retries happen inline with a short pause instead.
+     *
+     * @return object|array<int, object>|null
+     */
+    private function authorizeClave(SriSoapService $sriSoapService): mixed
+    {
+        $autorizacion = $sriSoapService->authorize($this->claveAcceso);
+
+        if ($this->canBeReleased()) {
+            return $autorizacion;
+        }
+
+        for ($retry = 1; $autorizacion === null && $retry < $this->tries; $retry++) {
+            Sleep::for(2)->seconds();
+            $autorizacion = $sriSoapService->authorize($this->claveAcceso);
+        }
+
+        return $autorizacion;
     }
 
     private function processClave(
@@ -86,24 +151,12 @@ class ProcessSoapClaveJob implements ShouldQueue
         }
 
         $company = Company::findOrFail($this->companyId);
-        $autorizacion = $sriSoapService->authorize($this->claveAcceso);
+        $autorizacion = $this->authorizeClave($sriSoapService);
 
         if ($autorizacion === null) {
             $attempt = $this->attempts();
-            if ($attempt < $this->tries) {
-                $delay = $this->backoff[min($attempt - 1, count($this->backoff) - 1)] ?? 10;
-                $this->release($delay);
-
-                return;
-            }
-
-            Log::warning('ProcessSoapClaveJob: SRI SOAP no respondió después de todos los intentos', [
-                'clave' => $this->claveAcceso,
-                'company_id' => $this->companyId,
-                'scrape_type' => $this->scrapeType,
-            ]);
-
-            $this->incrementScrapeJobResult('errors');
+            $delay = $this->backoff[min($attempt - 1, count($this->backoff) - 1)] ?? 10;
+            $this->retryLaterOrFail('SRI SOAP no respondió', $delay);
 
             return;
         }
