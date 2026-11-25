@@ -4,6 +4,7 @@ namespace App\Http\Requests\Tenant;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreCompanyRequest extends FormRequest
 {
@@ -18,7 +19,7 @@ class StoreCompanyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'ruc' => ['required', 'string', 'digits:13', 'unique:companies,ruc'],
+            'ruc' => ['required', 'string', 'digits:13', Rule::unique('companies', 'ruc')->withoutTrashed()],
             'name' => ['required', 'string', 'max:300'],
             'matrix_address' => ['required', 'string', 'max:300'],
             'contributor_type_id' => ['required', 'integer', 'exists:contributor_types,id'],

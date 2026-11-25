@@ -41,6 +41,7 @@ class ReportAggregationTest extends TestCase
         Schema::create('companies', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->softDeletes();
         });
 
         Schema::create('voucher_types', function (Blueprint $table) {

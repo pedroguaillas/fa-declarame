@@ -7,6 +7,7 @@ use App\Models\Tenant\Company;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,7 +38,7 @@ class CompanyScopeController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
-            'company_id' => ['required', 'integer', 'exists:companies,id'],
+            'company_id' => ['required', 'integer', Rule::exists('companies', 'id')->withoutTrashed()],
         ]);
 
         session(['current_company_id' => $request->integer('company_id')]);

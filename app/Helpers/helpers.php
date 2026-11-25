@@ -6,18 +6,15 @@ use App\Models\TenantUser;
 use App\Models\User as CentralUser;
 use Illuminate\Support\Facades\Auth;
 
-
 function user(): CentralUser|TenantUser|null
 {
     return Auth::user() ?? Auth::guard('tenant')->user();
 }
 
-
 function isAuthenticated(): bool
 {
     return Auth::check() || Auth::guard('tenant')->check();
 }
-
 
 function isTenant(): bool
 {
@@ -32,7 +29,7 @@ function currentTenant(): ?Tenant
 function isTenantAdmin(): bool
 {
     $tenant = currentTenant();
-    $user   = Auth::user();
+    $user = Auth::user();
 
     return $tenant !== null
         && $user !== null
@@ -40,12 +37,10 @@ function isTenantAdmin(): bool
         && $user->tenant_id === $tenant->id;
 }
 
-
 function isTenantEmployee(): bool
 {
     return Auth::guard('tenant')->check();
 }
-
 
 function company(): ?Company
 {
@@ -54,7 +49,7 @@ function company(): ?Company
 
     $companyId = session('current_company_id');
 
-    if (!$companyId) {
+    if (! $companyId) {
         return null;
     }
 
@@ -62,7 +57,7 @@ function company(): ?Company
         return $cached;
     }
 
-    $cached = Company::withoutGlobalScopes()->find($companyId);
+    $cached = Company::find($companyId);
     $cachedId = $companyId;
 
     return $cached;

@@ -2,7 +2,7 @@
 import AppLayout from "@/layouts/AppLayout.vue";
 import { Head, router } from "@inertiajs/vue3";
 import { computed, ref, watch } from "vue";
-import { Pencil } from "lucide-vue-next";
+import { Pencil, Trash2 } from "lucide-vue-next";
 import type { Paginator } from "@/types";
 import type { ActionPayload, ColumnDef } from "@/types/shared";
 import { Company } from "@/types/tenant";
@@ -12,6 +12,7 @@ import DataTableMobile from "@/components/Shared/DataTableMobile.vue";
 import HeaderList from "@/components/Shared/HeaderList.vue";
 import Pagination from "@/components/Shared/Pagination.vue";
 import TenantLayout from "@/layouts/TenantLayout.vue";
+import CompanyDeleteDialog from "./components/CompanyDeleteDialog.vue";
 
 const props = defineProps<{
     companies: Paginator<Company>;
@@ -68,11 +69,27 @@ const actions = [
         label: "Editar",
         icon: Pencil,
     },
+    {
+        event: "delete",
+        label: "Eliminar",
+        separator: true,
+        class: "text-destructive focus:text-destructive",
+        icon: Trash2,
+    },
 ];
+
+// ── Delete ────────────────────────────────────────────
+const deleteDialogOpen = ref(false);
+const companyToDelete = ref<Company | null>(null);
 
 function handleAction({ event, item }: ActionPayload<Company>) {
     if (event === "edit") {
         router.visit(route("tenant.companies.edit", { id: item.id }));
+    }
+
+    if (event === "delete") {
+        companyToDelete.value = item;
+        deleteDialogOpen.value = true;
     }
 }
 
@@ -135,6 +152,11 @@ function handlePageChange(page: number) {
             <Pagination
                 :paginator="companies"
                 @change-page="handlePageChange"
+            />
+
+            <CompanyDeleteDialog
+                v-model:open="deleteDialogOpen"
+                :company="companyToDelete"
             />
         </div>
     </TenantLayout>

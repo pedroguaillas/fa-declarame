@@ -4,9 +4,12 @@ namespace App\Models\Tenant;
 
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Company extends Model
 {
+    use SoftDeletes;
+
     /**
      * If an encrypted attribute was stored with a different APP_KEY, treat it as
      * dirty so it gets re-encrypted with the current key on the next save.

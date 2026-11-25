@@ -40,6 +40,7 @@ class AtsXmlServiceRetentionFanoutTest extends TestCase
             $table->id();
             $table->string('ruc');
             $table->string('name');
+            $table->softDeletes();
         });
 
         Schema::create('voucher_types', function (Blueprint $table) {

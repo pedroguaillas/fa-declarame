@@ -126,6 +126,7 @@ class DeclarationFormTest extends TestCase
             $table->string('ruc');
             $table->string('name');
             $table->string('type_declaration')->nullable();
+            $table->softDeletes();
         });
 
         Schema::create('voucher_types', function (Blueprint $table) {

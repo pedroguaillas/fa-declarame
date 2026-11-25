@@ -69,6 +69,7 @@ class ShopLiquidacionCompraImportTest extends TestCase
             $table->id();
             $table->string('ruc', 13)->unique();
             $table->string('name', 300);
+            $table->softDeletes();
         });
 
         Schema::create('contacts', function (Blueprint $table) {

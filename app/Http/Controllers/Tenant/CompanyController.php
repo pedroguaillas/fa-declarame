@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Tenant\DestroyCompanyRequest;
 use App\Http\Requests\Tenant\StoreCompanyRequest;
 use App\Http\Requests\Tenant\UpdateCompanyRequest;
 use App\Models\Tenant\Company;
@@ -10,6 +11,7 @@ use App\Models\Tenant\ContributorType;
 use App\Services\SriResolveNameService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -50,7 +52,7 @@ class CompanyController extends Controller
         string $identification,
         SriResolveNameService $sriService
     ) {
-        $company = Company::where('ruc', $identification)->first();
+        $company = Company::withTrashed()->where('ruc', $identification)->first();
 
         if (! $company) {
             $company = $sriService->searchByIdentificationSRI($identification);
@@ -61,7 +63,20 @@ class CompanyController extends Controller
 
     public function store(StoreCompanyRequest $request): RedirectResponse
     {
-        Company::create($request->validated());
+        $data = $request->validated();
+        $trashedCompany = Company::onlyTrashed()->where('ruc', $data['ruc'])->first();
+
+        if ($trashedCompany) {
+            DB::transaction(function () use ($trashedCompany, $data): void {
+                $trashedCompany->restore();
+                $trashedCompany->update($data);
+            });
+
+            return redirect()->route('tenant.companies.index')
+                ->with('success', 'Empresa restaurada correctamente con su información anterior.');
+        }
+
+        Company::create($data);
 
         return redirect()->route('tenant.companies.index')
             ->with('success', 'Empresa creada correctamente.');
@@ -89,11 +104,23 @@ class CompanyController extends Controller
             ->with('success', 'Empresa actualizada correctamente.');
     }
 
-    public function destroy(Company $company): RedirectResponse
+    /**
+     * Eliminación lógica (deleted_at) o física (borra la empresa y, en cascada,
+     * compras, ventas, retenciones y descargas del SRI asociadas).
+     */
+    public function destroy(DestroyCompanyRequest $request, Company $company): RedirectResponse
     {
-        $company->delete();
+        $isPhysical = $request->isPhysical();
+
+        DB::transaction(fn () => $isPhysical ? $company->forceDelete() : $company->delete());
+
+        if ((int) session('current_company_id') === $company->id) {
+            session()->forget('current_company_id');
+        }
 
         return redirect()->route('tenant.companies.index')
-            ->with('success', 'Empresa eliminada correctamente.');
+            ->with('success', $isPhysical
+                ? 'Empresa y toda su información eliminadas definitivamente.'
+                : 'Empresa eliminada. Puedes recuperarla registrando nuevamente su RUC.');
     }
 }

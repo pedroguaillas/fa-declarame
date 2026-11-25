@@ -10,7 +10,9 @@ class RequireCompanyScope
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (!session('current_company_id')) {
+        if (! session('current_company_id') || ! company()) {
+            session()->forget('current_company_id');
+
             return redirect()->route('tenant.dashboard')
                 ->with('error', 'Debes seleccionar una empresa para continuar.');
         }
