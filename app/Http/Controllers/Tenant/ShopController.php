@@ -88,18 +88,12 @@ class ShopController extends Controller
 
     public function store(StoreShopRequest $request): RedirectResponse
     {
-        $taxSupportId = null;
         $voucherType = VoucherType::find($request->voucher_type_id);
-
-        if ($voucherType->code === Constants::NOTA_VENTA) {
-            $taxSupportId = TaxSupport::where('code', Constants::NOTA_VENTA)->value('id');
-        } else {
-            $taxSupportId = TaxSupport::where('code', Constants::FACTURA)->value('id');
-        }
+        $taxSupportCode = Shop::taxSupportCodeFor($voucherType->code);
 
         Shop::create(array_merge($request->validated(), [
             'company_id' => session('current_company_id'),
-            'tax_support_id' => $taxSupportId,
+            'tax_support_id' => TaxSupport::where('code', $taxSupportCode)->value('id'),
         ]));
 
         return redirect()->route('tenant.shops.index')
@@ -131,7 +125,18 @@ class ShopController extends Controller
 
     public function update(UpdateShopRequest $request, Shop $shop): RedirectResponse
     {
-        $shop->update($request->validated());
+        $shop->loadMissing(['taxSupport', 'voucherType']);
+
+        $voucherType = VoucherType::find($request->validated('voucher_type_id'));
+        $taxSupportCode = Shop::taxSupportCodeFor(
+            $voucherType->code,
+            $shop->taxSupport?->code,
+            $shop->voucherType?->code,
+        );
+
+        $shop->update(array_merge($request->validated(), [
+            'tax_support_id' => TaxSupport::where('code', $taxSupportCode)->value('id') ?? $shop->tax_support_id,
+        ]));
 
         return redirect()->route('tenant.shops.index')
             ->with('success', 'Compra actualizada correctamente.');

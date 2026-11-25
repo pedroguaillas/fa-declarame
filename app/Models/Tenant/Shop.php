@@ -2,11 +2,24 @@
 
 namespace App\Models\Tenant;
 
+use Constants;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Shop extends BaseModel
 {
+    /**
+     * Sustentos con crédito tributario de IVA y su equivalente de costo/gasto IR.
+     * Una nota de venta (RISE/RIMPE) no otorga crédito tributario.
+     *
+     * @var array<string, string>
+     */
+    public const CREDIT_TO_EXPENSE_TAX_SUPPORT = [
+        '01' => '02',
+        '03' => '04',
+        '06' => '07',
+    ];
+
     protected $fillable = [
         'account_id',
         'company_id',
@@ -109,6 +122,39 @@ class Shop extends BaseModel
     public function taxSupport(): BelongsTo
     {
         return $this->belongsTo(TaxSupport::class);
+    }
+
+    /**
+     * Resuelve el código de sustento tributario según el tipo de comprobante.
+     *
+     * - Nota de venta: convierte sustentos con crédito tributario a su equivalente de costo/gasto.
+     * - Al dejar de ser nota de venta: revierte el equivalente de costo/gasto a crédito tributario.
+     * - Otros casos: conserva el sustento actual o usa 01 por defecto.
+     */
+    public static function taxSupportCodeFor(
+        string $voucherCode,
+        ?string $currentTaxSupportCode = null,
+        ?string $previousVoucherCode = null,
+    ): string {
+        if ($voucherCode === Constants::NOTA_VENTA) {
+            if ($currentTaxSupportCode === null) {
+                return '02';
+            }
+
+            return self::CREDIT_TO_EXPENSE_TAX_SUPPORT[$currentTaxSupportCode] ?? $currentTaxSupportCode;
+        }
+
+        if ($currentTaxSupportCode === null) {
+            return '01';
+        }
+
+        if ($previousVoucherCode === Constants::NOTA_VENTA) {
+            $expenseToCredit = array_flip(self::CREDIT_TO_EXPENSE_TAX_SUPPORT);
+
+            return $expenseToCredit[$currentTaxSupportCode] ?? $currentTaxSupportCode;
+        }
+
+        return $currentTaxSupportCode;
     }
 
     public function voucherTypeModify()
